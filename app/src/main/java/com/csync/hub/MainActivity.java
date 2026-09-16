@@ -14,6 +14,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -36,8 +37,8 @@ public class MainActivity extends Activity {
 
     private final Handler ui = new Handler(Looper.getMainLooper());
 
-    private View pageXkcd, pageSystem, pageDevices;
-    private int current = 0; // 0 xkcd, 1 system, 2 devices
+    private View pageXkcd, pageSystem, pageDevices, pageChat;
+    private int current = 0; // 0 xkcd, 1 system, 2 devices, 3 chat
     private boolean resumed;
 
     // system page (Shizuku top)
@@ -66,16 +67,20 @@ public class MainActivity extends Activity {
         pageXkcd = inf.inflate(R.layout.page_xkcd, content, false);
         pageSystem = inf.inflate(R.layout.page_system, content, false);
         pageDevices = inf.inflate(R.layout.page_devices, content, false);
+        pageChat = inf.inflate(R.layout.page_chat, content, false);
         content.addView(pageXkcd);
         content.addView(pageSystem);
         content.addView(pageDevices);
+        content.addView(pageChat);
 
         ((Button) findViewById(R.id.nav_xkcd)).setOnClickListener(v -> show(0));
         ((Button) findViewById(R.id.nav_system)).setOnClickListener(v -> show(1));
         ((Button) findViewById(R.id.nav_devices)).setOnClickListener(v -> show(2));
+        ((Button) findViewById(R.id.nav_chat)).setOnClickListener(v -> show(3));
 
         setupSystemPage();
         setupDevicesPage();
+        setupChatPage();
 
         Shizuku.addRequestPermissionResultListener(permListener);
         Shizuku.addBinderReceivedListenerSticky(binderListener);
@@ -91,6 +96,7 @@ public class MainActivity extends Activity {
         pageXkcd.setVisibility(page == 0 ? View.VISIBLE : View.GONE);
         pageSystem.setVisibility(page == 1 ? View.VISIBLE : View.GONE);
         pageDevices.setVisibility(page == 2 ? View.VISIBLE : View.GONE);
+        pageChat.setVisibility(page == 3 ? View.VISIBLE : View.GONE);
         if (page == 1) ensureShizuku();
         if (page == 2) refreshDevicesHeader();
     }
@@ -263,6 +269,80 @@ public class MainActivity extends Activity {
         } else {
             devReceiver.setText("Start receiving");
         }
+    }
+
+    // ---------------- chat page (assistant on the Pi) ----------------
+
+    private EditText chatIp, chatInput;
+    private TextView chatLog;
+    private ScrollView chatScroll;
+    private String chatSession;
+
+    private void setupChatPage() {
+        chatIp = pageChat.findViewById(R.id.chat_assist_ip);
+        chatInput = pageChat.findViewById(R.id.chat_input);
+        chatLog = pageChat.findViewById(R.id.chat_log);
+        chatScroll = pageChat.findViewById(R.id.chat_scroll);
+        chatIp.setText(Prefs.assistIp(this));
+        chatSession = Prefs.deviceName(this) + "-" + System.currentTimeMillis();
+
+        pageChat.findViewById(R.id.chat_assist_save).setOnClickListener(v -> {
+            Prefs.saveAssistIp(this, chatIp.getText().toString());
+            toast("Assistant set to " + Prefs.assistIp(this));
+        });
+        pageChat.findViewById(R.id.chat_send).setOnClickListener(v -> sendChat());
+        pageChat.findViewById(R.id.chat_reset).setOnClickListener(v -> resetChat());
+    }
+
+    private void sendChat() {
+        final String msg = chatInput.getText().toString().trim();
+        if (msg.isEmpty()) return;
+        final String ip = Prefs.assistIp(this), token = Prefs.token(this);
+        if (ip.isEmpty() || token.isEmpty()) { toast("Set the assistant IP and save the token in Devices"); return; }
+        appendChat("You", msg);
+        chatInput.setText("");
+        appendChat("csync", "…");
+        new Thread(() -> {
+            String reply;
+            try {
+                reply = MeshClient.chat(ip, token, chatSession, msg);
+            } catch (Throwable e) {
+                reply = "[error] " + e.getMessage();
+            }
+            final String r = reply;
+            ui.post(() -> replaceLastReply(r));
+        }).start();
+    }
+
+    private void resetChat() {
+        final String ip = Prefs.assistIp(this), token = Prefs.token(this);
+        chatSession = Prefs.deviceName(this) + "-" + System.currentTimeMillis();
+        chatLog.setText("");
+        if (!ip.isEmpty() && !token.isEmpty()) {
+            final String session = chatSession;
+            new Thread(() -> {
+                try { MeshClient.chatReset(ip, token, session); } catch (Throwable ignore) {}
+            }).start();
+        }
+        toast("New conversation");
+    }
+
+    private void appendChat(String who, String text) {
+        chatLog.append(who + ":  " + text + "\n\n");
+        chatScroll.post(() -> chatScroll.fullScroll(View.FOCUS_DOWN));
+    }
+
+    // Swap the "…" placeholder for the real reply once it arrives.
+    private void replaceLastReply(String reply) {
+        String s = chatLog.getText().toString();
+        int i = s.lastIndexOf("csync:  …\n\n");
+        if (i >= 0) {
+            chatLog.setText(s.substring(0, i));
+            chatLog.append("csync:  " + reply + "\n\n");
+        } else {
+            chatLog.append("csync:  " + reply + "\n\n");
+        }
+        chatScroll.post(() -> chatScroll.fullScroll(View.FOCUS_DOWN));
     }
 
     private String clipboardText() {

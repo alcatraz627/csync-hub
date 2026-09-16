@@ -1,6 +1,7 @@
 package com.csync.hub;
 
 import org.json.JSONArray;
+import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -18,6 +19,53 @@ import java.util.Enumeration;
 public final class MeshClient {
 
     static final int PORT = 8790;
+    static final int ASSIST_PORT = 8791;
+
+    /** Send a chat message to the assistant peer and return its reply text. */
+    static String chat(String ip, String token, String session, String message) throws Exception {
+        URL url = new URL("http://" + ip + ":" + ASSIST_PORT + "/chat");
+        HttpURLConnection c = (HttpURLConnection) url.openConnection();
+        c.setConnectTimeout(5000);
+        c.setReadTimeout(90000);
+        c.setDoOutput(true);
+        c.setRequestMethod("POST");
+        c.setRequestProperty("Content-Type", "application/json");
+        c.setRequestProperty("X-Csync-Token", token);
+        JSONObject req = new JSONObject();
+        req.put("session", session);
+        req.put("message", message);
+        byte[] body = req.toString().getBytes("UTF-8");
+        c.setFixedLengthStreamingMode(body.length);
+        OutputStream out = c.getOutputStream();
+        out.write(body);
+        out.close();
+        int code = c.getResponseCode();
+        String resp = readAll(code < 400 ? c.getInputStream() : c.getErrorStream());
+        c.disconnect();
+        if (code >= 400) {
+            throw new Exception("assistant error (" + code + "): " + resp);
+        }
+        return new JSONObject(resp).optString("reply", "(no reply)");
+    }
+
+    /** Clear the assistant's memory for a session. */
+    static void chatReset(String ip, String token, String session) throws Exception {
+        URL url = new URL("http://" + ip + ":" + ASSIST_PORT + "/reset");
+        HttpURLConnection c = (HttpURLConnection) url.openConnection();
+        c.setConnectTimeout(5000);
+        c.setReadTimeout(8000);
+        c.setDoOutput(true);
+        c.setRequestMethod("POST");
+        c.setRequestProperty("Content-Type", "application/json");
+        c.setRequestProperty("X-Csync-Token", token);
+        byte[] body = ("{\"session\":\"" + session + "\"}").getBytes("UTF-8");
+        c.setFixedLengthStreamingMode(body.length);
+        OutputStream out = c.getOutputStream();
+        out.write(body);
+        out.close();
+        c.getResponseCode();
+        c.disconnect();
+    }
 
     /** Post one payload to a peer's /send. Returns the receipt body on success. */
     static String send(String ip, String token, String from, String kind,

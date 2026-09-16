@@ -19,6 +19,13 @@ public final class Prefs {
         p(c).edit().putString("home_ip", ip.trim()).putString("token", token.trim()).apply();
     }
 
+    // The assistant peer (the Pi running csync-assist); defaults to the Pi's tailnet IP.
+    static String assistIp(Context c) { return p(c).getString("assist_ip", "100.65.188.9"); }
+
+    static void saveAssistIp(Context c, String ip) {
+        p(c).edit().putString("assist_ip", ip.trim()).apply();
+    }
+
     /** This device's name on the mesh; the phone model, sanitised for a folder name. */
     static String deviceName(Context c) {
         String m = Build.MODEL != null ? Build.MODEL : "android";
