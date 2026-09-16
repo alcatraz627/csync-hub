@@ -1,0 +1,110 @@
+package com.csync.hub;
+
+import org.json.JSONArray;
+
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.net.URL;
+import java.util.Enumeration;
+
+/**
+ * The client half of the mesh contract: send text and files to a peer's /send,
+ * and read a peer's /peers roster. All calls block, so run them off the UI thread.
+ */
+public final class MeshClient {
+
+    static final int PORT = 8790;
+
+    /** Post one payload to a peer's /send. Returns the receipt body on success. */
+    static String send(String ip, String token, String from, String kind,
+                       String name, byte[] body) throws Exception {
+        URL url = new URL("http://" + ip + ":" + PORT + "/send");
+        HttpURLConnection c = (HttpURLConnection) url.openConnection();
+        c.setConnectTimeout(5000);
+        c.setReadTimeout(60000);
+        c.setDoOutput(true);
+        c.setRequestMethod("POST");
+        c.setFixedLengthStreamingMode(body.length);
+        c.setRequestProperty("Content-Type", "application/octet-stream");
+        c.setRequestProperty("X-Csync-Token", token);
+        c.setRequestProperty("X-Csync-From", from);
+        c.setRequestProperty("X-Csync-Kind", kind);
+        c.setRequestProperty("X-Csync-Name", name);
+        OutputStream out = c.getOutputStream();
+        out.write(body);
+        out.close();
+        int code = c.getResponseCode();
+        String resp = readAll(code < 400 ? c.getInputStream() : c.getErrorStream());
+        c.disconnect();
+        if (code >= 400) {
+            throw new Exception("peer refused (" + code + "): " + resp);
+        }
+        return resp;
+    }
+
+    /** Read a peer's tailnet roster (that peer runs `tailscale`, this device need not). */
+    static JSONArray peers(String ip, String token) throws Exception {
+        URL url = new URL("http://" + ip + ":" + PORT + "/peers");
+        HttpURLConnection c = (HttpURLConnection) url.openConnection();
+        c.setConnectTimeout(5000);
+        c.setReadTimeout(8000);
+        c.setRequestProperty("X-Csync-Token", token);
+        int code = c.getResponseCode();
+        String resp = readAll(code < 400 ? c.getInputStream() : c.getErrorStream());
+        c.disconnect();
+        if (code >= 400) {
+            throw new Exception("scan failed (" + code + "): " + resp);
+        }
+        return new JSONArray(resp);
+    }
+
+    /**
+     * This device's tailnet IPv4, if Tailscale is up. Tailscale hands out
+     * addresses in the 100.64.0.0/10 CGNAT range, so that is what we look for.
+     */
+    static String tailnetIP() {
+        try {
+            Enumeration<NetworkInterface> ifaces = NetworkInterface.getNetworkInterfaces();
+            while (ifaces.hasMoreElements()) {
+                NetworkInterface ni = ifaces.nextElement();
+                Enumeration<InetAddress> addrs = ni.getInetAddresses();
+                while (addrs.hasMoreElements()) {
+                    String ip = addrs.nextElement().getHostAddress();
+                    if (ip != null && ip.indexOf(':') < 0 && inCGNAT(ip)) {
+                        return ip;
+                    }
+                }
+            }
+        } catch (Throwable ignore) {
+        }
+        return null;
+    }
+
+    private static boolean inCGNAT(String ip) {
+        String[] p = ip.split("\\.");
+        if (p.length != 4) return false;
+        try {
+            int a = Integer.parseInt(p[0]);
+            int b = Integer.parseInt(p[1]);
+            return a == 100 && b >= 64 && b <= 127;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
+    static String readAll(InputStream in) throws Exception {
+        if (in == null) return "";
+        ByteArrayOutputStream bo = new ByteArrayOutputStream();
+        byte[] buf = new byte[8192];
+        int r;
+        while ((r = in.read(buf)) != -1) bo.write(buf, 0, r);
+        in.close();
+        return new String(bo.toByteArray(), "UTF-8");
+    }
+
+    private MeshClient() {}
+}
