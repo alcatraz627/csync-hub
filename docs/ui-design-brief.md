@@ -121,7 +121,17 @@ logged. Security rests on the tailnet plus the mesh token, same as the rest.
 
 ## Provider note
 
-The assistant backend is Gemini today (gemini-3.8-flash). A Claude backend
-(`CLAUDE_CODE_OAUTH_TOKEN` at `~/.config/csync/claude.key`) is planned as a
-provider switch on the Pi (`assist.provider` = gemini or claude), not wired yet;
+The assistant backend is Gemini today (gemini-3.8-flash). Provider is an
+extensible registry, not a binary switch: the Pi serves `GET /providers` with
+each provider's models and effort levels, the app drills provider then model then
+effort, and `POST /config` sets the active choice. A new provider is added by
+dropping a `providers.json` on the Pi, with no app change. Claude is registered
+already; it needs a key in `~/.config/csync/claude.key` before it will answer, so
 Gemini stays the daily driver.
+
+## Shipped
+
+The app is built to this brief. The five surfaces, the named-peer roster, the
+Tailscale status, the background reply notification, the provider config, and the
+light-default theme with the four accents are all live and verified on-device. See
+the [README](../README.md) for how it fits together and how to build it.
