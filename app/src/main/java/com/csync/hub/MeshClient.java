@@ -219,6 +219,46 @@ public final class MeshClient {
         });
     }
 
+    /** The provider registry and the active selection: {providers:[…], active:{…}}. */
+    static JSONObject providers(String assistIp, String token) throws Exception {
+        return withRetry(assistIp, () -> {
+            URL url = new URL("http://" + assistIp + ":" + ASSIST_PORT + "/providers");
+            HttpURLConnection c = (HttpURLConnection) url.openConnection();
+            c.setConnectTimeout(5000);
+            c.setReadTimeout(8000);
+            c.setRequestProperty("X-Csync-Token", token);
+            int code = c.getResponseCode();
+            String resp = readAll(code < 400 ? c.getInputStream() : c.getErrorStream());
+            c.disconnect();
+            if (code >= 400) throw new Exception("providers failed (" + code + "): " + resp);
+            return new JSONObject(resp);
+        });
+    }
+
+    /** Set the active provider, model, and effort. Returns {ok, active}. */
+    static JSONObject setConfig(String assistIp, String token, String provider, String model, String effort) throws Exception {
+        return withRetry(assistIp, () -> {
+            URL url = new URL("http://" + assistIp + ":" + ASSIST_PORT + "/config");
+            HttpURLConnection c = (HttpURLConnection) url.openConnection();
+            c.setConnectTimeout(5000);
+            c.setReadTimeout(8000);
+            c.setDoOutput(true);
+            c.setRequestMethod("POST");
+            c.setRequestProperty("Content-Type", "application/json");
+            c.setRequestProperty("X-Csync-Token", token);
+            JSONObject req = new JSONObject();
+            req.put("provider", provider); req.put("model", model); req.put("effort", effort);
+            byte[] body = req.toString().getBytes("UTF-8");
+            c.setFixedLengthStreamingMode(body.length);
+            OutputStream out = c.getOutputStream(); out.write(body); out.close();
+            int code = c.getResponseCode();
+            String resp = readAll(code < 400 ? c.getInputStream() : c.getErrorStream());
+            c.disconnect();
+            if (code >= 400) throw new Exception("config failed (" + code + "): " + resp);
+            return new JSONObject(resp);
+        });
+    }
+
     /**
      * A quick liveness probe of a device by name, resolved via MagicDNS. Hits
      * /whoami with a short timeout and no retry; true means the device answered.

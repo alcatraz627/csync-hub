@@ -133,10 +133,63 @@
                     android:paddingTop="10dp" android:textSize="12sp" android:textColor="@color/dim" android:text=""/>
             </LinearLayout>
 
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:text="Provider, model, and thinking config move here next."
-                android:textSize="12sp" android:textColor="@color/dim"
-                android:gravity="center" android:layout_marginTop="18dp"/>
+            <!-- assistant card -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/card_bg"
+                android:padding="14dp"
+                android:layout_marginTop="14dp">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="ASSISTANT" android:textSize="12sp" android:textStyle="bold"
+                    android:textColor="@color/dim" android:letterSpacing="0.06" android:layout_marginBottom="10dp"/>
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="Provider" android:textSize="13sp" android:textColor="@color/text"/>
+                <com.google.android.material.button.MaterialButtonToggleGroup
+                    android:id="@+id/set_provider"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp" app:singleSelection="true"/>
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="Model" android:textSize="13sp" android:textColor="@color/text"
+                    android:layout_marginTop="12dp"/>
+                <Spinner android:id="@+id/set_model"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"/>
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="Thinking" android:textSize="13sp" android:textColor="@color/text"
+                    android:layout_marginTop="12dp"/>
+                <com.google.android.material.button.MaterialButtonToggleGroup
+                    android:id="@+id/set_effort"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp" app:singleSelection="true"/>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical"
+                    android:layout_marginTop="12dp">
+                    <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+                        android:orientation="vertical">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Run commands" android:textSize="13sp" android:textColor="@color/text"/>
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="set on the Pi" android:textSize="11sp" android:textColor="@color/dim"/>
+                    </LinearLayout>
+                    <TextView android:id="@+id/set_runcmd"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="—" android:textSize="13sp" android:textColor="@color/dim"/>
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/set_apply"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp" android:text="Apply"/>
+                <TextView android:id="@+id/set_assist_status"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:paddingTop="8dp" android:textSize="12sp" android:textColor="@color/dim" android:text=""/>
+            </LinearLayout>
 
         </LinearLayout>
     </ScrollView>

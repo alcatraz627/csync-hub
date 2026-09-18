@@ -99,6 +99,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         setupChatPage();
         setupSettingsPage();
         setupConnectionCard();
+        setupAssistantCard();
 
         Shizuku.addRequestPermissionResultListener(permListener);
         Shizuku.addBinderReceivedListenerSticky(binderListener);
@@ -120,7 +121,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         if (page == 1) refreshShare();
         if (page == 2) warmChat();
         if (page == 3) ensureShizuku();
-        if (page == 4) refreshConnection();
+        if (page == 4) { refreshConnection(); refreshAssistant(); }
     }
 
     // Wake the tailnet path to the assistant so the first message is not the cold
@@ -523,6 +524,147 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             else startService(svc);
         }
         ui.postDelayed(this::refreshConnection, 400);
+    }
+
+    // ---------------- settings: assistant provider/model/effort ----------------
+
+    private JSONObject providerData;
+    private boolean populatingProviders;
+
+    private void setupAssistantCard() {
+        pageSettings.findViewById(R.id.set_apply).setOnClickListener(v -> applyAssistantConfig());
+        com.google.android.material.button.MaterialButtonToggleGroup pg = pageSettings.findViewById(R.id.set_provider);
+        pg.addOnButtonCheckedListener((g, id, checked) -> {
+            if (!checked || populatingProviders) return;
+            String pid = tagOf(g, id);
+            if (pid != null) populateModelsAndEfforts(pid, null, null);
+        });
+    }
+
+    private void refreshAssistant() {
+        final String assist = Prefs.assistIp(this), token = Prefs.token(this);
+        if (assist.isEmpty() || token.isEmpty()) return;
+        new Thread(() -> {
+            JSONObject data = null; JSONArray caps = null; String err = null;
+            try { data = MeshClient.providers(assist, token); } catch (Throwable e) { err = e.getMessage(); }
+            try { caps = MeshClient.capabilities(assist, token); } catch (Throwable ignore) {}
+            final JSONObject d = data; final JSONArray c = caps; final String e = err;
+            ui.post(() -> {
+                if (d != null) renderProviders(d);
+                else ((TextView) pageSettings.findViewById(R.id.set_assist_status)).setText("assistant: " + e);
+                renderRunCmd(c);
+            });
+        }).start();
+    }
+
+    private void renderProviders(JSONObject data) {
+        providerData = data;
+        JSONArray providers = data.optJSONArray("providers");
+        JSONObject active = data.optJSONObject("active");
+        String ap = active == null ? "" : active.optString("provider");
+        String am = active == null ? "" : active.optString("model");
+        String ae = active == null ? "" : active.optString("effort");
+        com.google.android.material.button.MaterialButtonToggleGroup pg = pageSettings.findViewById(R.id.set_provider);
+        populatingProviders = true;
+        pg.removeAllViews();
+        int checkId = -1;
+        for (int i = 0; providers != null && i < providers.length(); i++) {
+            JSONObject p = providers.optJSONObject(i);
+            if (p == null) continue;
+            com.google.android.material.button.MaterialButton b = toggleButton(p.optString("label"), p.optString("id"));
+            pg.addView(b);
+            if (p.optString("id").equals(ap)) checkId = b.getId();
+        }
+        if (checkId != -1) pg.check(checkId);
+        populatingProviders = false;
+        populateModelsAndEfforts(ap, am, ae);
+    }
+
+    private void populateModelsAndEfforts(String providerId, String selModel, String selEffort) {
+        JSONObject prov = findProvider(providerId);
+        if (prov == null) return;
+        JSONArray models = prov.optJSONArray("models");
+        JSONArray efforts = prov.optJSONArray("efforts");
+
+        java.util.List<String> ms = new java.util.ArrayList<>();
+        for (int i = 0; models != null && i < models.length(); i++) ms.add(models.optString(i));
+        android.widget.Spinner sp = pageSettings.findViewById(R.id.set_model);
+        android.widget.ArrayAdapter<String> ad = new android.widget.ArrayAdapter<>(
+                this, android.R.layout.simple_spinner_dropdown_item, ms);
+        sp.setAdapter(ad);
+        if (selModel != null) { int idx = ms.indexOf(selModel); if (idx >= 0) sp.setSelection(idx); }
+
+        com.google.android.material.button.MaterialButtonToggleGroup eg = pageSettings.findViewById(R.id.set_effort);
+        eg.removeAllViews();
+        int checkId = -1;
+        for (int i = 0; efforts != null && i < efforts.length(); i++) {
+            String e = efforts.optString(i);
+            com.google.android.material.button.MaterialButton b = toggleButton(prettyName(e), e);
+            eg.addView(b);
+            if (e.equals(selEffort)) checkId = b.getId();
+        }
+        if (checkId != -1) eg.check(checkId);
+    }
+
+    private void applyAssistantConfig() {
+        com.google.android.material.button.MaterialButtonToggleGroup pg = pageSettings.findViewById(R.id.set_provider);
+        com.google.android.material.button.MaterialButtonToggleGroup eg = pageSettings.findViewById(R.id.set_effort);
+        android.widget.Spinner sp = pageSettings.findViewById(R.id.set_model);
+        final String provider = tagOf(pg, pg.getCheckedButtonId());
+        final String effort = tagOf(eg, eg.getCheckedButtonId());
+        final String model = sp.getSelectedItem() == null ? "" : sp.getSelectedItem().toString();
+        final TextView status = pageSettings.findViewById(R.id.set_assist_status);
+        if (provider == null) { toast("Pick a provider"); return; }
+        final String assist = Prefs.assistIp(this), token = Prefs.token(this);
+        status.setText("applying…");
+        new Thread(() -> {
+            String r;
+            try { MeshClient.setConfig(assist, token, provider, model, effort); r = "active: " + provider + " · " + model + " · " + effort; }
+            catch (Throwable e) { r = "failed: " + e.getMessage(); }
+            final String rr = r;
+            ui.post(() -> status.setText(rr));
+        }).start();
+    }
+
+    private void renderRunCmd(JSONArray caps) {
+        TextView t = pageSettings.findViewById(R.id.set_runcmd);
+        if (caps == null) { t.setText("unknown"); t.setTextColor(col(R.color.dim)); return; }
+        boolean on = false;
+        for (int i = 0; i < caps.length(); i++) {
+            JSONObject c = caps.optJSONObject(i);
+            String n = c == null ? "" : c.optString("name").toLowerCase();
+            if (n.contains("run") || n.contains("command") || n.contains("exec") || n.contains("shell")) on = true;
+        }
+        t.setText(on ? "on" : "off");
+        t.setTextColor(col(on ? R.color.online : R.color.dim));
+    }
+
+    private JSONObject findProvider(String id) {
+        JSONArray providers = providerData == null ? null : providerData.optJSONArray("providers");
+        for (int i = 0; providers != null && i < providers.length(); i++) {
+            JSONObject p = providers.optJSONObject(i);
+            if (p != null && id.equals(p.optString("id"))) return p;
+        }
+        return null;
+    }
+
+    // A MaterialButton styled as an outlined toggle, carrying its value as the tag.
+    // The outlined style comes from the defStyleAttr, not a theme wrapper, so the
+    // unchecked buttons read as outlines rather than solid fills.
+    private com.google.android.material.button.MaterialButton toggleButton(String label, String value) {
+        com.google.android.material.button.MaterialButton b =
+                new com.google.android.material.button.MaterialButton(
+                        this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle);
+        b.setId(View.generateViewId());
+        b.setText(label);
+        b.setTag(value);
+        return b;
+    }
+
+    private String tagOf(android.view.ViewGroup group, int viewId) {
+        if (viewId == View.NO_ID) return null;
+        View v = group.findViewById(viewId);
+        return v == null || v.getTag() == null ? null : v.getTag().toString();
     }
 
     // ---------------- chat page (assistant on the Pi) ----------------
