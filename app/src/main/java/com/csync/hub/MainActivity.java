@@ -294,7 +294,7 @@ public class MainActivity extends Activity {
         chatInput = pageChat.findViewById(R.id.chat_input);
         chatList = pageChat.findViewById(R.id.chat_list);
         chatScroll = pageChat.findViewById(R.id.chat_scroll);
-        markwon = io.noties.markwon.Markwon.create(this);
+        markwon = buildMarkwon();
         chatIp.setText(Prefs.assistIp(this));
         chatSession = Prefs.deviceName(this) + "-" + System.currentTimeMillis();
 
@@ -345,6 +345,19 @@ public class MainActivity extends Activity {
         toast("New conversation");
     }
 
+    // Markwon with code syntax highlighting, themed light or dark to match the app.
+    private io.noties.markwon.Markwon buildMarkwon() {
+        io.noties.prism4j.Prism4j prism = new io.noties.prism4j.Prism4j(new GrammarLocatorDef());
+        boolean night = (getResources().getConfiguration().uiMode
+                & android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+        io.noties.markwon.syntax.Prism4jTheme theme = night
+                ? io.noties.markwon.syntax.Prism4jThemeDarkula.create()
+                : io.noties.markwon.syntax.Prism4jThemeDefault.create();
+        return io.noties.markwon.Markwon.builder(this)
+                .usePlugin(io.noties.markwon.syntax.SyntaxHighlightPlugin.create(prism, theme))
+                .build();
+    }
+
     // ---- chat view builders ----
     private int dp(int v) { return Math.round(v * getResources().getDisplayMetrics().density); }
     private int col(int res) { return androidx.core.content.ContextCompat.getColor(this, res); }
@@ -384,10 +397,10 @@ public class MainActivity extends Activity {
         LinearLayout box = new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL);
         box.setBackground(bg(col(R.color.surface2), 12)); box.setPadding(dp(11), dp(8), dp(11), dp(8));
         final TextView head = new TextView(this); head.setText("▸  " + label); head.setTextColor(col(R.color.dim)); head.setTextSize(12);
-        final TextView bodyV = new TextView(this); bodyV.setText(body == null ? "" : body); bodyV.setTextColor(col(R.color.dim));
+        final TextView bodyV = new TextView(this); bodyV.setTextColor(col(R.color.dim));
         bodyV.setTextSize(12); bodyV.setPadding(0, dp(6), 0, 0); bodyV.setVisibility(View.GONE);
-        if (italic) bodyV.setTypeface(bodyV.getTypeface(), android.graphics.Typeface.ITALIC);
-        else bodyV.setTypeface(android.graphics.Typeface.MONOSPACE);
+        bodyV.setTextIsSelectable(true);
+        markwon.setMarkdown(bodyV, body == null ? "" : body);
         head.setOnClickListener(v -> { boolean vis = bodyV.getVisibility() == View.VISIBLE;
             bodyV.setVisibility(vis ? View.GONE : View.VISIBLE); head.setText((vis ? "▸  " : "▾  ") + label); });
         box.addView(head); box.addView(bodyV);
