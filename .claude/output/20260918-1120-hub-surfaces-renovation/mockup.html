@@ -1,0 +1,330 @@
+<title>csync hub mockup</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap">
+<style>
+  :root {
+    --accent: #E4572E;
+    --accent-weak: #E4572E22;
+    /* neutral: slate-light default (cool, blue-biased) */
+    --bg: #F5F7FA;
+    --surface: #FFFFFF;
+    --surface-2: #EDF1F6;
+    --text: #161A20;
+    --dim: #5A6472;
+    --border: #DDE4EC;
+    --online: #16A34A;
+    --offline: #AEB6C2;
+    --error: #DC2626;
+    --shadow: 0 1px 3px rgba(20,30,50,.08), 0 1px 2px rgba(20,30,50,.05);
+    --radius: 16px;
+    font-family: 'Roboto', system-ui, sans-serif;
+  }
+  .material-symbols-outlined {
+    font-family: 'Material Symbols Outlined'; font-weight: normal; font-style: normal;
+    line-height: 1; letter-spacing: normal; text-transform: none; white-space: nowrap;
+    -webkit-font-feature-settings: 'liga'; -webkit-font-smoothing: antialiased;
+    font-variation-settings: 'opsz' 24; vertical-align: middle;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); margin: 0; transition: background .15s; }
+  .wrap { padding: 20px 16px 48px; max-width: 1120px; margin: 0 auto; }
+  .lead h1 { font-size: 22px; font-weight: 700; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .lead p { color: var(--dim); margin: 0 0 20px; font-size: 14px; max-width: 62ch; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 18px; align-items: center;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px 16px; box-shadow: var(--shadow); margin-bottom: 24px; position: sticky;
+    top: env(safe-area-inset-top, 0px); z-index: 5; }
+  .ctl-group { display: flex; align-items: center; gap: 10px; }
+  .ctl-label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); font-weight: 500; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+  .seg button { border: 0; background: transparent; color: var(--dim); font: inherit; font-size: 13px; padding: 6px 14px; cursor: pointer; }
+  .seg button.on { background: var(--accent); color: #fff; }
+  .swatches { display: flex; gap: 8px; }
+  .sw { width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; position: relative; }
+  .sw.on { border-color: var(--text); }
+  .sw.on::after { content: "✓"; color: #fff; position: absolute; inset: 0; display: grid; place-items: center; font-size: 13px; }
+  .nsw { width: 30px; height: 26px; border-radius: 7px; border: 2px solid var(--border); cursor: pointer; }
+  .nsw.on { border-color: var(--text); }
+
+  .phones { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 24px; align-items: start; }
+  .phone { background: var(--surface); border: 1px solid var(--border); border-radius: 28px; box-shadow: var(--shadow);
+    overflow: hidden; display: flex; flex-direction: column; min-height: 580px; }
+  .caption { font-size: 12px; color: var(--dim); margin: 0 0 8px 4px; text-transform: uppercase; letter-spacing: .07em; }
+
+  .appbar { padding: 15px 18px 12px; border-bottom: 1px solid var(--border); }
+  .appbar .t { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+  .appbar .s { font-size: 12.5px; color: var(--dim); margin-top: 1px; }
+  .body { padding: 16px; display: flex; flex-direction: column; gap: 14px; flex: 1; }
+  .nav { display: flex; border-top: 1px solid var(--border); background: var(--surface-2); }
+  .nav div { flex: 1; display: grid; place-items: center; padding: 12px 4px; color: var(--dim); cursor: default; }
+  .nav div.on { color: var(--accent); }
+  .nav .material-symbols-outlined { font-size: 24px; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; }
+  .sec { font-size: 12px; font-weight: 700; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; margin: 0 0 10px; }
+  .statusrow { display: flex; gap: 18px; }
+  .stat { display: flex; align-items: center; gap: 7px; font-size: 13px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--offline); flex: none; }
+  .dot.up { background: var(--online); }
+  .caplist { display: flex; flex-direction: column; gap: 9px; }
+  .cap { display: flex; gap: 9px; font-size: 13px; align-items: baseline; }
+  .cap b { font-weight: 500; }
+  .cap span { color: var(--dim); font-size: 12px; }
+  .cap .off { color: var(--error); }
+  .actions { display: flex; gap: 10px; margin-top: 2px; }
+  .btn { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 13px; border-radius: 12px; font-weight: 500; font-size: 14px; background: var(--accent); color: #fff; }
+  .btn.ghost { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); }
+  .btn .material-symbols-outlined { font-size: 19px; }
+
+  .chat { display: flex; flex-direction: column; gap: 12px; }
+  .bubble { max-width: 82%; padding: 10px 13px; border-radius: 16px; font-size: 14px; line-height: 1.45; }
+  .me { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 5px; }
+  details.think, details.tool { align-self: flex-start; max-width: 92%; width: 100%; background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 12px; padding: 8px 11px; font-size: 12.5px; }
+  details summary { cursor: pointer; color: var(--dim); list-style: none; display: flex; align-items: center; gap: 7px; }
+  details summary::-webkit-details-marker { display: none; }
+  details summary .material-symbols-outlined { font-size: 17px; }
+  details[open] summary { margin-bottom: 7px; }
+  .think .txt { color: var(--dim); font-style: italic; line-height: 1.4; }
+  .tool .name { font-family: 'Roboto Mono', monospace; color: var(--accent); font-weight: 500; }
+  .tool pre { font-family: 'Roboto Mono', monospace; font-size: 11.5px; background: var(--bg); border-radius: 8px;
+    padding: 9px; margin: 0; overflow-x: auto; white-space: pre-wrap; color: var(--text); }
+  .md { align-self: flex-start; max-width: 92%; background: var(--surface-2); border-radius: 16px;
+    border-bottom-left-radius: 5px; padding: 11px 13px; font-size: 14px; line-height: 1.5; }
+  .md p { margin: 0 0 7px; } .md ul { margin: 0; padding-left: 18px; } .md li { margin-bottom: 3px; }
+  .md code { font-family: 'Roboto Mono', monospace; font-size: 12.5px; background: var(--bg); padding: 1px 5px; border-radius: 5px; }
+  .composer { display: flex; gap: 8px; margin-top: 2px; align-items: center; }
+  .composer .input { flex: 1; background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px;
+    padding: 10px 14px; color: var(--dim); font-size: 13px; display: inline-flex; align-items: center; gap: 6px; }
+  .composer .input .material-symbols-outlined { font-size: 17px; }
+  .send { width: 40px; height: 40px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; flex: none; }
+  .send .material-symbols-outlined { font-size: 20px; }
+
+  .peer { display: flex; align-items: center; gap: 11px; padding: 11px 12px; border: 1px solid var(--border); border-radius: 12px; font-size: 14px; }
+  .peer.sel { border-color: var(--accent); background: var(--accent-weak); }
+  .peer .meta { color: var(--dim); font-size: 12px; margin-left: auto; }
+
+  /* settings surface */
+  .setrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0; }
+  .setrow .k { font-size: 14px; } .setrow .k small { display: block; color: var(--dim); font-size: 12px; }
+  .toggle { width: 44px; height: 26px; border-radius: 999px; background: var(--accent); position: relative; flex: none; }
+  .toggle::after { content: ""; position: absolute; width: 20px; height: 20px; border-radius: 50%; background: #fff; top: 3px; right: 3px; }
+  .toggle.off { background: var(--border); } .toggle.off::after { right: auto; left: 3px; }
+  .row-sw { display: flex; gap: 8px; }
+  .note { font-size: 12px; color: var(--dim); margin-top: 20px; text-align: center; }
+</style>
+
+<div class="wrap">
+  <div class="lead">
+    <h1>csync hub</h1>
+    <p>v2 of the look, local only. This is still a rough pass with surfaces missing; toggle theme, accent, and the new blue-grey neutrals, and tell me what to change. The theme and accent controls also live in the Settings surface below.</p>
+  </div>
+
+  <div class="controls">
+    <div class="ctl-group"><span class="ctl-label">Theme</span>
+      <div class="seg" id="themeSeg">
+        <button data-theme="light" class="on">Light</button>
+        <button data-theme="dark">Dark</button>
+      </div>
+    </div>
+    <div class="ctl-group"><span class="ctl-label">Accent</span>
+      <div class="swatches" id="swatches">
+        <div class="sw on" style="background:#E4572E" data-accent="#E4572E" title="Coral"></div>
+        <div class="sw" style="background:#0D9488" data-accent="#0D9488" title="Teal"></div>
+        <div class="sw" style="background:#7C5CFF" data-accent="#7C5CFF" title="Violet"></div>
+        <div class="sw" style="background:#C2410C" data-accent="#C2410C" title="Rust"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="phones">
+
+    <div>
+      <p class="caption">Home</p>
+      <div class="phone">
+        <div class="appbar"><div class="t">csync</div><div class="s">your mesh at a glance</div></div>
+        <div class="body">
+          <div class="card">
+            <p class="sec">Status</p>
+            <div class="statusrow">
+              <div class="stat"><span class="dot up"></span>Tailscale</div>
+              <div class="stat"><span class="dot up"></span>Mac</div>
+              <div class="stat"><span class="dot up"></span>Pi</div>
+            </div>
+          </div>
+          <div class="card">
+            <p class="sec">Assistant can</p>
+            <div class="caplist">
+              <div class="cap"><b>Home health</b><span>disk, memory, services</span></div>
+              <div class="cap"><b>List devices</b><span>who is online</span></div>
+              <div class="cap"><b>Message a device</b><span>send to a peer</span></div>
+              <div class="cap"><b>Run command</b><span class="off">off</span></div>
+            </div>
+          </div>
+          <div class="actions">
+            <div class="btn ghost"><span class="material-symbols-outlined">ios_share</span>Share</div>
+            <div class="btn"><span class="material-symbols-outlined">forum</span>Chat</div>
+          </div>
+        </div>
+        <div class="nav">
+          <div class="on"><span class="material-symbols-outlined">cottage</span></div>
+          <div><span class="material-symbols-outlined">ios_share</span></div>
+          <div><span class="material-symbols-outlined">forum</span></div>
+          <div><span class="material-symbols-outlined">grid_view</span></div>
+          <div><span class="material-symbols-outlined">tune</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <p class="caption">Chat</p>
+      <div class="phone">
+        <div class="appbar"><div class="t">Chat</div><div class="s">assistant on raspberrypi</div></div>
+        <div class="body">
+          <div class="chat">
+            <div class="bubble me">how's the home server?</div>
+            <details class="think">
+              <summary><span class="material-symbols-outlined">neurology</span>Thinking</summary>
+              <div class="txt">The user wants a quick health check. home_health covers disk, memory, uptime, load and the key services, no arguments. Call it and summarise.</div>
+            </details>
+            <details class="tool" open>
+              <summary><span class="material-symbols-outlined">build</span><span class="name">home_health</span></summary>
+              <pre>disk /: 8.7G used of 58G (16%)
+memory: 498Mi used of 3.7Gi
+uptime: up 2 hours, 4 minutes
+load: 0.22 0.15 0.10
+tailscaled: active
+ssh: active
+jellyfin: active</pre>
+            </details>
+            <div class="md">
+              <p>The server is healthy:</p>
+              <ul>
+                <li><b>Disk <code>/</code>:</b> 8.7G of 58G (16%)</li>
+                <li><b>Memory:</b> 498Mi of 3.7Gi</li>
+                <li><b>Uptime:</b> 2h 4m</li>
+                <li><b>Services:</b> Tailscale, SSH, Jellyfin all active</li>
+              </ul>
+            </div>
+          </div>
+          <div class="composer">
+            <div class="input"><span class="material-symbols-outlined">edit</span>Message raspberrypi…</div>
+            <div class="send"><span class="material-symbols-outlined">arrow_upward</span></div>
+          </div>
+        </div>
+        <div class="nav">
+          <div><span class="material-symbols-outlined">cottage</span></div>
+          <div><span class="material-symbols-outlined">ios_share</span></div>
+          <div class="on"><span class="material-symbols-outlined">forum</span></div>
+          <div><span class="material-symbols-outlined">grid_view</span></div>
+          <div><span class="material-symbols-outlined">tune</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <p class="caption">Share</p>
+      <div class="phone">
+        <div class="appbar"><div class="t">Share</div><div class="s">send to a device</div></div>
+        <div class="body">
+          <div class="card">
+            <p class="sec">Send to</p>
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <div class="peer sel"><span class="dot up"></span>aakarshs-m5-pro<span class="meta">Mac · online</span></div>
+              <div class="peer"><span class="dot up"></span>raspberrypi<span class="meta">Pi · online</span></div>
+              <div class="peer"><span class="dot"></span>desktop-j29une6<span class="meta">offline</span></div>
+            </div>
+          </div>
+          <div class="composer">
+            <div class="input"><span class="material-symbols-outlined">edit_note</span>Type or<span class="material-symbols-outlined">content_paste</span>Paste</div>
+            <div class="send"><span class="material-symbols-outlined">arrow_upward</span></div>
+          </div>
+          <div class="card">
+            <p class="sec">Inbox</p>
+            <div class="cap"><b>shot.png</b><span>from raspberrypi · 2m</span></div>
+            <div class="cap" style="margin-top:8px"><b>notes.txt</b><span>from aakarshs-m5-pro · 1h</span></div>
+          </div>
+        </div>
+        <div class="nav">
+          <div><span class="material-symbols-outlined">cottage</span></div>
+          <div class="on"><span class="material-symbols-outlined">ios_share</span></div>
+          <div><span class="material-symbols-outlined">forum</span></div>
+          <div><span class="material-symbols-outlined">grid_view</span></div>
+          <div><span class="material-symbols-outlined">tune</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <p class="caption">Settings</p>
+      <div class="phone">
+        <div class="appbar"><div class="t">Settings</div><div class="s">theme, peers, provider</div></div>
+        <div class="body">
+          <div class="card">
+            <p class="sec">Appearance</p>
+            <div class="setrow"><div class="k">Theme<small>light or dark</small></div>
+              <div class="seg"><button class="on" style="padding:5px 12px;font-size:12px">Light</button><button style="padding:5px 12px;font-size:12px;background:transparent;color:var(--dim);border:0">Dark</button></div>
+            </div>
+            <div class="setrow"><div class="k">Accent</div>
+              <div class="swatches">
+                <div class="sw on" style="background:var(--accent);width:22px;height:22px"></div>
+                <div class="sw" style="background:#0D9488;width:22px;height:22px"></div>
+                <div class="sw" style="background:#7C5CFF;width:22px;height:22px"></div>
+                <div class="sw" style="background:#C2410C;width:22px;height:22px"></div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <p class="sec">Assistant</p>
+            <div class="setrow"><div class="k">Provider</div>
+              <div class="seg"><button class="on" style="padding:5px 11px;font-size:12px">Gemini</button><button style="padding:5px 11px;font-size:12px;background:transparent;color:var(--dim);border:0">Claude</button><button style="padding:5px 10px;font-size:12px;background:transparent;color:var(--dim);border:0">+</button></div>
+            </div>
+            <div class="setrow"><div class="k">Model</div>
+              <div style="border:1px solid var(--border);border-radius:999px;padding:6px 12px;font-size:12px;display:inline-flex;align-items:center;gap:6px">gemini-3.8-flash<span class="material-symbols-outlined" style="font-size:16px;color:var(--dim)">expand_more</span></div>
+            </div>
+            <div class="setrow"><div class="k">Thinking</div>
+              <div class="seg"><button style="padding:5px 10px;font-size:12px;background:transparent;color:var(--dim);border:0">Off</button><button style="padding:5px 10px;font-size:12px;background:transparent;color:var(--dim);border:0">Low</button><button class="on" style="padding:5px 10px;font-size:12px">Med</button><button style="padding:5px 10px;font-size:12px;background:transparent;color:var(--dim);border:0">High</button></div>
+            </div>
+            <div class="setrow"><div class="k">Run commands<small>let it run shell on the Pi</small></div><div class="toggle off"></div></div>
+          </div>
+        </div>
+        <div class="nav">
+          <div><span class="material-symbols-outlined">cottage</span></div>
+          <div><span class="material-symbols-outlined">ios_share</span></div>
+          <div><span class="material-symbols-outlined">forum</span></div>
+          <div><span class="material-symbols-outlined">grid_view</span></div>
+          <div class="on"><span class="material-symbols-outlined">tune</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <p class="note">Rough pass, surfaces still missing (Tools, inbox detail, peer add, empty and error states). Tell me the accent, grey tone, and default theme, and what to flesh out next.</p>
+</div>
+
+<script>
+  const root = document.documentElement;
+  const NEUTRALS = {
+    slate: { light:{bg:'#F5F7FA',s:'#FFFFFF',s2:'#EDF1F6',text:'#161A20',dim:'#5A6472',border:'#DDE4EC',off:'#AEB6C2'},
+             dark: {bg:'#0F1216',s:'#171B21',s2:'#1F242C',text:'#ECEEF2',dim:'#8A94A2',border:'#2A313B',off:'#525A66'} },
+    mist:  { light:{bg:'#F1F5FA',s:'#FFFFFF',s2:'#E6EDF6',text:'#141A22',dim:'#566373',border:'#D4DFEB',off:'#A9B4C2'},
+             dark: {bg:'#0E1319',s:'#151B23',s2:'#1C2430',text:'#EAEEF3',dim:'#8794A4',border:'#28323E',off:'#4E5865'} },
+    steel: { light:{bg:'#ECF1F7',s:'#FBFCFE',s2:'#E1E9F5',text:'#12181F',dim:'#525E6E',border:'#CDD9E6',off:'#A4B0BF'},
+             dark: {bg:'#0C1014',s:'#13181F',s2:'#1A212C',text:'#E9EDF2',dim:'#8390A0',border:'#252E3A',off:'#4C5561'} },
+  };
+  let curNeutral = 'slate';
+  function theme(){ const t = root.getAttribute('data-theme'); if (t) return t; return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; }
+  function applyNeutral(){ const n = NEUTRALS[curNeutral][theme()]; const S = root.style;
+    S.setProperty('--bg',n.bg); S.setProperty('--surface',n.s); S.setProperty('--surface-2',n.s2);
+    S.setProperty('--text',n.text); S.setProperty('--dim',n.dim); S.setProperty('--border',n.border); S.setProperty('--offline',n.off); }
+  document.getElementById('themeSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
+    root.setAttribute('data-theme', b.dataset.theme);
+    document.querySelectorAll('#themeSeg button').forEach(x => x.classList.toggle('on', x === b)); applyNeutral(); });
+  document.getElementById('swatches').addEventListener('click', e => { const s = e.target.closest('.sw'); if (!s) return;
+    const a = s.dataset.accent; root.style.setProperty('--accent', a); root.style.setProperty('--accent-weak', a + '22');
+    document.querySelectorAll('#swatches .sw').forEach(x => x.classList.toggle('on', x === s)); });
+  applyNeutral();
+</script>

@@ -63,6 +63,48 @@ public final class MeshClient {
         return withRetry(ip, () -> chatOnce(ip, token, session, message));
     }
 
+    /** Send a chat message and return the structured turns (thinking, tool_call, text). */
+    static JSONArray chatTurns(String ip, String token, String session, String message) throws Exception {
+        return withRetry(ip, () -> {
+            String resp = chatRaw(ip, token, session, message);
+            JSONObject o = new JSONObject(resp);
+            JSONArray turns = o.optJSONArray("turns");
+            if (turns == null) { // older assist: wrap the flat reply as one text turn
+                turns = new JSONArray();
+                JSONObject t = new JSONObject();
+                t.put("type", "text"); t.put("text", o.optString("reply", "(no reply)"));
+                turns.put(t);
+            }
+            return turns;
+        });
+    }
+
+    private static String chatRaw(String ip, String token, String session, String message) throws Exception {
+        URL url = new URL("http://" + ip + ":" + ASSIST_PORT + "/chat");
+        HttpURLConnection c = (HttpURLConnection) url.openConnection();
+        c.setConnectTimeout(5000);
+        c.setReadTimeout(90000);
+        c.setDoOutput(true);
+        c.setRequestMethod("POST");
+        c.setRequestProperty("Content-Type", "application/json");
+        c.setRequestProperty("X-Csync-Token", token);
+        JSONObject req = new JSONObject();
+        req.put("session", session);
+        req.put("message", message);
+        byte[] body = req.toString().getBytes("UTF-8");
+        c.setFixedLengthStreamingMode(body.length);
+        OutputStream out = c.getOutputStream();
+        out.write(body);
+        out.close();
+        int code = c.getResponseCode();
+        String resp = readAll(code < 400 ? c.getInputStream() : c.getErrorStream());
+        c.disconnect();
+        if (code >= 400) {
+            throw new Exception("assistant error (" + code + "): " + resp);
+        }
+        return resp;
+    }
+
     private static String chatOnce(String ip, String token, String session, String message) throws Exception {
         URL url = new URL("http://" + ip + ":" + ASSIST_PORT + "/chat");
         HttpURLConnection c = (HttpURLConnection) url.openConnection();

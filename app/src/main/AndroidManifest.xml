@@ -13,7 +13,7 @@
         android:icon="@drawable/ic_launcher"
         android:label="csync"
         android:usesCleartextTraffic="true"
-        android:theme="@android:style/Theme.Material">
+        android:theme="@style/Theme.Csync">
 
         <activity
             android:name=".MainActivity"
@@ -28,7 +28,7 @@
             android:name=".ShareActivity"
             android:exported="true"
             android:excludeFromRecents="true"
-            android:theme="@android:style/Theme.Material.Dialog">
+            android:theme="@style/Theme.Csync.Dialog">
             <intent-filter>
                 <action android:name="android.intent.action.SEND"/>
                 <category android:name="android.intent.category.DEFAULT"/>

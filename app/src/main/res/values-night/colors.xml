@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Slate neutral, dark -->
+    <color name="bg">#0F1216</color>
+    <color name="surface">#171B21</color>
+    <color name="surface2">#1F242C</color>
+    <color name="text">#ECEEF2</color>
+    <color name="dim">#8A94A2</color>
+    <color name="border">#2A313B</color>
+    <color name="offline">#525A66</color>
+</resources>
