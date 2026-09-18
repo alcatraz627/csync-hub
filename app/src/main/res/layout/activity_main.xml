@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical">
+    android:orientation="vertical"
+    android:background="@color/bg">
 
     <FrameLayout
         android:id="@+id/content"
@@ -10,38 +12,11 @@
         android:layout_height="0dp"
         android:layout_weight="1"/>
 
-    <LinearLayout
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/nav"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:background="#20000000">
-
-        <Button
-            android:id="@+id/nav_xkcd"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="xkcd"/>
-
-        <Button
-            android:id="@+id/nav_system"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="System"/>
-
-        <Button
-            android:id="@+id/nav_devices"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Devices"/>
-
-        <Button
-            android:id="@+id/nav_chat"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Chat"/>
-    </LinearLayout>
+        android:background="@color/surface"
+        app:labelVisibilityMode="unlabeled"
+        app:menu="@menu/nav_menu"/>
 </LinearLayout>

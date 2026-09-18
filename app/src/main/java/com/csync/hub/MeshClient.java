@@ -202,6 +202,41 @@ public final class MeshClient {
         return new JSONArray(resp);
     }
 
+    /** The assistant's advertised tools: a list of {name, description}. */
+    static JSONArray capabilities(String assistIp, String token) throws Exception {
+        return withRetry(assistIp, () -> {
+            URL url = new URL("http://" + assistIp + ":" + ASSIST_PORT + "/capabilities");
+            HttpURLConnection c = (HttpURLConnection) url.openConnection();
+            c.setConnectTimeout(5000);
+            c.setReadTimeout(8000);
+            c.setRequestProperty("X-Csync-Token", token);
+            int code = c.getResponseCode();
+            String resp = readAll(code < 400 ? c.getInputStream() : c.getErrorStream());
+            c.disconnect();
+            if (code >= 400) throw new Exception("capabilities failed (" + code + "): " + resp);
+            JSONArray tools = new JSONObject(resp).optJSONArray("tools");
+            return tools == null ? new JSONArray() : tools;
+        });
+    }
+
+    /**
+     * A quick liveness probe of a device by name, resolved via MagicDNS. Hits
+     * /whoami with a short timeout and no retry; true means the device answered.
+     * Used for the Home status dots, where a slow no is as good as a fast no.
+     */
+    static boolean reachable(String host, int port) {
+        try {
+            HttpURLConnection c = (HttpURLConnection) new URL("http://" + host + ":" + port + "/whoami").openConnection();
+            c.setConnectTimeout(2500);
+            c.setReadTimeout(2500);
+            int code = c.getResponseCode();
+            c.disconnect();
+            return code == 200;
+        } catch (Throwable e) {
+            return false;
+        }
+    }
+
     /**
      * This device's tailnet IPv4, if Tailscale is up. Tailscale hands out
      * addresses in the 100.64.0.0/10 CGNAT range, so that is what we look for.

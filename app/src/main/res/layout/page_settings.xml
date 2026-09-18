@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg">
+
+    <!-- app bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingLeft="18dp" android:paddingRight="18dp"
+        android:paddingTop="16dp" android:paddingBottom="12dp"
+        android:background="@color/surface">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Settings" android:textSize="20sp" android:textStyle="bold" android:textColor="@color/text"/>
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="theme and accent" android:textSize="12sp" android:textColor="@color/dim"/>
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <!-- appearance card -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/card_bg"
+                android:padding="14dp">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="APPEARANCE" android:textSize="12sp" android:textStyle="bold"
+                    android:textColor="@color/dim" android:letterSpacing="0.06" android:layout_marginBottom="10dp"/>
+
+                <!-- theme row -->
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical">
+                    <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+                        android:text="Theme" android:textSize="14sp" android:textColor="@color/text"/>
+                    <com.google.android.material.button.MaterialButtonToggleGroup
+                        android:id="@+id/set_theme_group"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        app:singleSelection="true" app:selectionRequired="true">
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/set_theme_light"
+                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Light"/>
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/set_theme_dark"
+                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Dark"/>
+                    </com.google.android.material.button.MaterialButtonToggleGroup>
+                </LinearLayout>
+
+                <!-- accent row -->
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical"
+                    android:layout_marginTop="12dp">
+                    <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+                        android:text="Accent" android:textSize="14sp" android:textColor="@color/text"/>
+                    <View android:id="@+id/set_accent_coral" android:layout_width="26dp" android:layout_height="26dp"
+                        android:layout_marginStart="8dp" android:background="@drawable/dot_circle"/>
+                    <View android:id="@+id/set_accent_teal" android:layout_width="26dp" android:layout_height="26dp"
+                        android:layout_marginStart="8dp" android:background="@drawable/dot_circle"/>
+                    <View android:id="@+id/set_accent_violet" android:layout_width="26dp" android:layout_height="26dp"
+                        android:layout_marginStart="8dp" android:background="@drawable/dot_circle"/>
+                    <View android:id="@+id/set_accent_rust" android:layout_width="26dp" android:layout_height="26dp"
+                        android:layout_marginStart="8dp" android:background="@drawable/dot_circle"/>
+                </LinearLayout>
+            </LinearLayout>
+
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="Peers, token, and provider config move here next."
+                android:textSize="12sp" android:textColor="@color/dim"
+                android:gravity="center" android:layout_marginTop="18dp"/>
+
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

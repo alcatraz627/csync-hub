@@ -27,6 +27,21 @@ public final class Prefs {
         p(c).edit().putString("assist_ip", ip.trim()).apply();
     }
 
+    // Appearance. Light is the default theme; accent is one of coral, teal,
+    // violet, rust (coral default). Both survive restarts and are applied at
+    // MainActivity startup before the content view is set.
+    static boolean darkTheme(Context c) { return p(c).getBoolean("dark_theme", false); }
+
+    static void saveDarkTheme(Context c, boolean dark) {
+        p(c).edit().putBoolean("dark_theme", dark).apply();
+    }
+
+    static String accent(Context c) { return p(c).getString("accent", "coral"); }
+
+    static void saveAccent(Context c, String accent) {
+        p(c).edit().putString("accent", accent).apply();
+    }
+
     /** This device's name on the mesh; the phone model, sanitised for a folder name. */
     static String deviceName(Context c) {
         String m = Build.MODEL != null ? Build.MODEL : "android";
