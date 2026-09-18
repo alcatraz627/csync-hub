@@ -18,5 +18,7 @@
         android:layout_height="wrap_content"
         android:background="@color/surface"
         app:labelVisibilityMode="unlabeled"
+        app:itemIconTint="@color/nav_icon_tint"
+        app:itemActiveIndicatorStyle="@style/Csync.NavIndicator"
         app:menu="@menu/nav_menu"/>
 </LinearLayout>

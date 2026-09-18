@@ -107,7 +107,18 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         if (Build.VERSION.SDK_INT >= 33) {
             requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 2002);
         }
-        nav.setSelectedItemId(R.id.nav_home);
+        int[] navIds = {R.id.nav_home, R.id.nav_share, R.id.nav_chat, R.id.nav_tools, R.id.nav_settings};
+        int start = b != null ? b.getInt("tab", 0) : 0;
+        if (start < 0 || start >= navIds.length) start = 0;
+        nav.setSelectedItemId(navIds[start]);
+    }
+
+    // Keep the open surface across a theme or accent change, which recreates the
+    // Activity; without this the app would snap back to Home on every toggle.
+    @Override
+    protected void onSaveInstanceState(Bundle b) {
+        super.onSaveInstanceState(b);
+        b.putInt("tab", current);
     }
 
     private void show(int page) {
@@ -132,8 +143,31 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         new Thread(() -> MeshClient.warmUp(ip, MeshClient.ASSIST_PORT)).start();
     }
 
-    @Override protected void onResume() { super.onResume(); resumed = true; if (current == 3) ensureShizuku(); }
-    @Override protected void onPause() { super.onPause(); resumed = false; }
+    @Override
+    protected void onResume() {
+        super.onResume();
+        resumed = true;
+        ChatService.uiForeground = true;
+        android.content.IntentFilter f = new android.content.IntentFilter(ChatService.ACTION_REPLY);
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(chatReceiver, f, Context.RECEIVER_NOT_EXPORTED);
+        else registerReceiver(chatReceiver, f);
+        // A reply that arrived while we were away is waiting in the service stash.
+        if (ChatService.stashedTurns != null || ChatService.stashedError != null) {
+            String t = ChatService.stashedTurns, e = ChatService.stashedError;
+            ChatService.stashedTurns = null; ChatService.stashedError = null;
+            deliverReply(t, e);
+        }
+        ((android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancel(7002);
+        if (current == 3) ensureShizuku();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        resumed = false;
+        ChatService.uiForeground = false;
+        try { unregisterReceiver(chatReceiver); } catch (Throwable ignore) {}
+    }
 
     @Override
     protected void onDestroy() {
@@ -385,7 +419,15 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setGravity(android.view.Gravity.CENTER_VERTICAL);
             row.setPadding(dp(11), dp(11), dp(12), dp(11));
-            row.setBackground(bg(col(name.equals(selected) ? R.color.surface2 : R.color.surface), 12));
+            if (name.equals(selected)) {
+                android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable();
+                g.setColor((accent() & 0x00FFFFFF) | 0x22000000); // accent at ~13% for the fill
+                g.setCornerRadius(dp(12));
+                g.setStroke(dp(1), accent());
+                row.setBackground(g);
+            } else {
+                row.setBackground(bg(col(R.color.surface), 12));
+            }
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
             lp.topMargin = dp(i == 0 ? 0 : 8); row.setLayoutParams(lp);
@@ -689,6 +731,12 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageChat.findViewById(R.id.chat_reset).setOnClickListener(v -> resetChat());
     }
 
+    private TextView chatPending;
+
+    // Hand the request to ChatService (a foreground service with a wakelock) so a
+    // reply that lands after the app is backgrounded still completes and can
+    // notify. The reply comes back via chatReceiver, or is drained from the
+    // service's stash on the next resume.
     private void sendChat() {
         final String msg = chatInput.getText().toString().trim();
         if (msg.isEmpty()) return;
@@ -696,20 +744,32 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         if (ip.isEmpty() || token.isEmpty()) { toast("Set the assistant and token in Settings"); return; }
         addUserBubble(msg);
         chatInput.setText("");
-        final TextView pending = addPending();
-        new Thread(() -> {
-            org.json.JSONArray turns = null; String err = null;
-            try { turns = MeshClient.chatTurns(ip, token, chatSession, msg); }
-            catch (Throwable e) { err = e.getMessage(); }
-            final org.json.JSONArray t = turns; final String e = err;
-            ui.post(() -> {
-                chatList.removeView(pending);
-                if (t != null) { renderTurns(t); if (!resumed) notifyReply(lastText(t)); }
-                else addError(e);
-                scrollDown();
-            });
-        }).start();
+        if (chatPending != null) chatList.removeView(chatPending);
+        chatPending = addPending();
+        Intent svc = new Intent(this, ChatService.class);
+        svc.putExtra("assist", ip); svc.putExtra("token", token);
+        svc.putExtra("session", chatSession); svc.putExtra("message", msg);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(svc);
+        else startService(svc);
     }
+
+    // Render a reply from ChatService, live or stashed, clearing the placeholder.
+    private void deliverReply(String turnsStr, String err) {
+        if (chatPending != null) { chatList.removeView(chatPending); chatPending = null; }
+        if (turnsStr != null) {
+            try { renderTurns(new org.json.JSONArray(turnsStr)); }
+            catch (Throwable e) { addError("bad reply: " + e.getMessage()); }
+        } else if (err != null) {
+            addError(err);
+        }
+        scrollDown();
+    }
+
+    private final android.content.BroadcastReceiver chatReceiver = new android.content.BroadcastReceiver() {
+        public void onReceive(android.content.Context c, Intent i) {
+            deliverReply(i.getStringExtra("turns"), i.getStringExtra("error"));
+        }
+    };
 
     private void renderTurns(org.json.JSONArray turns) {
         for (int i = 0; i < turns.length(); i++) {
@@ -720,44 +780,6 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             else if ("tool_call".equals(type)) addCollapsible(t.optString("name"), pretty(t.optJSONObject("result")), false);
             else if ("text".equals(type)) addMarkdown(t.optString("text"));
         }
-    }
-
-    // The assistant's final text turn, for the notification preview.
-    private String lastText(org.json.JSONArray turns) {
-        String last = "";
-        for (int i = 0; i < turns.length(); i++) {
-            org.json.JSONObject t = turns.optJSONObject(i);
-            if (t != null && "text".equals(t.optString("type"))) last = t.optString("text");
-        }
-        return last;
-    }
-
-    // Post a notification when a reply lands while the app is not in front, so a
-    // slow answer is not lost to the background. Reuses the mesh notification
-    // channel. Preview is trimmed to one line.
-    private void notifyReply(String text) {
-        if (text == null || text.isEmpty()) return;
-        try {
-            android.app.NotificationManager nm =
-                    (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-            android.app.Notification note;
-            String preview = text.length() > 120 ? text.substring(0, 120) + "…" : text;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                nm.createNotificationChannel(new android.app.NotificationChannel(
-                        "csync", "csync", android.app.NotificationManager.IMPORTANCE_DEFAULT));
-                note = new android.app.Notification.Builder(this, "csync")
-                        .setContentTitle("Assistant replied")
-                        .setContentText(preview)
-                        .setStyle(new android.app.Notification.BigTextStyle().bigText(preview))
-                        .setSmallIcon(android.R.drawable.stat_notify_chat)
-                        .setAutoCancel(true).build();
-            } else {
-                note = new android.app.Notification.Builder(this)
-                        .setContentTitle("Assistant replied").setContentText(preview)
-                        .setSmallIcon(android.R.drawable.stat_notify_chat).build();
-            }
-            nm.notify(7002, note);
-        } catch (Throwable ignore) {}
     }
 
     private void resetChat() {
