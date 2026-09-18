@@ -81,8 +81,52 @@
                 </LinearLayout>
             </LinearLayout>
 
+            <!-- connection card -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/card_bg"
+                android:padding="14dp"
+                android:layout_marginTop="14dp">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="CONNECTION" android:textSize="12sp" android:textStyle="bold"
+                    android:textColor="@color/dim" android:letterSpacing="0.06" android:layout_marginBottom="10dp"/>
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="Home peer" android:textSize="13sp" android:textColor="@color/text"/>
+                <EditText android:id="@+id/set_home"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:hint="name or tailnet IP of the Mac" android:inputType="text"
+                    android:textColor="@color/text" android:textColorHint="@color/dim"/>
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="Mesh token" android:textSize="13sp" android:textColor="@color/text"
+                    android:layout_marginTop="8dp"/>
+                <EditText android:id="@+id/set_token"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:hint="shared mesh token" android:inputType="textPassword"
+                    android:textColor="@color/text" android:textColorHint="@color/dim"/>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:layout_marginTop="10dp">
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/set_save"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:layout_marginEnd="8dp" android:text="Save"/>
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/set_receiver"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="Start receiving"/>
+                </LinearLayout>
+                <TextView android:id="@+id/set_conn_status"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:paddingTop="10dp" android:textSize="12sp" android:textColor="@color/dim" android:text=""/>
+            </LinearLayout>
+
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:text="Peers, token, and provider config move here next."
+                android:text="Provider, model, and thinking config move here next."
                 android:textSize="12sp" android:textColor="@color/dim"
                 android:gravity="center" android:layout_marginTop="18dp"/>
 

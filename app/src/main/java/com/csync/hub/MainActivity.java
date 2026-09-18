@@ -72,7 +72,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         FrameLayout content = findViewById(R.id.content);
         LayoutInflater inf = LayoutInflater.from(this);
         pageHome = inf.inflate(R.layout.page_home, content, false);
-        pageShare = inf.inflate(R.layout.page_devices, content, false);
+        pageShare = inf.inflate(R.layout.page_share, content, false);
         pageChat = inf.inflate(R.layout.page_chat, content, false);
         pageTools = inf.inflate(R.layout.page_tools, content, false);
         pageSettings = inf.inflate(R.layout.page_settings, content, false);
@@ -95,9 +95,10 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
         setupHomePage();
         setupSystemPage();
-        setupDevicesPage();
+        setupSharePage();
         setupChatPage();
         setupSettingsPage();
+        setupConnectionCard();
 
         Shizuku.addRequestPermissionResultListener(permListener);
         Shizuku.addBinderReceivedListenerSticky(binderListener);
@@ -116,9 +117,10 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageTools.setVisibility(page == 3 ? View.VISIBLE : View.GONE);
         pageSettings.setVisibility(page == 4 ? View.VISIBLE : View.GONE);
         if (page == 0) refreshHome();
-        if (page == 1) refreshDevicesHeader();
+        if (page == 1) refreshShare();
         if (page == 2) warmChat();
         if (page == 3) ensureShizuku();
+        if (page == 4) refreshConnection();
     }
 
     // Wake the tailnet path to the assistant so the first message is not the cold
@@ -319,86 +321,192 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         }
     }
 
-    // ---------------- devices page (mesh) ----------------
+    // ---------------- share page (send to a named peer, inbox) ----------------
 
-    private EditText devIp, devToken, devText;
-    private TextView devSelf, devStatus;
-    private Button devReceiver;
+    private EditText shareText;
+    private LinearLayout sharePeers, shareInbox;
+    private TextView shareStatus;
 
-    private void setupDevicesPage() {
-        devSelf = pageShare.findViewById(R.id.dev_self);
-        devIp = pageShare.findViewById(R.id.dev_ip);
-        devToken = pageShare.findViewById(R.id.dev_token);
-        devText = pageShare.findViewById(R.id.dev_text);
-        devStatus = pageShare.findViewById(R.id.dev_status);
-        devReceiver = pageShare.findViewById(R.id.dev_receiver);
-
-        devIp.setText(Prefs.homeIp(this));
-        devToken.setText(Prefs.token(this));
-
-        pageShare.findViewById(R.id.dev_save).setOnClickListener(v -> {
-            Prefs.save(this, devIp.getText().toString(), devToken.getText().toString());
-            toast("Saved");
-        });
-        pageShare.findViewById(R.id.dev_send_text).setOnClickListener(v ->
-                sendText(devText.getText().toString()));
-        pageShare.findViewById(R.id.dev_send_clip).setOnClickListener(v -> sendText(clipboardText()));
-        pageShare.findViewById(R.id.dev_scan).setOnClickListener(v -> scan());
-        devReceiver.setOnClickListener(v -> toggleReceiver());
-
-        updateReceiverButton();
+    private void setupSharePage() {
+        sharePeers = pageShare.findViewById(R.id.share_peers);
+        shareText = pageShare.findViewById(R.id.share_text);
+        shareInbox = pageShare.findViewById(R.id.share_inbox);
+        shareStatus = pageShare.findViewById(R.id.share_status);
+        pageShare.findViewById(R.id.share_send).setOnClickListener(v -> sendToSelected(shareText.getText().toString()));
+        pageShare.findViewById(R.id.share_paste).setOnClickListener(v -> sendToSelected(clipboardText()));
+        pageShare.findViewById(R.id.share_scan).setOnClickListener(v -> scanPeers());
     }
 
-    private void refreshDevicesHeader() {
-        String ip = MeshClient.tailnetIP();
-        devSelf.setText("This device: " + Prefs.deviceName(this)
-                + "\nTailnet IP: " + (ip == null ? "Tailscale not up" : ip));
-        updateReceiverButton();
+    // Show the stored roster and inbox immediately, then refresh online state in
+    // the background so the picker is never blank while a scan runs.
+    private void refreshShare() {
+        renderPeers(PeerStore.load(this));
+        renderInbox();
+        if (!Prefs.token(this).isEmpty()) scanPeers();
     }
 
-    private void sendText(final String text) {
+    private void scanPeers() {
+        final String home = Prefs.homeIp(this), token = Prefs.token(this);
+        if (home.isEmpty() || token.isEmpty()) { toast("Set the home peer and token in Settings"); return; }
+        shareStatus.setText("scanning…");
+        new Thread(() -> {
+            try {
+                JSONArray scanned = MeshClient.peers(home, token);
+                final JSONArray merged = PeerStore.mergeScan(this, scanned);
+                ui.post(() -> { renderPeers(merged); shareStatus.setText(""); });
+            } catch (Throwable e) {
+                final String msg = e.getMessage();
+                ui.post(() -> shareStatus.setText("scan failed: " + msg));
+            }
+        }).start();
+    }
+
+    private void renderPeers(JSONArray roster) {
+        sharePeers.removeAllViews();
+        if (roster == null || roster.length() == 0) {
+            TextView empty = new TextView(this);
+            empty.setText("No devices yet. Tap Scan.");
+            empty.setTextColor(col(R.color.dim)); empty.setTextSize(13);
+            sharePeers.addView(empty);
+            return;
+        }
+        String selected = PeerStore.selected(this);
+        for (int i = 0; i < roster.length(); i++) {
+            JSONObject o = roster.optJSONObject(i);
+            if (o == null) continue;
+            final String name = o.optString("name");
+            boolean online = o.optBoolean("online");
+            String meta = o.optString("platform");
+            if (meta.isEmpty()) meta = online ? "online" : "offline";
+            else meta += online ? " · online" : " · offline";
+
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            row.setPadding(dp(11), dp(11), dp(12), dp(11));
+            row.setBackground(bg(col(name.equals(selected) ? R.color.surface2 : R.color.surface), 12));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            lp.topMargin = dp(i == 0 ? 0 : 8); row.setLayoutParams(lp);
+
+            View dot = new View(this);
+            LinearLayout.LayoutParams dp2 = new LinearLayout.LayoutParams(dp(10), dp(10));
+            dp2.rightMargin = dp(11); dot.setLayoutParams(dp2);
+            dot.setBackground(getDrawable(R.drawable.dot_circle));
+            setDot(dot, online);
+            row.addView(dot);
+
+            TextView tvName = new TextView(this);
+            tvName.setText(name); tvName.setTextColor(col(R.color.text)); tvName.setTextSize(14);
+            LinearLayout.LayoutParams np = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            tvName.setLayoutParams(np);
+            row.addView(tvName);
+
+            TextView tvMeta = new TextView(this);
+            tvMeta.setText(meta); tvMeta.setTextColor(col(R.color.dim)); tvMeta.setTextSize(12);
+            row.addView(tvMeta);
+
+            row.setOnClickListener(v -> { PeerStore.select(this, name); renderPeers(PeerStore.load(this)); });
+            sharePeers.addView(row);
+        }
+    }
+
+    private void sendToSelected(final String text) {
         if (text == null || text.isEmpty()) { toast("Nothing to send"); return; }
-        final String ip = Prefs.homeIp(this), token = Prefs.token(this);
-        if (ip.isEmpty() || token.isEmpty()) { toast("Save the home peer first"); return; }
+        final String target = PeerStore.selected(this), token = Prefs.token(this);
+        if (target.isEmpty()) { toast("Pick a device first"); return; }
+        if (token.isEmpty()) { toast("Set the token in Settings"); return; }
         final String from = Prefs.deviceName(this);
+        shareStatus.setText("sending to " + target + "…");
         new Thread(() -> {
             String result;
             try {
-                MeshClient.send(ip, token, from, "text", "shared.txt", text.getBytes("UTF-8"));
-                result = "sent text to " + ip;
+                MeshClient.send(target, token, from, "text", "shared.txt", text.getBytes("UTF-8"));
+                result = "sent to " + target;
             } catch (Throwable e) {
                 result = "failed: " + e.getMessage();
             }
             final String r = result;
-            ui.post(() -> devStatus.setText(r));
+            ui.post(() -> { shareStatus.setText(r); shareText.setText(""); });
         }).start();
     }
 
-    private void scan() {
-        final String ip = Prefs.homeIp(this), token = Prefs.token(this);
-        if (ip.isEmpty() || token.isEmpty()) { toast("Save the home peer first"); return; }
-        devStatus.setText("scanning via " + ip + " ...");
-        new Thread(() -> {
-            String out;
-            try {
-                JSONArray arr = MeshClient.peers(ip, token);
-                StringBuilder sb = new StringBuilder();
-                for (int i = 0; i < arr.length(); i++) {
-                    JSONObject p = arr.getJSONObject(i);
-                    String agent = p.optBoolean("reachable") ? "agent"
-                            : (p.optBoolean("online") ? "online" : "offline");
-                    sb.append(p.optString("name")).append("  ")
-                      .append(p.optString("ip")).append("  ")
-                      .append(agent).append("  ")
-                      .append(p.optString("platform")).append('\n');
+    // List what has arrived in the app's inbox: files under inbox/<from>/<name>.
+    // Tapping a row copies the file's text into the clipboard.
+    private void renderInbox() {
+        shareInbox.removeAllViews();
+        java.io.File inbox = getExternalFilesDir("inbox");
+        java.io.File[] senders = (inbox != null && inbox.exists()) ? inbox.listFiles() : null;
+        boolean any = false;
+        if (senders != null) {
+            for (java.io.File sender : senders) {
+                java.io.File[] files = sender.listFiles();
+                if (files == null) continue;
+                for (java.io.File f : files) {
+                    any = true;
+                    TextView row = new TextView(this);
+                    row.setText(f.getName() + "   " + sender.getName());
+                    row.setTextColor(col(R.color.text)); row.setTextSize(13);
+                    row.setPadding(0, dp(6), 0, dp(6));
+                    row.setOnClickListener(v -> copyFile(f));
+                    shareInbox.addView(row);
                 }
-                out = sb.length() == 0 ? "no peers" : sb.toString();
-            } catch (Throwable e) {
-                out = "scan failed: " + e.getMessage();
             }
-            final String r = out;
-            ui.post(() -> devStatus.setText(r));
-        }).start();
+        }
+        if (!any) {
+            TextView empty = new TextView(this);
+            empty.setText("Nothing received yet.");
+            empty.setTextColor(col(R.color.dim)); empty.setTextSize(13);
+            shareInbox.addView(empty);
+        }
+    }
+
+    private void copyFile(java.io.File f) {
+        try {
+            byte[] data = new byte[(int) Math.min(f.length(), 1 << 20)];
+            java.io.FileInputStream in = new java.io.FileInputStream(f);
+            int n = in.read(data); in.close();
+            String text = new String(data, 0, Math.max(n, 0), "UTF-8");
+            ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("csync", text));
+            toast("Copied " + f.getName());
+        } catch (Throwable e) {
+            toast("Can't copy: " + e.getMessage());
+        }
+    }
+
+    // ---------------- settings: connection card ----------------
+
+    private EditText connHome, connToken;
+    private com.google.android.material.button.MaterialButton connReceiver;
+    private TextView connStatus;
+
+    private void setupConnectionCard() {
+        connHome = pageSettings.findViewById(R.id.set_home);
+        connToken = pageSettings.findViewById(R.id.set_token);
+        connReceiver = pageSettings.findViewById(R.id.set_receiver);
+        connStatus = pageSettings.findViewById(R.id.set_conn_status);
+        connHome.setText(Prefs.homeIp(this));
+        connToken.setText(Prefs.token(this));
+        pageSettings.findViewById(R.id.set_save).setOnClickListener(v -> {
+            Prefs.save(this, connHome.getText().toString(), connToken.getText().toString());
+            toast("Saved");
+        });
+        connReceiver.setOnClickListener(v -> toggleReceiver());
+        refreshConnection();
+    }
+
+    private void refreshConnection() {
+        if (connReceiver == null) return;
+        String self = Prefs.deviceName(this);
+        String tail = MeshClient.tailnetIP();
+        if (MeshService.running) {
+            connReceiver.setText("Stop receiving");
+            connStatus.setText(self + " · receiving on " + MeshService.boundInfo);
+        } else {
+            connReceiver.setText("Start receiving");
+            connStatus.setText(self + " · tailnet " + (tail == null ? "not up" : tail));
+        }
     }
 
     private void toggleReceiver() {
@@ -410,17 +518,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(svc);
             else startService(svc);
         }
-        ui.postDelayed(this::updateReceiverButton, 400);
-    }
-
-    private void updateReceiverButton() {
-        if (devReceiver == null) return;
-        if (MeshService.running) {
-            devReceiver.setText("Stop receiving");
-            devStatus.setText("receiving on " + MeshService.boundInfo);
-        } else {
-            devReceiver.setText("Start receiving");
-        }
+        ui.postDelayed(this::refreshConnection, 400);
     }
 
     // ---------------- chat page (assistant on the Pi) ----------------

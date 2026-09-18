@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg">
+
+    <!-- app bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingLeft="18dp" android:paddingRight="18dp"
+        android:paddingTop="16dp" android:paddingBottom="12dp"
+        android:background="@color/surface">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Share" android:textSize="20sp" android:textStyle="bold" android:textColor="@color/text"/>
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="send to a device" android:textSize="12sp" android:textColor="@color/dim"/>
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <!-- peer picker -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/card_bg"
+                android:padding="14dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical"
+                    android:layout_marginBottom="10dp">
+                    <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+                        android:text="SEND TO" android:textSize="12sp" android:textStyle="bold"
+                        android:textColor="@color/dim" android:letterSpacing="0.06"/>
+                    <Button android:id="@+id/share_scan" style="?android:attr/buttonStyleSmall"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Scan"/>
+                </LinearLayout>
+                <LinearLayout android:id="@+id/share_peers"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical"/>
+            </LinearLayout>
+
+            <!-- composer -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/card_bg"
+                android:padding="14dp"
+                android:layout_marginTop="14dp">
+                <EditText android:id="@+id/share_text"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:minLines="2" android:gravity="top"
+                    android:hint="type text to send" android:inputType="textMultiLine"
+                    android:textColor="@color/text" android:textColorHint="@color/dim"/>
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:layout_marginTop="8dp">
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/share_send"
+                        android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+                        android:layout_marginEnd="6dp" app:icon="@drawable/ic_share" android:text="Send"/>
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/share_paste"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp" android:text="Send clipboard"/>
+                </LinearLayout>
+                <TextView android:id="@+id/share_status"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:paddingTop="8dp" android:textSize="12sp" android:textColor="@color/dim" android:text=""/>
+            </LinearLayout>
+
+            <!-- inbox -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/card_bg"
+                android:padding="14dp"
+                android:layout_marginTop="14dp">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="INBOX" android:textSize="12sp" android:textStyle="bold"
+                    android:textColor="@color/dim" android:letterSpacing="0.06" android:layout_marginBottom="10dp"/>
+                <LinearLayout android:id="@+id/share_inbox"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical"/>
+            </LinearLayout>
+
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>
