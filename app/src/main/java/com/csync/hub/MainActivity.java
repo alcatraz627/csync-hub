@@ -99,6 +99,15 @@ public class MainActivity extends Activity {
         pageChat.setVisibility(page == 3 ? View.VISIBLE : View.GONE);
         if (page == 1) ensureShizuku();
         if (page == 2) refreshDevicesHeader();
+        if (page == 3) warmChat();
+    }
+
+    // Wake the tailnet path to the assistant so the first message is not the cold
+    // start that would otherwise time out.
+    private void warmChat() {
+        final String ip = Prefs.assistIp(this);
+        if (ip.isEmpty()) return;
+        new Thread(() -> MeshClient.warmUp(ip, MeshClient.ASSIST_PORT)).start();
     }
 
     @Override protected void onResume() { super.onResume(); resumed = true; if (current == 1) ensureShizuku(); }

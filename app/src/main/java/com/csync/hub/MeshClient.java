@@ -21,8 +21,49 @@ public final class MeshClient {
     static final int PORT = 8790;
     static final int ASSIST_PORT = 8791;
 
+    interface Attempt<T> {
+        T run() throws Exception;
+    }
+
+    /**
+     * A mobile Tailscale link goes cold between uses, so the first request after
+     * an idle stretch times out while the path re-establishes, then works. Retry
+     * a few times so that cold start is invisible; only a genuinely-down peer or
+     * a disconnected Tailscale reaches the final, plain-language error.
+     */
+    static <T> T withRetry(String peer, Attempt<T> a) throws Exception {
+        Exception last = null;
+        for (int i = 0; i < 3; i++) {
+            try {
+                return a.run();
+            } catch (java.io.IOException e) {
+                last = e;
+                try { Thread.sleep(1200); } catch (InterruptedException ignore) {}
+            }
+        }
+        throw new Exception("Can't reach " + peer + " over Tailscale. Check that Tailscale is"
+                + " connected on this phone and that the device is on. ("
+                + (last != null ? last.getMessage() : "no response") + ")");
+    }
+
+    /** Wake the path to a peer so the first real request is warm. Errors ignored. */
+    static void warmUp(String ip, int port) {
+        try {
+            HttpURLConnection c = (HttpURLConnection) new URL("http://" + ip + ":" + port + "/whoami").openConnection();
+            c.setConnectTimeout(4000);
+            c.setReadTimeout(4000);
+            c.getResponseCode();
+            c.disconnect();
+        } catch (Throwable ignore) {
+        }
+    }
+
     /** Send a chat message to the assistant peer and return its reply text. */
     static String chat(String ip, String token, String session, String message) throws Exception {
+        return withRetry(ip, () -> chatOnce(ip, token, session, message));
+    }
+
+    private static String chatOnce(String ip, String token, String session, String message) throws Exception {
         URL url = new URL("http://" + ip + ":" + ASSIST_PORT + "/chat");
         HttpURLConnection c = (HttpURLConnection) url.openConnection();
         c.setConnectTimeout(5000);
@@ -70,6 +111,11 @@ public final class MeshClient {
     /** Post one payload to a peer's /send. Returns the receipt body on success. */
     static String send(String ip, String token, String from, String kind,
                        String name, byte[] body) throws Exception {
+        return withRetry(ip, () -> sendOnce(ip, token, from, kind, name, body));
+    }
+
+    private static String sendOnce(String ip, String token, String from, String kind,
+                                   String name, byte[] body) throws Exception {
         URL url = new URL("http://" + ip + ":" + PORT + "/send");
         HttpURLConnection c = (HttpURLConnection) url.openConnection();
         c.setConnectTimeout(5000);
@@ -96,6 +142,10 @@ public final class MeshClient {
 
     /** Read a peer's tailnet roster (that peer runs `tailscale`, this device need not). */
     static JSONArray peers(String ip, String token) throws Exception {
+        return withRetry(ip, () -> peersOnce(ip, token));
+    }
+
+    private static JSONArray peersOnce(String ip, String token) throws Exception {
         URL url = new URL("http://" + ip + ":" + PORT + "/peers");
         HttpURLConnection c = (HttpURLConnection) url.openConnection();
         c.setConnectTimeout(5000);
