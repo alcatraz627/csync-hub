@@ -477,19 +477,23 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     // ---------------- settings: connection card ----------------
 
-    private EditText connHome, connToken;
+    private EditText connHome, connToken, connAssist;
     private com.google.android.material.button.MaterialButton connReceiver;
     private TextView connStatus;
 
     private void setupConnectionCard() {
         connHome = pageSettings.findViewById(R.id.set_home);
+        connAssist = pageSettings.findViewById(R.id.set_assist);
         connToken = pageSettings.findViewById(R.id.set_token);
         connReceiver = pageSettings.findViewById(R.id.set_receiver);
         connStatus = pageSettings.findViewById(R.id.set_conn_status);
         connHome.setText(Prefs.homeIp(this));
+        connAssist.setText(Prefs.assistIp(this));
         connToken.setText(Prefs.token(this));
         pageSettings.findViewById(R.id.set_save).setOnClickListener(v -> {
             Prefs.save(this, connHome.getText().toString(), connToken.getText().toString());
+            Prefs.saveAssistIp(this, connAssist.getText().toString());
+            if (chatSubtitle != null) chatSubtitle.setText("assistant on " + Prefs.assistIp(this));
             toast("Saved");
         });
         connReceiver.setOnClickListener(v -> toggleReceiver());
@@ -523,25 +527,22 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     // ---------------- chat page (assistant on the Pi) ----------------
 
-    private EditText chatIp, chatInput;
+    private EditText chatInput;
+    private TextView chatSubtitle;
     private LinearLayout chatList;
     private ScrollView chatScroll;
     private String chatSession;
     private io.noties.markwon.Markwon markwon;
 
     private void setupChatPage() {
-        chatIp = pageChat.findViewById(R.id.chat_assist_ip);
         chatInput = pageChat.findViewById(R.id.chat_input);
         chatList = pageChat.findViewById(R.id.chat_list);
         chatScroll = pageChat.findViewById(R.id.chat_scroll);
+        chatSubtitle = pageChat.findViewById(R.id.chat_subtitle);
         markwon = buildMarkwon();
-        chatIp.setText(Prefs.assistIp(this));
         chatSession = Prefs.deviceName(this) + "-" + System.currentTimeMillis();
+        chatSubtitle.setText("assistant on " + Prefs.assistIp(this));
 
-        pageChat.findViewById(R.id.chat_assist_save).setOnClickListener(v -> {
-            Prefs.saveAssistIp(this, chatIp.getText().toString());
-            toast("Assistant set to " + Prefs.assistIp(this));
-        });
         pageChat.findViewById(R.id.chat_send).setOnClickListener(v -> sendChat());
         pageChat.findViewById(R.id.chat_reset).setOnClickListener(v -> resetChat());
     }
@@ -550,7 +551,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         final String msg = chatInput.getText().toString().trim();
         if (msg.isEmpty()) return;
         final String ip = Prefs.assistIp(this), token = Prefs.token(this);
-        if (ip.isEmpty() || token.isEmpty()) { toast("Set the assistant IP and save the token in Devices"); return; }
+        if (ip.isEmpty() || token.isEmpty()) { toast("Set the assistant and token in Settings"); return; }
         addUserBubble(msg);
         chatInput.setText("");
         final TextView pending = addPending();
@@ -559,7 +560,12 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             try { turns = MeshClient.chatTurns(ip, token, chatSession, msg); }
             catch (Throwable e) { err = e.getMessage(); }
             final org.json.JSONArray t = turns; final String e = err;
-            ui.post(() -> { chatList.removeView(pending); if (t != null) renderTurns(t); else addError(e); scrollDown(); });
+            ui.post(() -> {
+                chatList.removeView(pending);
+                if (t != null) { renderTurns(t); if (!resumed) notifyReply(lastText(t)); }
+                else addError(e);
+                scrollDown();
+            });
         }).start();
     }
 
@@ -572,6 +578,44 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             else if ("tool_call".equals(type)) addCollapsible(t.optString("name"), pretty(t.optJSONObject("result")), false);
             else if ("text".equals(type)) addMarkdown(t.optString("text"));
         }
+    }
+
+    // The assistant's final text turn, for the notification preview.
+    private String lastText(org.json.JSONArray turns) {
+        String last = "";
+        for (int i = 0; i < turns.length(); i++) {
+            org.json.JSONObject t = turns.optJSONObject(i);
+            if (t != null && "text".equals(t.optString("type"))) last = t.optString("text");
+        }
+        return last;
+    }
+
+    // Post a notification when a reply lands while the app is not in front, so a
+    // slow answer is not lost to the background. Reuses the mesh notification
+    // channel. Preview is trimmed to one line.
+    private void notifyReply(String text) {
+        if (text == null || text.isEmpty()) return;
+        try {
+            android.app.NotificationManager nm =
+                    (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            android.app.Notification note;
+            String preview = text.length() > 120 ? text.substring(0, 120) + "…" : text;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                nm.createNotificationChannel(new android.app.NotificationChannel(
+                        "csync", "csync", android.app.NotificationManager.IMPORTANCE_DEFAULT));
+                note = new android.app.Notification.Builder(this, "csync")
+                        .setContentTitle("Assistant replied")
+                        .setContentText(preview)
+                        .setStyle(new android.app.Notification.BigTextStyle().bigText(preview))
+                        .setSmallIcon(android.R.drawable.stat_notify_chat)
+                        .setAutoCancel(true).build();
+            } else {
+                note = new android.app.Notification.Builder(this)
+                        .setContentTitle("Assistant replied").setContentText(preview)
+                        .setSmallIcon(android.R.drawable.stat_notify_chat).build();
+            }
+            nm.notify(7002, note);
+        } catch (Throwable ignore) {}
     }
 
     private void resetChat() {
