@@ -817,6 +817,11 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageChat.findViewById(R.id.chat_new).setOnClickListener(v -> newConversation());
         chatBack.setOnClickListener(v -> showChatList());
         chatSubtitle.setOnClickListener(v -> { if (chatConvoMode) openConfigDialog(); });
+        // Long-press the Chats title to open the feature roadmap the agent maintains.
+        chatTitle.setOnLongClickListener(v -> {
+            if (!chatConvoMode) openMediaModal("/media/tasks.md", "markdown", "tasks.md");
+            return true;
+        });
         chatSearch.addTextChangedListener(new android.text.TextWatcher() {
             public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
             public void onTextChanged(CharSequence s, int a, int b, int c) {}
