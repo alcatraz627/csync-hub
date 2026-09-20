@@ -31,7 +31,10 @@ public class ChatService extends Service {
     // raises a notification when the reply would otherwise go unseen.
     static volatile boolean uiForeground = false;
     // A reply that landed while the UI was away, drained by MainActivity.onResume.
-    static volatile String stashedTurns, stashedError;
+    static volatile String stashedTurns, stashedError, stashedSession;
+    // Number of in-flight chats, so several can stream at once and the foreground
+    // service only stops when the last finishes.
+    static final java.util.concurrent.atomic.AtomicInteger active = new java.util.concurrent.atomic.AtomicInteger(0);
 
     @Override public IBinder onBind(Intent i) { return null; }
 
@@ -43,41 +46,45 @@ public class ChatService extends Service {
         final String session = intent.getStringExtra("session");
         final String message = intent.getStringExtra("message");
 
+        active.incrementAndGet();
         startForeground(FG_ID, sendingNote());
         PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
         final PowerManager.WakeLock wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "csync:chat");
-        wl.acquire(120000);
+        wl.acquire(300000);
+        final android.content.Context ctx = getApplicationContext();
 
         new Thread(() -> {
             final JSONArray acc = new JSONArray();
             final String[] err = {null};
             MeshClient.chatStream(assist, token, session, message, new MeshClient.TurnSink() {
                 public void onTurn(JSONObject turn) {
-                    if (turn != null) acc.put(turn);
+                    if (turn != null) { acc.put(turn); ChatStore.append(ctx, session, null, turn); }
                     Intent b = new Intent(ACTION_REPLY).setPackage(getPackageName());
+                    b.putExtra("session", session);
                     if (turn != null) b.putExtra("turn", turn.toString());
                     sendBroadcast(b);
                 }
                 public void onError(String message) {
                     err[0] = message;
                     Intent b = new Intent(ACTION_REPLY).setPackage(getPackageName());
+                    b.putExtra("session", session);
                     b.putExtra("error", message);
                     sendBroadcast(b);
                 }
                 public void onDone(String reply) {
                     Intent b = new Intent(ACTION_REPLY).setPackage(getPackageName());
+                    b.putExtra("session", session);
                     b.putExtra("done", true);
                     sendBroadcast(b);
                 }
             });
 
             if (!uiForeground) {
-                if (acc.length() > 0) { stashedTurns = acc.toString(); notifyReply(lastText(acc.toString())); }
+                if (acc.length() > 0) { stashedTurns = acc.toString(); stashedSession = session; notifyReply(lastText(acc.toString())); }
                 if (err[0] != null) stashedError = err[0];
             }
             try { wl.release(); } catch (Throwable ignore) {}
-            stopForeground(true);
-            stopSelf();
+            if (active.decrementAndGet() <= 0) { stopForeground(true); stopSelf(); }
         }).start();
         return START_NOT_STICKY;
     }

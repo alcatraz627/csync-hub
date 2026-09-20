@@ -130,7 +130,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageSettings.setVisibility(page == 4 ? View.VISIBLE : View.GONE);
         if (page == 0) refreshHome();
         if (page == 1) refreshShare();
-        if (page == 2) warmChat();
+        if (page == 2) { warmChat(); if (!chatConvoMode) { renderHistoryList(); refreshAgentStatus(); } }
         if (page == 3) ensureShizuku();
         if (page == 4) { refreshConnection(); refreshAssistant(); }
     }
@@ -153,9 +153,13 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         else registerReceiver(chatReceiver, f);
         // A reply that arrived while we were away is waiting in the service stash.
         if (ChatService.stashedTurns != null || ChatService.stashedError != null) {
-            String t = ChatService.stashedTurns, e = ChatService.stashedError;
-            ChatService.stashedTurns = null; ChatService.stashedError = null;
-            deliverReply(t, e);
+            String ss = ChatService.stashedSession;
+            ChatService.stashedTurns = null; ChatService.stashedError = null; ChatService.stashedSession = null;
+            if (chatConvoMode && ss != null && ss.equals(chatSession)) {
+                renderTranscript(ChatStore.transcript(this, chatSession)); scrollDown();
+            } else if (!chatConvoMode) {
+                renderHistoryList();
+            }
         }
         ((android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancel(7002);
         if (current == 3) ensureShizuku();
@@ -776,10 +780,11 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     // ---------------- chat page (assistant on the Pi) ----------------
 
     private EditText chatInput;
-    private TextView chatSubtitle;
-    private LinearLayout chatList;
-    private ScrollView chatScroll;
+    private TextView chatSubtitle, chatTitle, chatBack;
+    private LinearLayout chatList, chatHistoryList, chatConvo;
+    private ScrollView chatScroll, chatHistory;
     private String chatSession;
+    private boolean chatExpanded, chatConvoMode;
     private io.noties.markwon.Markwon markwon;
 
     private void setupChatPage() {
@@ -787,12 +792,115 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         chatList = pageChat.findViewById(R.id.chat_list);
         chatScroll = pageChat.findViewById(R.id.chat_scroll);
         chatSubtitle = pageChat.findViewById(R.id.chat_subtitle);
+        chatTitle = pageChat.findViewById(R.id.chat_title);
+        chatBack = pageChat.findViewById(R.id.chat_back);
+        chatHistory = pageChat.findViewById(R.id.chat_history);
+        chatHistoryList = pageChat.findViewById(R.id.chat_history_list);
+        chatConvo = pageChat.findViewById(R.id.chat_convo);
         markwon = buildMarkwon();
-        chatSession = Prefs.deviceName(this) + "-" + System.currentTimeMillis();
-        chatSubtitle.setText("assistant on " + Prefs.assistIp(this));
 
+        final TextView expand = pageChat.findViewById(R.id.chat_expand);
+        expand.setOnClickListener(v -> {
+            chatExpanded = !chatExpanded;
+            int n = chatExpanded ? 6 : 2;
+            chatInput.setMinLines(n); chatInput.setMaxLines(n);
+            expand.setText(chatExpanded ? "⌃" : "⌄");
+        });
         pageChat.findViewById(R.id.chat_send).setOnClickListener(v -> sendChat());
-        pageChat.findViewById(R.id.chat_reset).setOnClickListener(v -> resetChat());
+        pageChat.findViewById(R.id.chat_new).setOnClickListener(v -> newConversation());
+        chatBack.setOnClickListener(v -> showChatList());
+        showChatList();
+    }
+
+    // ---- chat: history list vs one open conversation ----
+
+    private void showChatList() {
+        chatConvoMode = false;
+        chatHistory.setVisibility(View.VISIBLE);
+        chatConvo.setVisibility(View.GONE);
+        chatBack.setVisibility(View.GONE);
+        chatTitle.setText("Chats");
+        renderHistoryList();
+        refreshAgentStatus();
+    }
+
+    private void renderHistoryList() {
+        chatHistoryList.removeAllViews();
+        org.json.JSONArray idx = ChatStore.index(this);
+        if (idx.length() == 0) {
+            TextView e = new TextView(this); e.setText("No chats yet. Tap New.");
+            e.setTextColor(col(R.color.dim)); e.setTextSize(13); e.setPadding(dp(6), dp(12), 0, 0);
+            chatHistoryList.addView(e); return;
+        }
+        for (int i = 0; i < idx.length(); i++) {
+            org.json.JSONObject o = idx.optJSONObject(i);
+            if (o == null) continue;
+            final String id = o.optString("id");
+            final String title = o.optString("title").isEmpty() ? "(untitled)" : o.optString("title");
+            long updated = o.optLong("updated");
+            LinearLayout row = new LinearLayout(this); row.setOrientation(LinearLayout.VERTICAL);
+            row.setBackground(bg(col(R.color.surface2), 12)); row.setPadding(dp(13), dp(11), dp(13), dp(11));
+            row.setClickable(true); row.setFocusable(true);
+            TextView tt = new TextView(this); tt.setText(title); tt.setTextColor(col(R.color.text));
+            tt.setTextSize(15); tt.setSingleLine(true); tt.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            TextView sub = new TextView(this); sub.setText(relTime(updated)); sub.setTextColor(col(R.color.dim)); sub.setTextSize(12);
+            row.addView(tt); row.addView(sub);
+            row.setOnClickListener(v -> openConversation(id, title));
+            row.setOnLongClickListener(v -> { ChatStore.delete(this, id); renderHistoryList(); toast("Chat deleted"); return true; });
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            lp.topMargin = dp(8); row.setLayoutParams(lp); chatHistoryList.addView(row);
+        }
+    }
+
+    private void openConversation(String id, String title) {
+        chatSession = id;
+        chatConvoMode = true;
+        chatHistory.setVisibility(View.GONE);
+        chatConvo.setVisibility(View.VISIBLE);
+        chatBack.setVisibility(View.VISIBLE);
+        chatTitle.setText(title == null || title.isEmpty() ? "Chat" : title);
+        renderTranscript(ChatStore.transcript(this, id));
+        scrollDown();
+    }
+
+    private void newConversation() {
+        chatSession = Prefs.deviceName(this) + "-" + System.currentTimeMillis();
+        chatConvoMode = true;
+        chatHistory.setVisibility(View.GONE);
+        chatConvo.setVisibility(View.VISIBLE);
+        chatBack.setVisibility(View.VISIBLE);
+        chatTitle.setText("New chat");
+        chatList.removeAllViews(); chatPending = null;
+        chatInput.requestFocus();
+    }
+
+    private void renderTranscript(org.json.JSONArray tr) {
+        chatList.removeAllViews(); chatPending = null;
+        for (int i = 0; i < tr.length(); i++) {
+            org.json.JSONObject o = tr.optJSONObject(i);
+            if (o == null) continue;
+            if ("user".equals(o.optString("role"))) addUserBubble(o.optString("text"));
+            else renderSingleTurn(o);
+        }
+    }
+
+    private void refreshAgentStatus() {
+        final String ip = Prefs.assistIp(this);
+        if (ip.isEmpty()) { chatSubtitle.setText("set the assistant in Settings"); return; }
+        chatSubtitle.setText("assistant on " + ip + " · checking…");
+        new Thread(() -> {
+            boolean up = MeshClient.reachable(ip, MeshClient.ASSIST_PORT);
+            ui.post(() -> chatSubtitle.setText("assistant on " + ip + (up ? " · online" : " · offline")));
+        }).start();
+    }
+
+    private String relTime(long t) {
+        if (t <= 0) return "";
+        long d = System.currentTimeMillis() - t;
+        if (d < 60000) return "just now";
+        if (d < 3600000) return (d / 60000) + "m ago";
+        if (d < 86400000) return (d / 3600000) + "h ago";
+        return (d / 86400000) + "d ago";
     }
 
     private TextView chatPending;
@@ -806,7 +914,12 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         if (msg.isEmpty()) return;
         final String ip = Prefs.assistIp(this), token = Prefs.token(this);
         if (ip.isEmpty() || token.isEmpty()) { toast("Set the assistant and token in Settings"); return; }
+        if (chatSession == null || !chatConvoMode) newConversation();
         addUserBubble(msg);
+        try { org.json.JSONObject u = new org.json.JSONObject(); u.put("role", "user"); u.put("text", msg);
+              ChatStore.append(this, chatSession, msg, u); } catch (Throwable ignore) {}
+        if ("New chat".contentEquals(chatTitle.getText()))
+            chatTitle.setText(msg.length() > 40 ? msg.substring(0, 40) : msg);
         chatInput.setText("");
         if (chatPending != null) chatList.removeView(chatPending);
         chatPending = addPending();
@@ -831,6 +944,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     private final android.content.BroadcastReceiver chatReceiver = new android.content.BroadcastReceiver() {
         public void onReceive(android.content.Context c, Intent i) {
+            String s = i.getStringExtra("session");
+            // Every chat persists to its own store; only the open one renders live.
+            if (!chatConvoMode || s == null || !s.equals(chatSession)) return;
             String turn = i.getStringExtra("turn");
             String err = i.getStringExtra("error");
             if (turn != null) {
@@ -840,8 +956,6 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                 addError(err); scrollDown();
             } else if (i.getBooleanExtra("done", false)) {
                 if (chatPending != null) { chatList.removeView(chatPending); chatPending = null; }
-            } else {
-                deliverReply(i.getStringExtra("turns"), i.getStringExtra("error"));
             }
         }
     };
@@ -857,10 +971,12 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         if (chatPending != null) { chatList.removeView(chatPending); chatPending = null; }
         if (t == null) return;
         String type = t.optString("type");
-        if ("thinking".equals(type)) addCollapsible("Thinking", t.optString("text"), true);
-        else if ("tool_call".equals(type)) {
+        if ("thinking".equals(type)) {
+            String txt = t.optString("text");
+            addCollapsible("Thinking", firstLine(txt), txt);
+        } else if ("tool_call".equals(type)) {
             org.json.JSONObject res = t.optJSONObject("result");
-            addCollapsible(t.optString("name"), pretty(res), false);
+            addCollapsible(t.optString("name"), toolPreview(t), codeFence(pretty(res)));
             if (res != null && !res.optString("media_url").isEmpty())
                 addImage(res.optString("media_url"), res.optString("media_type"));
         } else if ("text".equals(type)) addMarkdown(t.optString("text"));
@@ -902,7 +1018,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private void addTo(View v, int gravity, int topMargin) {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         lp.gravity = gravity; lp.topMargin = dp(topMargin); v.setLayoutParams(lp); chatList.addView(v); }
-    private void scrollDown() { chatScroll.post(() -> chatScroll.fullScroll(View.FOCUS_DOWN)); }
+    // Scroll to the bottom WITHOUT fullScroll, which would move focus to the last
+    // view and drop the keyboard off the input while a reply streams in.
+    private void scrollDown() { chatScroll.post(() -> chatScroll.smoothScrollTo(0, chatList.getBottom())); }
 
     private void addUserBubble(String text) {
         TextView tv = new TextView(this); tv.setText(text); tv.setTextColor(col(R.color.onAccent));
@@ -958,25 +1076,65 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             } catch (Throwable ignore) {}
         }).start();
     }
+    // Errors (connection lost, agent down) are shown quietly as a dim centered
+    // note rather than a loud red block.
     private void addError(String msg) {
-        TextView tv = new TextView(this); tv.setText(msg == null ? "failed" : msg); tv.setTextColor(col(R.color.onAccent));
-        tv.setTextSize(13); tv.setPadding(dp(12), dp(9), dp(12), dp(9)); tv.setBackground(bg(col(R.color.danger), 12));
-        addTo(tv, android.view.Gravity.START, 12);
+        TextView tv = new TextView(this); tv.setText("· " + (msg == null ? "failed" : msg) + " ·");
+        tv.setTextColor(col(R.color.dim)); tv.setTextSize(12); tv.setGravity(android.view.Gravity.CENTER);
+        tv.setPadding(dp(12), dp(6), dp(12), dp(6));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(10); tv.setLayoutParams(lp); chatList.addView(tv);
     }
     // A collapsible block: a dim header that toggles a body. Used for thinking and tool calls.
-    private void addCollapsible(String label, String body, boolean italic) {
+    // A collapsed step shows two lines: the label, and a dim preview of the first
+    // line of the command or thought. Tapping expands the full body.
+    private void addCollapsible(String label, String preview, String body) {
         LinearLayout box = new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL);
         box.setBackground(bg(col(R.color.surface2), 12)); box.setPadding(dp(11), dp(8), dp(11), dp(8));
         final TextView head = new TextView(this); head.setText("▸  " + label); head.setTextColor(col(R.color.dim)); head.setTextSize(12);
+        final TextView prev = new TextView(this); prev.setText(preview == null ? "" : preview);
+        prev.setTextColor(col(R.color.dim)); prev.setTextSize(12); prev.setAlpha(0.75f);
+        prev.setSingleLine(true); prev.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        prev.setPadding(dp(15), dp(2), 0, 0);
         final TextView bodyV = new TextView(this); bodyV.setTextColor(col(R.color.dim));
-        bodyV.setTextSize(12); bodyV.setPadding(0, dp(6), 0, 0); bodyV.setVisibility(View.GONE);
+        bodyV.setTextSize(12); bodyV.setPadding(dp(2), dp(6), 0, 0); bodyV.setVisibility(View.GONE);
         bodyV.setTextIsSelectable(true);
         markwon.setMarkdown(bodyV, body == null ? "" : body);
         head.setOnClickListener(v -> { boolean vis = bodyV.getVisibility() == View.VISIBLE;
-            bodyV.setVisibility(vis ? View.GONE : View.VISIBLE); head.setText((vis ? "▸  " : "▾  ") + label); });
-        box.addView(head); box.addView(bodyV);
+            bodyV.setVisibility(vis ? View.GONE : View.VISIBLE);
+            prev.setVisibility(vis ? View.VISIBLE : View.GONE);
+            head.setText((vis ? "▸  " : "▾  ") + label); });
+        box.addView(head);
+        if (preview != null && !preview.isEmpty()) box.addView(prev);
+        box.addView(bodyV);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         lp.gravity = android.view.Gravity.START; lp.topMargin = dp(12); box.setLayoutParams(lp); chatList.addView(box);
+    }
+
+    private String firstLine(String s) {
+        if (s == null) return "";
+        s = s.trim();
+        int nl = s.indexOf('\n');
+        return nl >= 0 ? s.substring(0, nl) : s;
+    }
+
+    // Wrap text as a fenced code block so command and code output renders monospaced
+    // and syntax-coloured rather than as loose prose.
+    private String codeFence(String s) {
+        if (s == null || s.trim().isEmpty()) return "";
+        return "```\n" + s.replace("```", "``​`") + "\n```";
+    }
+
+    // The one-line preview for a collapsed tool step: the command it ran, else its
+    // arguments, else the first line of the result.
+    private String toolPreview(org.json.JSONObject t) {
+        org.json.JSONObject args = t.optJSONObject("args");
+        if (args != null) {
+            String cmd = args.optString("command");
+            if (!cmd.isEmpty()) return firstLine(cmd);
+            if (args.length() > 0) return firstLine(args.toString());
+        }
+        return firstLine(pretty(t.optJSONObject("result")));
     }
     private String pretty(org.json.JSONObject o) {
         if (o == null) return "";
