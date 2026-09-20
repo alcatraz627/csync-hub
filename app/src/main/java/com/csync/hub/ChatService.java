@@ -49,19 +49,31 @@ public class ChatService extends Service {
         wl.acquire(120000);
 
         new Thread(() -> {
-            String turns = null, err = null;
-            try { turns = MeshClient.chatTurns(assist, token, session, message).toString(); }
-            catch (Throwable e) { err = e.getMessage(); }
-
-            Intent b = new Intent(ACTION_REPLY).setPackage(getPackageName());
-            b.putExtra("turns", turns);
-            b.putExtra("error", err);
-            sendBroadcast(b);
+            final JSONArray acc = new JSONArray();
+            final String[] err = {null};
+            MeshClient.chatStream(assist, token, session, message, new MeshClient.TurnSink() {
+                public void onTurn(JSONObject turn) {
+                    if (turn != null) acc.put(turn);
+                    Intent b = new Intent(ACTION_REPLY).setPackage(getPackageName());
+                    if (turn != null) b.putExtra("turn", turn.toString());
+                    sendBroadcast(b);
+                }
+                public void onError(String message) {
+                    err[0] = message;
+                    Intent b = new Intent(ACTION_REPLY).setPackage(getPackageName());
+                    b.putExtra("error", message);
+                    sendBroadcast(b);
+                }
+                public void onDone(String reply) {
+                    Intent b = new Intent(ACTION_REPLY).setPackage(getPackageName());
+                    b.putExtra("done", true);
+                    sendBroadcast(b);
+                }
+            });
 
             if (!uiForeground) {
-                stashedTurns = turns;
-                stashedError = err;
-                if (turns != null) notifyReply(lastText(turns));
+                if (acc.length() > 0) { stashedTurns = acc.toString(); notifyReply(lastText(acc.toString())); }
+                if (err[0] != null) stashedError = err[0];
             }
             try { wl.release(); } catch (Throwable ignore) {}
             stopForeground(true);

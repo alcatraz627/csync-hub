@@ -767,19 +767,40 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     private final android.content.BroadcastReceiver chatReceiver = new android.content.BroadcastReceiver() {
         public void onReceive(android.content.Context c, Intent i) {
-            deliverReply(i.getStringExtra("turns"), i.getStringExtra("error"));
+            String turn = i.getStringExtra("turn");
+            String err = i.getStringExtra("error");
+            if (turn != null) {
+                try { renderSingleTurn(new org.json.JSONObject(turn)); } catch (Throwable e) {}
+            } else if (err != null) {
+                if (chatPending != null) { chatList.removeView(chatPending); chatPending = null; }
+                addError(err); scrollDown();
+            } else if (i.getBooleanExtra("done", false)) {
+                if (chatPending != null) { chatList.removeView(chatPending); chatPending = null; }
+            } else {
+                deliverReply(i.getStringExtra("turns"), i.getStringExtra("error"));
+            }
         }
     };
 
     private void renderTurns(org.json.JSONArray turns) {
-        for (int i = 0; i < turns.length(); i++) {
-            org.json.JSONObject t = turns.optJSONObject(i);
-            if (t == null) continue;
-            String type = t.optString("type");
-            if ("thinking".equals(type)) addCollapsible("Thinking", t.optString("text"), true);
-            else if ("tool_call".equals(type)) addCollapsible(t.optString("name"), pretty(t.optJSONObject("result")), false);
-            else if ("text".equals(type)) addMarkdown(t.optString("text"));
-        }
+        for (int i = 0; i < turns.length(); i++) renderSingleTurn(turns.optJSONObject(i));
+    }
+
+    // Render one turn as it streams in: thinking and tool calls collapse, text
+    // shows as markdown with a copy button, and a tool result carrying a media_url
+    // renders the captured image inline.
+    private void renderSingleTurn(org.json.JSONObject t) {
+        if (chatPending != null) { chatList.removeView(chatPending); chatPending = null; }
+        if (t == null) return;
+        String type = t.optString("type");
+        if ("thinking".equals(type)) addCollapsible("Thinking", t.optString("text"), true);
+        else if ("tool_call".equals(type)) {
+            org.json.JSONObject res = t.optJSONObject("result");
+            addCollapsible(t.optString("name"), pretty(res), false);
+            if (res != null && !res.optString("media_url").isEmpty())
+                addImage(res.optString("media_url"), res.optString("media_type"));
+        } else if ("text".equals(type)) addMarkdown(t.optString("text"));
+        scrollDown();
     }
 
     private void resetChat() {
@@ -830,10 +851,48 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         addTo(tv, android.view.Gravity.START, 12); scrollDown(); return tv;
     }
     private void addMarkdown(String md) {
-        TextView tv = new TextView(this); markwon.setMarkdown(tv, md == null ? "" : md);
+        final String text = md == null ? "" : md;
+        LinearLayout box = new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL);
+        box.setBackground(bg(col(R.color.surface2), 16)); box.setPadding(dp(13), dp(11), dp(13), dp(7));
+        TextView tv = new TextView(this); markwon.setMarkdown(tv, text);
         tv.setTextColor(col(R.color.text)); tv.setTextSize(14); tv.setLineSpacing(0, 1.2f);
-        tv.setPadding(dp(13), dp(11), dp(13), dp(11)); tv.setBackground(bg(col(R.color.surface2), 16));
-        tv.setTextIsSelectable(true); addTo(tv, android.view.Gravity.START, 12);
+        tv.setTextIsSelectable(true); box.addView(tv);
+        TextView copy = new TextView(this); copy.setText("⧉ copy"); copy.setTextColor(col(R.color.dim));
+        copy.setTextSize(12); copy.setPadding(dp(6), dp(6), dp(2), dp(1));
+        copy.setOnClickListener(v -> { copyText(text); toast("Copied"); });
+        LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        cp.gravity = android.view.Gravity.END; copy.setLayoutParams(cp); box.addView(copy);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.gravity = android.view.Gravity.START; lp.topMargin = dp(12); box.setLayoutParams(lp); chatList.addView(box);
+    }
+
+    private void copyText(String s) {
+        android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        if (cm != null) cm.setPrimaryClip(android.content.ClipData.newPlainText("csync", s == null ? "" : s));
+    }
+
+    // Render a captured image inline (fetched authed from the assistant's /media),
+    // or a tap-to-note for a video clip.
+    private void addImage(String mediaUrl, String mediaType) {
+        final String ip = Prefs.assistIp(this), token = Prefs.token(this);
+        if ("video".equals(mediaType)) {
+            TextView tv = new TextView(this); tv.setText("▷  video captured, saved on the Pi");
+            tv.setTextColor(col(R.color.text)); tv.setTextSize(13);
+            tv.setPadding(dp(12), dp(9), dp(12), dp(9)); tv.setBackground(bg(col(R.color.surface2), 12));
+            addTo(tv, android.view.Gravity.START, 12);
+            return;
+        }
+        final android.widget.ImageView iv = new android.widget.ImageView(this);
+        iv.setAdjustViewBounds(true); iv.setMaxWidth(dp(280));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.gravity = android.view.Gravity.START; lp.topMargin = dp(12); iv.setLayoutParams(lp); chatList.addView(iv);
+        new Thread(() -> {
+            try {
+                byte[] b = MeshClient.fetchMedia(ip, token, mediaUrl);
+                final android.graphics.Bitmap bm = android.graphics.BitmapFactory.decodeByteArray(b, 0, b.length);
+                runOnUiThread(() -> { if (bm != null) { iv.setImageBitmap(bm); scrollDown(); } });
+            } catch (Throwable ignore) {}
+        }).start();
     }
     private void addError(String msg) {
         TextView tv = new TextView(this); tv.setText(msg == null ? "failed" : msg); tv.setTextColor(col(R.color.onAccent));

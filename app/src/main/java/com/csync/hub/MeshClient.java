@@ -3,8 +3,10 @@ package com.csync.hub;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.InetAddress;
@@ -77,6 +79,86 @@ public final class MeshClient {
             }
             return turns;
         });
+    }
+
+    /** Sink for a streamed chat: each turn as it lands, then done or error. */
+    interface TurnSink {
+        void onTurn(JSONObject turn);
+        void onDone(String reply);
+        void onError(String message);
+    }
+
+    /**
+     * Stream a chat via /chat?stream=1, delivering each turn to the sink the
+     * moment it arrives so the UI shows the run live. Blocks; run off the UI thread.
+     */
+    static void chatStream(String ip, String token, String session, String message, TurnSink sink) {
+        HttpURLConnection c = null;
+        try {
+            URL url = new URL("http://" + ip + ":" + ASSIST_PORT + "/chat?stream=1");
+            c = (HttpURLConnection) url.openConnection();
+            c.setConnectTimeout(6000);
+            c.setReadTimeout(300000);
+            c.setDoOutput(true);
+            c.setRequestMethod("POST");
+            c.setRequestProperty("Content-Type", "application/json");
+            c.setRequestProperty("X-Csync-Token", token);
+            JSONObject req = new JSONObject();
+            req.put("session", session);
+            req.put("message", message);
+            byte[] body = req.toString().getBytes("UTF-8");
+            c.setFixedLengthStreamingMode(body.length);
+            OutputStream out = c.getOutputStream();
+            out.write(body);
+            out.close();
+            int code = c.getResponseCode();
+            InputStream in = code < 400 ? c.getInputStream() : c.getErrorStream();
+            if (code >= 400) {
+                sink.onError("assistant error (" + code + "): " + readAll(in));
+                return;
+            }
+            BufferedReader r = new BufferedReader(new InputStreamReader(in, "UTF-8"));
+            String line;
+            String reply = "";
+            while ((line = r.readLine()) != null) {
+                line = line.trim();
+                if (line.isEmpty()) continue;
+                JSONObject o;
+                try { o = new JSONObject(line); } catch (Throwable e) { continue; }
+                if (o.has("turn")) {
+                    sink.onTurn(o.optJSONObject("turn"));
+                } else if (o.has("error")) {
+                    sink.onError(o.optString("error"));
+                } else if (o.optBoolean("done")) {
+                    reply = o.optString("reply", reply);
+                }
+            }
+            r.close();
+            sink.onDone(reply);
+        } catch (Throwable e) {
+            sink.onError("Can't reach " + ip + " over Tailscale (" + e.getMessage() + ")");
+        } finally {
+            if (c != null) c.disconnect();
+        }
+    }
+
+    /** Fetch a media file (image or video) from the assistant, authed. Blocks. */
+    static byte[] fetchMedia(String ip, String token, String mediaPath) throws Exception {
+        URL url = new URL("http://" + ip + ":" + ASSIST_PORT + mediaPath);
+        HttpURLConnection c = (HttpURLConnection) url.openConnection();
+        c.setConnectTimeout(5000);
+        c.setReadTimeout(30000);
+        c.setRequestProperty("X-Csync-Token", token);
+        int code = c.getResponseCode();
+        InputStream in = code < 400 ? c.getInputStream() : c.getErrorStream();
+        ByteArrayOutputStream bo = new ByteArrayOutputStream();
+        byte[] buf = new byte[8192];
+        int r;
+        while ((r = in.read(buf)) != -1) bo.write(buf, 0, r);
+        in.close();
+        c.disconnect();
+        if (code >= 400) throw new Exception("media " + code);
+        return bo.toByteArray();
     }
 
     private static String chatRaw(String ip, String token, String session, String message) throws Exception {
