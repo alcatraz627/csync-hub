@@ -305,6 +305,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private void setupSystemPage() {
         sysStatus = pageTools.findViewById(R.id.sys_status);
         sysOutput = pageTools.findViewById(R.id.sys_output);
+        sysOutput.setTypeface(android.graphics.Typeface.MONOSPACE);
         ((Button) pageTools.findViewById(R.id.sys_refresh)).setOnClickListener(v -> sysTickOnce());
     }
 
@@ -336,6 +337,12 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     }
 
     private String runTop() {
+        String raw = rawTop();
+        try { return formatStats(raw); }
+        catch (Throwable e) { return raw; }
+    }
+
+    private String rawTop() {
         BufferedReader r = null;
         try {
             Method m = Shizuku.class.getDeclaredMethod("newProcess",
@@ -354,6 +361,63 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         } finally {
             if (r != null) try { r.close(); } catch (Throwable ignore) {}
         }
+    }
+
+    // Turn toybox top output into a compact summary (RAM, CPU, tasks) and an
+    // aligned process table. Falls back to raw output if the format shifts.
+    private String formatStats(String raw) {
+        String[] lines = raw.split("\n");
+        String memLine = "", cpuLine = "", tasksLine = "";
+        int headerIdx = -1;
+        for (int i = 0; i < lines.length; i++) {
+            String l = lines[i].trim();
+            if (l.startsWith("Tasks:")) tasksLine = l;
+            else if (l.startsWith("Mem:")) memLine = l;
+            else if (l.contains("%cpu")) cpuLine = l;
+            else if (l.startsWith("PID") && l.contains("%CPU")) { headerIdx = i; break; }
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append(memSummary(memLine)).append("\n");
+        sb.append(cpuSummary(cpuLine));
+        String tasks = matchOne(tasksLine, "Tasks:\\s+(\\d+)");
+        if (!tasks.isEmpty()) sb.append("   ").append(tasks).append(" tasks");
+        sb.append("\n\n");
+        sb.append(String.format("%-22s %5s %5s %6s\n", "process", "cpu%", "mem%", "res"));
+        if (headerIdx >= 0) {
+            for (int i = headerIdx + 1; i < lines.length; i++) {
+                String[] f = lines[i].trim().split("\\s+");
+                if (f.length < 12) continue;
+                String name = f[11];
+                if (name.length() > 22) name = name.substring(name.length() - 22);
+                sb.append(String.format("%-22s %5s %5s %6s\n", name, f[8], f[9], f[5]));
+            }
+        }
+        return sb.toString().trim();
+    }
+
+    private String memSummary(String l) {
+        try {
+            long total = matchMB(l, "total"), used = matchMB(l, "used");
+            int pct = total > 0 ? (int) Math.round(used * 100.0 / total) : 0;
+            return String.format("RAM %s / %s (%d%%)", gb(used), gb(total), pct);
+        } catch (Throwable e) { return "RAM ?"; }
+    }
+    private String cpuSummary(String l) {
+        try {
+            double t = Double.parseDouble(matchOne(l, "(\\d+)%cpu"));
+            double idle = Double.parseDouble(matchOne(l, "(\\d+)%idle"));
+            int pct = t > 0 ? (int) Math.round((t - idle) * 100.0 / t) : 0;
+            return String.format("CPU %d%%", pct);
+        } catch (Throwable e) { return "CPU ?"; }
+    }
+    private long matchMB(String l, String key) {
+        String v = matchOne(l, "(\\d+)M\\s+" + key);
+        return v.isEmpty() ? 0 : Long.parseLong(v);
+    }
+    private String gb(long mb) { return mb >= 1024 ? String.format("%.1fG", mb / 1024.0) : mb + "M"; }
+    private String matchOne(String s, String regex) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile(regex).matcher(s == null ? "" : s);
+        return m.find() ? m.group(1) : "";
     }
 
     // ---------------- share page (send to a named peer, inbox) ----------------
