@@ -45,6 +45,8 @@ public class ChatService extends Service {
         final String token = intent.getStringExtra("token");
         final String session = intent.getStringExtra("session");
         final String message = intent.getStringExtra("message");
+        final String model = intent.getStringExtra("model");
+        final String effort = intent.getStringExtra("effort");
 
         active.incrementAndGet();
         startForeground(FG_ID, sendingNote());
@@ -56,7 +58,7 @@ public class ChatService extends Service {
         new Thread(() -> {
             final JSONArray acc = new JSONArray();
             final String[] err = {null};
-            MeshClient.chatStream(assist, token, session, message, new MeshClient.TurnSink() {
+            MeshClient.chatStream(assist, token, session, message, model, effort, new MeshClient.TurnSink() {
                 public void onTurn(JSONObject turn) {
                     if (turn != null) { acc.put(turn); ChatStore.append(ctx, session, null, turn); }
                     Intent b = new Intent(ACTION_REPLY).setPackage(getPackageName());

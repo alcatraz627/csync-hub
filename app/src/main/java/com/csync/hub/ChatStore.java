@@ -44,6 +44,19 @@ public final class ChatStore {
                 .apply();
     }
 
+    // Set a field on a conversation's index entry (title, favorite, archived).
+    static synchronized void patch(Context c, String id, String key, Object val) {
+        JSONArray idx = index(c);
+        for (int i = 0; i < idx.length(); i++) {
+            JSONObject o = idx.optJSONObject(i);
+            if (o != null && id.equals(o.optString("id"))) {
+                try { o.put(key, val); } catch (Throwable ignore) {}
+                break;
+            }
+        }
+        p(c).edit().putString(INDEX, idx.toString()).apply();
+    }
+
     static synchronized void delete(Context c, String id) {
         JSONArray idx = index(c), keep = new JSONArray();
         for (int i = 0; i < idx.length(); i++) {

@@ -92,7 +92,7 @@ public final class MeshClient {
      * Stream a chat via /chat?stream=1, delivering each turn to the sink the
      * moment it arrives so the UI shows the run live. Blocks; run off the UI thread.
      */
-    static void chatStream(String ip, String token, String session, String message, TurnSink sink) {
+    static void chatStream(String ip, String token, String session, String message, String model, String effort, TurnSink sink) {
         HttpURLConnection c = null;
         try {
             URL url = new URL("http://" + ip + ":" + ASSIST_PORT + "/chat?stream=1");
@@ -106,6 +106,8 @@ public final class MeshClient {
             JSONObject req = new JSONObject();
             req.put("session", session);
             req.put("message", message);
+            if (model != null && !model.isEmpty()) req.put("model", model);
+            if (effort != null && !effort.isEmpty()) req.put("effort", effort);
             byte[] body = req.toString().getBytes("UTF-8");
             c.setFixedLengthStreamingMode(body.length);
             OutputStream out = c.getOutputStream();

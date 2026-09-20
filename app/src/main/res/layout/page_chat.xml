@@ -32,6 +32,32 @@
             android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="New"/>
     </LinearLayout>
 
+    <!-- filter bar (list mode) -->
+    <LinearLayout
+        android:id="@+id/chat_filterbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingLeft="12dp" android:paddingRight="12dp"
+        android:paddingTop="6dp" android:paddingBottom="6dp">
+        <EditText
+            android:id="@+id/chat_search"
+            android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+            android:hint="search chats" android:textSize="14sp" android:maxLines="1"
+            android:inputType="text" android:textColor="@color/text" android:textColorHint="@color/dim"/>
+        <TextView android:id="@+id/chat_toggle_fav"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="★" android:textSize="16sp" android:textColor="@color/dim"
+            android:paddingLeft="10dp" android:paddingRight="10dp" android:paddingTop="6dp" android:paddingBottom="6dp"
+            android:background="?attr/selectableItemBackgroundBorderless"/>
+        <TextView android:id="@+id/chat_toggle_archived"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Archived" android:textSize="12sp" android:textColor="@color/dim"
+            android:paddingLeft="10dp" android:paddingRight="6dp" android:paddingTop="6dp" android:paddingBottom="6dp"
+            android:background="?attr/selectableItemBackgroundBorderless"/>
+    </LinearLayout>
+
     <!-- history list -->
     <ScrollView
         android:id="@+id/chat_history"

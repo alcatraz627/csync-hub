@@ -779,13 +779,16 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     // ---------------- chat page (assistant on the Pi) ----------------
 
-    private EditText chatInput;
-    private TextView chatSubtitle, chatTitle, chatBack;
-    private LinearLayout chatList, chatHistoryList, chatConvo;
+    private EditText chatInput, chatSearch;
+    private TextView chatSubtitle, chatTitle, chatBack, chatToggleFav, chatToggleArchived;
+    private LinearLayout chatList, chatHistoryList, chatConvo, chatFilterbar;
     private ScrollView chatScroll, chatHistory;
     private String chatSession;
-    private boolean chatExpanded, chatConvoMode;
+    private boolean chatExpanded, chatConvoMode, showArchived, showFavOnly;
     private io.noties.markwon.Markwon markwon;
+
+    private static final String[] MODELS = {"(default)", "gemini-3.8-flash", "gemini-3.5-flash", "gemini-flash-latest", "gemini-2.5-flash"};
+    private static final String[] EFFORTS = {"(default)", "off", "low", "medium", "high"};
 
     private void setupChatPage() {
         chatInput = pageChat.findViewById(R.id.chat_input);
@@ -797,6 +800,10 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         chatHistory = pageChat.findViewById(R.id.chat_history);
         chatHistoryList = pageChat.findViewById(R.id.chat_history_list);
         chatConvo = pageChat.findViewById(R.id.chat_convo);
+        chatFilterbar = pageChat.findViewById(R.id.chat_filterbar);
+        chatSearch = pageChat.findViewById(R.id.chat_search);
+        chatToggleFav = pageChat.findViewById(R.id.chat_toggle_fav);
+        chatToggleArchived = pageChat.findViewById(R.id.chat_toggle_archived);
         markwon = buildMarkwon();
 
         final TextView expand = pageChat.findViewById(R.id.chat_expand);
@@ -809,7 +816,53 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageChat.findViewById(R.id.chat_send).setOnClickListener(v -> sendChat());
         pageChat.findViewById(R.id.chat_new).setOnClickListener(v -> newConversation());
         chatBack.setOnClickListener(v -> showChatList());
+        chatSubtitle.setOnClickListener(v -> { if (chatConvoMode) openConfigDialog(); });
+        chatSearch.addTextChangedListener(new android.text.TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+            public void onTextChanged(CharSequence s, int a, int b, int c) {}
+            public void afterTextChanged(android.text.Editable s) { renderHistoryList(); }
+        });
+        chatToggleFav.setOnClickListener(v -> {
+            showFavOnly = !showFavOnly;
+            chatToggleFav.setTextColor(showFavOnly ? accent() : col(R.color.dim));
+            renderHistoryList();
+        });
+        chatToggleArchived.setOnClickListener(v -> {
+            showArchived = !showArchived;
+            chatToggleArchived.setTextColor(showArchived ? accent() : col(R.color.dim));
+            renderHistoryList();
+        });
         showChatList();
+    }
+
+    private org.json.JSONObject convEntry(String id) {
+        org.json.JSONArray idx = ChatStore.index(this);
+        for (int i = 0; i < idx.length(); i++) {
+            org.json.JSONObject o = idx.optJSONObject(i);
+            if (o != null && id != null && id.equals(o.optString("id"))) return o;
+        }
+        return null;
+    }
+
+    private void openConfigDialog() {
+        if (chatSession == null) return;
+        new android.app.AlertDialog.Builder(this).setTitle("Model")
+            .setItems(MODELS, (dlg, mi) -> {
+                ChatStore.patch(this, chatSession, "model", mi == 0 ? "" : MODELS[mi]);
+                new android.app.AlertDialog.Builder(this).setTitle("Effort")
+                    .setItems(EFFORTS, (d2, ei) -> {
+                        ChatStore.patch(this, chatSession, "effort", ei == 0 ? "" : EFFORTS[ei]);
+                        updateConfigSubtitle();
+                    }).show();
+            }).show();
+    }
+
+    private void updateConfigSubtitle() {
+        org.json.JSONObject e = convEntry(chatSession);
+        String m = e != null ? e.optString("model") : "";
+        String ef = e != null ? e.optString("effort") : "";
+        if (m.startsWith("gemini-")) m = m.substring(7);
+        chatSubtitle.setText((m.isEmpty() ? "default model" : m) + " · " + (ef.isEmpty() ? "default" : ef) + "  ⚙");
     }
 
     // ---- chat: history list vs one open conversation ----
@@ -819,6 +872,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         chatHistory.setVisibility(View.VISIBLE);
         chatConvo.setVisibility(View.GONE);
         chatBack.setVisibility(View.GONE);
+        chatFilterbar.setVisibility(View.VISIBLE);
         chatTitle.setText("Chats");
         renderHistoryList();
         refreshAgentStatus();
@@ -826,30 +880,58 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     private void renderHistoryList() {
         chatHistoryList.removeAllViews();
+        String q = chatSearch == null ? "" : chatSearch.getText().toString().trim().toLowerCase();
         org.json.JSONArray idx = ChatStore.index(this);
-        if (idx.length() == 0) {
-            TextView e = new TextView(this); e.setText("No chats yet. Tap New.");
-            e.setTextColor(col(R.color.dim)); e.setTextSize(13); e.setPadding(dp(6), dp(12), 0, 0);
-            chatHistoryList.addView(e); return;
-        }
+        int shown = 0;
         for (int i = 0; i < idx.length(); i++) {
             org.json.JSONObject o = idx.optJSONObject(i);
             if (o == null) continue;
+            final boolean archived = o.optBoolean("archived");
+            final boolean fav = o.optBoolean("favorite");
+            if (archived != showArchived) continue;      // Archived is a filter toggle
+            if (showFavOnly && !fav) continue;
             final String id = o.optString("id");
             final String title = o.optString("title").isEmpty() ? "(untitled)" : o.optString("title");
+            if (!q.isEmpty() && !title.toLowerCase().contains(q)) continue;
             long updated = o.optLong("updated");
             LinearLayout row = new LinearLayout(this); row.setOrientation(LinearLayout.VERTICAL);
             row.setBackground(bg(col(R.color.surface2), 12)); row.setPadding(dp(13), dp(11), dp(13), dp(11));
             row.setClickable(true); row.setFocusable(true);
-            TextView tt = new TextView(this); tt.setText(title); tt.setTextColor(col(R.color.text));
+            TextView tt = new TextView(this); tt.setText((fav ? "★ " : "") + title); tt.setTextColor(col(R.color.text));
             tt.setTextSize(15); tt.setSingleLine(true); tt.setEllipsize(android.text.TextUtils.TruncateAt.END);
             TextView sub = new TextView(this); sub.setText(relTime(updated)); sub.setTextColor(col(R.color.dim)); sub.setTextSize(12);
             row.addView(tt); row.addView(sub);
-            row.setOnClickListener(v -> openConversation(id, title));
-            row.setOnLongClickListener(v -> { ChatStore.delete(this, id); renderHistoryList(); toast("Chat deleted"); return true; });
+            row.setOnClickListener(v -> openConversation(id, o.optString("title")));
+            row.setOnLongClickListener(v -> { chatOptions(id, title, fav, archived); return true; });
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
             lp.topMargin = dp(8); row.setLayoutParams(lp); chatHistoryList.addView(row);
+            shown++;
         }
+        if (shown == 0) {
+            TextView e = new TextView(this);
+            e.setText(showArchived ? "No archived chats." : (idx.length() == 0 ? "No chats yet. Tap New." : "No matches."));
+            e.setTextColor(col(R.color.dim)); e.setTextSize(13); e.setPadding(dp(6), dp(12), 0, 0);
+            chatHistoryList.addView(e);
+        }
+    }
+
+    private void chatOptions(String id, String title, boolean fav, boolean archived) {
+        String[] opts = { "Rename", fav ? "Unfavorite" : "Favorite", archived ? "Unarchive" : "Archive", "Delete" };
+        new android.app.AlertDialog.Builder(this).setItems(opts, (d, w) -> {
+            switch (w) {
+                case 0: renameChat(id, title); break;
+                case 1: ChatStore.patch(this, id, "favorite", !fav); renderHistoryList(); break;
+                case 2: ChatStore.patch(this, id, "archived", !archived); renderHistoryList(); break;
+                case 3: ChatStore.delete(this, id); renderHistoryList(); toast("Deleted"); break;
+            }
+        }).show();
+    }
+
+    private void renameChat(String id, String title) {
+        final EditText in = new EditText(this); in.setText(title); in.setSingleLine(true);
+        new android.app.AlertDialog.Builder(this).setTitle("Rename chat").setView(in)
+            .setPositiveButton("Save", (d, w) -> { ChatStore.patch(this, id, "title", in.getText().toString().trim()); renderHistoryList(); })
+            .setNegativeButton("Cancel", null).show();
     }
 
     private void openConversation(String id, String title) {
@@ -858,7 +940,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         chatHistory.setVisibility(View.GONE);
         chatConvo.setVisibility(View.VISIBLE);
         chatBack.setVisibility(View.VISIBLE);
+        chatFilterbar.setVisibility(View.GONE);
         chatTitle.setText(title == null || title.isEmpty() ? "Chat" : title);
+        updateConfigSubtitle();
         renderTranscript(ChatStore.transcript(this, id));
         scrollDown();
     }
@@ -869,7 +953,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         chatHistory.setVisibility(View.GONE);
         chatConvo.setVisibility(View.VISIBLE);
         chatBack.setVisibility(View.VISIBLE);
+        chatFilterbar.setVisibility(View.GONE);
         chatTitle.setText("New chat");
+        updateConfigSubtitle();
         chatList.removeAllViews(); chatPending = null;
         chatInput.requestFocus();
     }
@@ -923,9 +1009,11 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         chatInput.setText("");
         if (chatPending != null) chatList.removeView(chatPending);
         chatPending = addPending();
+        org.json.JSONObject ce = convEntry(chatSession);
         Intent svc = new Intent(this, ChatService.class);
         svc.putExtra("assist", ip); svc.putExtra("token", token);
         svc.putExtra("session", chatSession); svc.putExtra("message", msg);
+        if (ce != null) { svc.putExtra("model", ce.optString("model")); svc.putExtra("effort", ce.optString("effort")); }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(svc);
         else startService(svc);
     }
@@ -1038,7 +1126,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         box.setBackground(bg(col(R.color.surface2), 16)); box.setPadding(dp(13), dp(11), dp(13), dp(7));
         TextView tv = new TextView(this); markwon.setMarkdown(tv, text);
         tv.setTextColor(col(R.color.text)); tv.setTextSize(14); tv.setLineSpacing(0, 1.2f);
-        tv.setTextIsSelectable(true); box.addView(tv);
+        // LinkMovementMethod (not selectable text) so markdown links open on tap.
+        tv.setMovementMethod(android.text.method.LinkMovementMethod.getInstance());
+        box.addView(tv);
         TextView copy = new TextView(this); copy.setText("⧉ copy"); copy.setTextColor(col(R.color.dim));
         copy.setTextSize(12); copy.setPadding(dp(6), dp(6), dp(2), dp(1));
         copy.setOnClickListener(v -> { copyText(text); toast("Copied"); });
@@ -1057,15 +1147,19 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     // or a tap-to-note for a video clip.
     private void addImage(String mediaUrl, String mediaType) {
         final String ip = Prefs.assistIp(this), token = Prefs.token(this);
-        if ("video".equals(mediaType)) {
-            TextView tv = new TextView(this); tv.setText("▷  video captured, saved on the Pi");
+        final String name = mediaName(mediaUrl);
+        if (!"image".equals(mediaType)) {
+            TextView tv = new TextView(this);
+            tv.setText(("video".equals(mediaType) ? "▷  " : "▤  ") + name);
             tv.setTextColor(col(R.color.text)); tv.setTextSize(13);
             tv.setPadding(dp(12), dp(9), dp(12), dp(9)); tv.setBackground(bg(col(R.color.surface2), 12));
+            tv.setOnClickListener(v -> openMediaModal(mediaUrl, mediaType, name));
             addTo(tv, android.view.Gravity.START, 12);
             return;
         }
         final android.widget.ImageView iv = new android.widget.ImageView(this);
         iv.setAdjustViewBounds(true); iv.setMaxWidth(dp(280));
+        iv.setOnClickListener(v -> openMediaModal(mediaUrl, "image", name));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         lp.gravity = android.view.Gravity.START; lp.topMargin = dp(12); iv.setLayoutParams(lp); chatList.addView(iv);
         new Thread(() -> {
@@ -1075,6 +1169,139 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                 runOnUiThread(() -> { if (bm != null) { iv.setImageBitmap(bm); scrollDown(); } });
             } catch (Throwable ignore) {}
         }).start();
+    }
+
+    private String mediaName(String url) {
+        if (url == null) return "file";
+        int i = url.lastIndexOf('/');
+        return i >= 0 ? url.substring(i + 1) : url;
+    }
+
+    private String ext(String name) {
+        if (name == null) return "";
+        int i = name.lastIndexOf('.');
+        return i >= 0 ? name.substring(i + 1).toLowerCase() : "";
+    }
+
+    // A full-screen viewer for a media file: the path on top with download, pin and
+    // close, and a body that adapts to the type (image, selectable syntax-highlighted
+    // text or markdown, or a note plus download for anything else).
+    private void openMediaModal(final String mediaUrl, final String mediaType, final String name) {
+        final String ip = Prefs.assistIp(this), token = Prefs.token(this);
+        final android.app.Dialog d = new android.app.Dialog(this);
+        LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(col(R.color.bg));
+
+        LinearLayout header = new LinearLayout(this); header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        header.setPadding(dp(14), dp(12), dp(6), dp(12)); header.setBackgroundColor(col(R.color.surface));
+        TextView path = new TextView(this); path.setText(name); path.setTextColor(col(R.color.text));
+        path.setTextSize(13); path.setSingleLine(true); path.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
+        path.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        header.addView(path);
+        final String[] textHolder = {null};
+        header.addView(iconBtn("⧉", v -> { if (textHolder[0] != null) { copyText(textHolder[0]); toast("Copied"); } else toast("nothing to copy"); }));
+        header.addView(iconBtn("⇩", v -> downloadMedia(ip, token, mediaUrl, name)));
+        header.addView(iconBtn("★", v -> { addPin(name, mediaUrl, mediaType); toast("Pinned"); }));
+        header.addView(iconBtn("✕", v -> d.dismiss()));
+        root.addView(header);
+
+        final android.widget.FrameLayout body = new android.widget.FrameLayout(this);
+        body.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        final TextView loading = new TextView(this); loading.setText("loading…"); loading.setTextColor(col(R.color.dim));
+        loading.setPadding(dp(16), dp(16), dp(16), dp(16)); body.addView(loading);
+        root.addView(body);
+
+        d.setContentView(root);
+        if (d.getWindow() != null)
+            d.getWindow().setLayout(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT);
+        d.show();
+
+        new Thread(() -> {
+            try {
+                final byte[] b = MeshClient.fetchMedia(ip, token, mediaUrl);
+                ui.post(() -> {
+                    body.removeAllViews();
+                    body.addView(buildMediaView(mediaType, name, b, textHolder));
+                });
+            } catch (Throwable e) {
+                ui.post(() -> loading.setText("could not load: " + e.getMessage()));
+            }
+        }).start();
+    }
+
+    private View buildMediaView(String type, String name, byte[] b, String[] textHolder) {
+        String e = ext(name);
+        boolean image = "image".equals(type) || e.matches("png|jpe?g|gif|webp|bmp");
+        if (image) {
+            android.widget.ImageView iv = new android.widget.ImageView(this);
+            iv.setImageBitmap(android.graphics.BitmapFactory.decodeByteArray(b, 0, b.length));
+            iv.setAdjustViewBounds(true);
+            ScrollView sv = new ScrollView(this); sv.addView(iv); return sv;
+        }
+        boolean textual = "markdown".equals(type) || "text".equals(type) || "code".equals(type)
+                || e.matches("md|markdown|txt|log|json|ya?ml|toml|xml|csv|sh|bash|py|js|ts|java|kt|go|c|h|cpp|rs|html|css|conf|ini|env");
+        if (textual) {
+            String s = new String(b, java.nio.charset.StandardCharsets.UTF_8);
+            ScrollView sv = new ScrollView(this); sv.setPadding(dp(14), dp(12), dp(14), dp(16));
+            TextView tv = new TextView(this); tv.setTextColor(col(R.color.text)); tv.setTextSize(13);
+            tv.setTextIsSelectable(true);
+            if (e.equals("md") || e.equals("markdown") || "markdown".equals(type)) {
+                markwon.setMarkdown(tv, s);
+                textHolder[0] = s;
+            } else {
+                tv.setTypeface(android.graphics.Typeface.MONOSPACE);
+                markwon.setMarkdown(tv, "```" + e + "\n" + s.replace("```", "``​`") + "\n```");
+                textHolder[0] = s;
+            }
+            sv.addView(tv); return sv;
+        }
+        TextView tv = new TextView(this);
+        tv.setText(name + "\n\nUse ⇩ to download and open this file.");
+        tv.setTextColor(col(R.color.dim)); tv.setTextSize(13); tv.setPadding(dp(16), dp(16), dp(16), dp(16));
+        return tv;
+    }
+
+    private TextView iconBtn(String label, View.OnClickListener onClick) {
+        TextView t = new TextView(this); t.setText(label); t.setTextColor(col(R.color.text)); t.setTextSize(18);
+        t.setGravity(android.view.Gravity.CENTER); t.setMinWidth(dp(44)); t.setPadding(dp(6), dp(8), dp(6), dp(8));
+        t.setBackground(bg(col(R.color.surface2), 10)); t.setOnClickListener(onClick);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.leftMargin = dp(4); t.setLayoutParams(lp); return t;
+    }
+
+    private void downloadMedia(String ip, String token, String mediaUrl, String name) {
+        final String fn = name == null || name.isEmpty() ? mediaName(mediaUrl) : name;
+        new Thread(() -> {
+            try {
+                byte[] b = MeshClient.fetchMedia(ip, token, mediaUrl);
+                if (Build.VERSION.SDK_INT >= 29) {
+                    android.content.ContentValues cv = new android.content.ContentValues();
+                    cv.put(android.provider.MediaStore.Downloads.DISPLAY_NAME, fn);
+                    android.net.Uri uri = getContentResolver().insert(
+                            android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv);
+                    java.io.OutputStream os = getContentResolver().openOutputStream(uri);
+                    os.write(b); os.close();
+                } else {
+                    java.io.File dir = android.os.Environment.getExternalStoragePublicDirectory(
+                            android.os.Environment.DIRECTORY_DOWNLOADS);
+                    java.io.FileOutputStream os = new java.io.FileOutputStream(new java.io.File(dir, fn));
+                    os.write(b); os.close();
+                }
+                ui.post(() -> toast("Saved to Downloads: " + fn));
+            } catch (Throwable e) { ui.post(() -> toast("Download failed: " + e.getMessage())); }
+        }).start();
+    }
+
+    private void addPin(String name, String mediaUrl, String mediaType) {
+        try {
+            android.content.SharedPreferences p = getSharedPreferences("csync_pins", MODE_PRIVATE);
+            org.json.JSONArray a = new org.json.JSONArray(p.getString("pins", "[]"));
+            org.json.JSONObject o = new org.json.JSONObject();
+            o.put("name", name); o.put("media_url", mediaUrl); o.put("media_type", mediaType);
+            o.put("ts", System.currentTimeMillis());
+            a.put(o); p.edit().putString("pins", a.toString()).apply();
+        } catch (Throwable ignore) {}
     }
     // Errors (connection lost, agent down) are shown quietly as a dim centered
     // note rather than a loud red block.
@@ -1092,10 +1319,11 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         LinearLayout box = new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL);
         box.setBackground(bg(col(R.color.surface2), 12)); box.setPadding(dp(11), dp(8), dp(11), dp(8));
         final TextView head = new TextView(this); head.setText("▸  " + label); head.setTextColor(col(R.color.dim)); head.setTextSize(12);
-        final TextView prev = new TextView(this); prev.setText(preview == null ? "" : preview);
+        final TextView prev = new TextView(this);
         prev.setTextColor(col(R.color.dim)); prev.setTextSize(12); prev.setAlpha(0.75f);
         prev.setSingleLine(true); prev.setEllipsize(android.text.TextUtils.TruncateAt.END);
         prev.setPadding(dp(15), dp(2), 0, 0);
+        markwon.setMarkdown(prev, preview == null ? "" : preview);
         final TextView bodyV = new TextView(this); bodyV.setTextColor(col(R.color.dim));
         bodyV.setTextSize(12); bodyV.setPadding(dp(2), dp(6), 0, 0); bodyV.setVisibility(View.GONE);
         bodyV.setTextIsSelectable(true);
