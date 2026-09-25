@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="vertical" android:background="@color/mini_bg"
+    android:paddingStart="12dp" android:paddingEnd="8dp" android:paddingTop="7dp"
+    android:paddingBottom="6dp" android:visibility="gone">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical">
+        <LinearLayout android:id="@+id/mini_open" android:layout_width="0dp"
+            android:layout_weight="1" android:layout_height="48dp" android:orientation="vertical"
+            android:gravity="center_vertical" android:background="?attr/selectableItemBackground">
+            <TextView android:id="@+id/mini_target" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:text="PI SCREEN · PLAYING"
+                android:textSize="10sp" android:textColor="@color/mini_muted"/>
+            <TextView android:id="@+id/mini_title" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:maxLines="1" android:ellipsize="end"
+                android:text="Media  ›" android:textSize="13sp" android:textStyle="bold"
+                android:textColor="@color/mini_text"/>
+        </LinearLayout>
+        <TextView android:id="@+id/mini_pause" android:layout_width="55dp"
+            android:layout_height="48dp" android:gravity="center" android:text="Pause"
+            android:textSize="12sp" android:textStyle="bold" android:textColor="@color/mini_text"
+            android:background="?attr/selectableItemBackground"/>
+        <TextView android:id="@+id/mini_stop" android:layout_width="50dp"
+            android:layout_height="48dp" android:gravity="center" android:text="Stop"
+            android:textSize="12sp" android:textStyle="bold" android:textColor="@color/mini_text"
+            android:background="?attr/selectableItemBackground"/>
+    </LinearLayout>
+    <ProgressBar android:id="@+id/mini_progress" style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent" android:layout_height="2dp"
+        android:max="1000" android:progress="0" android:progressTint="?attr/colorPrimary"
+        android:progressBackgroundTint="@color/dim"/>
+</LinearLayout>

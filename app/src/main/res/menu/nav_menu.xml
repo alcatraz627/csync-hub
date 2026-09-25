@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:id="@+id/nav_home" android:icon="@drawable/ic_home" android:title="Home"/>
+    <item android:id="@+id/nav_media" android:icon="@drawable/ic_grid" android:title="Media"/>
     <item android:id="@+id/nav_share" android:icon="@drawable/ic_share" android:title="Share"/>
     <item android:id="@+id/nav_chat" android:icon="@drawable/ic_forum" android:title="Chat"/>
-    <item android:id="@+id/nav_tools" android:icon="@drawable/ic_grid" android:title="Tools"/>
-    <item android:id="@+id/nav_settings" android:icon="@drawable/ic_tune" android:title="Settings"/>
-    <item android:id="@+id/nav_camera" android:icon="@drawable/ic_camera" android:title="Camera"/>
+    <item android:id="@+id/nav_more" android:icon="@drawable/ic_tune" android:title="More"/>
 </menu>

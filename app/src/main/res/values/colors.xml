@@ -12,6 +12,9 @@
     <color name="offline">#AEB6C2</color>
     <color name="danger">#DC2626</color>
     <color name="onAccent">#FFFFFF</color>
+    <color name="mini_bg">#17212B</color>
+    <color name="mini_text">#FFFFFF</color>
+    <color name="mini_muted">#B6C2CE</color>
     <!-- accents -->
     <color name="coral">#E4572E</color>
     <color name="teal">#0D9488</color>

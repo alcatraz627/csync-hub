@@ -28,24 +28,15 @@ import java.lang.reflect.Method;
 
 import rikka.shizuku.Shizuku;
 
-/**
- * The csync hub: one app to reach the owner's own machines over Tailscale. Five
- * surfaces sit behind a bottom nav (Home, Share, Chat, Tools, Settings, Camera): Home is
- * a status-and-capabilities map, Share sends to mesh peers, Chat talks to the Pi
- * assistant, Tools holds the xkcd widget help and the Shizuku system monitor, and
- * Settings carries appearance (with more to come). Every page is inflated once at
- * startup and shown or hidden by {@link #show(int)}.
- */
+/** The csync hub: Home, Share, Chat, and More pages plus the Media activity. */
 public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     private final Handler ui = new Handler(Looper.getMainLooper());
 
-    // Five surfaces swapped by the bottom nav: Home, Share, Chat, Tools, Settings.
-    // Share reuses the old devices page for now; Tools folds the xkcd and system
-    // pages into one. current indexes them 0..4 in that order.
-    private View pageHome, pageShare, pageChat, pageTools, pageSettings, pageCamera;
+    private View pageHome, pageShare, pageChat, pageTools, pageSettings, pageCamera, pageMore;
     private CameraController cameraController;
-    private int current = 0; // 0 home, 1 share, 2 chat, 3 tools, 4 settings, 5 camera
+    private MediaMiniPlayer miniPlayer;
+    private int current = 0;
     private boolean resumed;
 
     // system page (Shizuku top)
@@ -78,23 +69,25 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageTools = inf.inflate(R.layout.page_tools, content, false);
         pageSettings = inf.inflate(R.layout.page_settings, content, false);
         pageCamera = inf.inflate(R.layout.page_camera, content, false);
+        pageMore = inf.inflate(R.layout.page_more, content, false);
         content.addView(pageHome);
         content.addView(pageShare);
         content.addView(pageChat);
         content.addView(pageTools);
         content.addView(pageSettings);
         content.addView(pageCamera);
+        content.addView(pageMore);
         cameraController = new CameraController(this, pageCamera);
+        miniPlayer = new MediaMiniPlayer(this);
 
         com.google.android.material.bottomnavigation.BottomNavigationView nav = findViewById(R.id.nav);
         nav.setOnItemSelectedListener(item -> {
             int id = item.getItemId();
             if (id == R.id.nav_home) show(0);
+            else if (id == R.id.nav_media) { startActivity(new Intent(this, MediaActivity.class)); return false; }
             else if (id == R.id.nav_share) show(1);
             else if (id == R.id.nav_chat) show(2);
-            else if (id == R.id.nav_tools) show(3);
-            else if (id == R.id.nav_settings) show(4);
-            else if (id == R.id.nav_camera) show(5);
+            else if (id == R.id.nav_more) show(6);
             return true;
         });
 
@@ -112,10 +105,28 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         if (Build.VERSION.SDK_INT >= 33) {
             requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 2002);
         }
-        int[] navIds = {R.id.nav_home, R.id.nav_share, R.id.nav_chat, R.id.nav_tools, R.id.nav_settings, R.id.nav_camera};
-        int start = b != null ? b.getInt("tab", 0) : 0;
-        if (start < 0 || start >= navIds.length) start = 0;
-        nav.setSelectedItemId(navIds[start]);
+        int[] navIds = {R.id.nav_home, R.id.nav_share, R.id.nav_chat, R.id.nav_more};
+        int start = b != null ? b.getInt("tab", 0) : tabFromIntent(getIntent());
+        int selected = start == 1 ? 1 : start == 2 ? 2 : start >= 3 ? 3 : 0;
+        nav.setSelectedItemId(navIds[selected]);
+        if (start >= 3 && start <= 5) show(start);
+    }
+
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        int tab = tabFromIntent(intent);
+        com.google.android.material.bottomnavigation.BottomNavigationView nav = findViewById(R.id.nav);
+        nav.setSelectedItemId(tab == 1 ? R.id.nav_share : tab == 2 ? R.id.nav_chat :
+            tab == 6 ? R.id.nav_more : R.id.nav_home);
+        show(tab);
+    }
+
+    private int tabFromIntent(Intent intent) {
+        if (intent == null) return 0;
+        String destination = intent.getStringExtra("destination");
+        return "share".equals(destination) ? 1 : "chat".equals(destination) ? 2 :
+            "more".equals(destination) ? 6 : 0;
     }
 
     // Keep the open surface across a theme or accent change, which recreates the
@@ -135,6 +146,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageTools.setVisibility(page == 3 ? View.VISIBLE : View.GONE);
         pageSettings.setVisibility(page == 4 ? View.VISIBLE : View.GONE);
         pageCamera.setVisibility(page == 5 ? View.VISIBLE : View.GONE);
+        pageMore.setVisibility(page == 6 ? View.VISIBLE : View.GONE);
         if (page == 0) refreshHome();
         if (page == 1) refreshShare();
         if (page == 2) { warmChat(); if (!chatConvoMode) { renderHistoryList(); refreshAgentStatus(); } }
@@ -172,6 +184,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         ((android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancel(7002);
         if (current == 3) ensureShizuku();
         if (current == 5) cameraController.show();
+        miniPlayer.start();
     }
 
     @Override
@@ -179,6 +192,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         super.onPause();
         resumed = false;
         cameraController.hide();
+        miniPlayer.stop();
         ChatService.uiForeground = false;
         try { unregisterReceiver(chatReceiver); } catch (Throwable ignore) {}
     }
@@ -220,11 +234,17 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         homeDotTail = pageHome.findViewById(R.id.home_dot_tail);
         homeDotMac = pageHome.findViewById(R.id.home_dot_mac);
         homeDotPi = pageHome.findViewById(R.id.home_dot_pi);
-        homeCaps = pageHome.findViewById(R.id.home_caps);
+        homeCaps = pageMore.findViewById(R.id.home_caps);
         com.google.android.material.bottomnavigation.BottomNavigationView nav = findViewById(R.id.nav);
         pageHome.findViewById(R.id.home_share).setOnClickListener(v -> nav.setSelectedItemId(R.id.nav_share));
         pageHome.findViewById(R.id.home_chat).setOnClickListener(v -> nav.setSelectedItemId(R.id.nav_chat));
         pageHome.findViewById(R.id.home_media).setOnClickListener(v -> startActivity(new Intent(this, MediaActivity.class)));
+        pageHome.findViewById(R.id.home_camera).setOnClickListener(v -> { nav.setSelectedItemId(R.id.nav_more); show(5); });
+        pageMore.findViewById(R.id.more_camera).setOnClickListener(v -> show(5));
+        pageMore.findViewById(R.id.more_tools).setOnClickListener(v -> show(3));
+        pageMore.findViewById(R.id.more_settings).setOnClickListener(v -> show(4));
+        pageMore.findViewById(R.id.more_assistant_tools).setOnClickListener(v ->
+            homeCaps.setVisibility(homeCaps.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE));
         pageTools.findViewById(R.id.tools_media).setOnClickListener(v -> startActivity(new Intent(this, MediaActivity.class)));
         pageTools.findViewById(R.id.tools_update).setOnClickListener(v ->
             AppUpdater.start(this, pageTools.findViewById(R.id.tools_update_status)));

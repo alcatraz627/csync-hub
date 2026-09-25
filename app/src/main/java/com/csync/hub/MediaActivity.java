@@ -48,13 +48,14 @@ public final class MediaActivity extends AppCompatActivity {
     private SeekBar seek;
     private SurfaceView video;
     private JSONObject selected;
-    private String driveId = "", path = "", target = "pi";
+    private String driveId = "", driveLabel = "", path = "", target = "pi";
     private boolean audioOnly;
     private boolean seeking;
     private boolean videoMode;
     private boolean videoControlsVisible;
     private boolean screenActive = true;
     private boolean showingVideos;
+    private boolean firstDriveLoad = true;
     private volatile long outputIntent;
     private final java.util.concurrent.atomic.AtomicBoolean stateInFlight = new java.util.concurrent.atomic.AtomicBoolean();
     private final ActivityResultLauncher<String> wallpaperPicker = registerForActivityResult(
@@ -79,6 +80,18 @@ public final class MediaActivity extends AppCompatActivity {
         search = findViewById(R.id.media_search);
         seek = findViewById(R.id.media_seek);
         video = findViewById(R.id.media_video);
+        com.google.android.material.bottomnavigation.BottomNavigationView nav = findViewById(R.id.media_bottom_nav);
+        nav.setSelectedItemId(R.id.nav_media);
+        nav.setOnItemSelectedListener(item -> {
+            if (item.getItemId() == R.id.nav_media) return true;
+            String destination = item.getItemId() == R.id.nav_share ? "share" :
+                item.getItemId() == R.id.nav_chat ? "chat" :
+                item.getItemId() == R.id.nav_more ? "more" : "home";
+            startActivity(new Intent(this, MainActivity.class)
+                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                .putExtra("destination", destination));
+            return false;
+        });
         video.setOnClickListener(v -> { if (videoMode) setVideoControls(!videoControlsVisible); });
         findViewById(R.id.media_back).setOnClickListener(v -> {
             if (videoMode) exitVideoMode();
@@ -88,10 +101,15 @@ public final class MediaActivity extends AppCompatActivity {
             else finish();
         });
         findViewById(R.id.media_drives).setOnClickListener(v -> { driveId = ""; path = ""; drives(); });
-        findViewById(R.id.media_videos).setOnClickListener(v -> videos(0, false));
+        findViewById(R.id.media_files).setOnClickListener(v -> { selectTab(R.id.media_files); if (driveId.isEmpty()) drives(); else browse(); });
+        findViewById(R.id.media_videos).setOnClickListener(v -> { selectTab(R.id.media_videos); videos(0, false); });
         findViewById(R.id.media_find).setOnClickListener(v -> find());
-        findViewById(R.id.media_history).setOnClickListener(v -> history());
-        findViewById(R.id.media_connections).setOnClickListener(v -> connections());
+        findViewById(R.id.media_history).setOnClickListener(v -> { selectTab(R.id.media_history); history(); });
+        findViewById(R.id.media_connections).setOnClickListener(v -> { selectTab(R.id.media_connections); connections(); });
+        findViewById(R.id.media_actions_toggle).setOnClickListener(v -> {
+            View actions = findViewById(R.id.media_actions);
+            actions.setVisibility(actions.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE);
+        });
         findViewById(R.id.media_wallpaper).setOnClickListener(v -> wallpaperPicker.launch("image/*"));
         findViewById(R.id.media_cast_file).setOnClickListener(v -> mediaPicker.launch("*/*"));
         findViewById(R.id.media_cast_youtube).setOnClickListener(v -> castYoutube());
@@ -120,6 +138,20 @@ public final class MediaActivity extends AppCompatActivity {
             else if (link != null) startYoutube(link.trim());
         }
         ui.postDelayed(this::refreshState, 1000);
+    }
+
+    private void selectTab(int selectedId) {
+        int accent = com.google.android.material.color.MaterialColors.getColor(
+            this, com.google.android.material.R.attr.colorPrimary, getColor(R.color.coral));
+        for (int id : new int[]{R.id.media_files, R.id.media_videos, R.id.media_history, R.id.media_connections}) {
+            TextView tab = findViewById(id);
+            tab.setTextColor(id == selectedId ? accent : getColor(R.color.dim));
+            tab.setTypeface(null, id == selectedId ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+        }
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
     private interface Work { JSONObject run() throws Exception; }
@@ -271,7 +303,7 @@ public final class MediaActivity extends AppCompatActivity {
     private void row(String title, String detail, View.OnClickListener click) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(16, 14, 16, 14);
+        box.setPadding(dp(0), dp(14), dp(0), dp(14));
         TextView heading = new TextView(this);
         heading.setText(title); heading.setTextSize(16); heading.setTextColor(getColor(R.color.text));
         box.addView(heading);
@@ -280,6 +312,9 @@ public final class MediaActivity extends AppCompatActivity {
         box.addView(sub);
         box.setOnClickListener(click);
         rows.addView(box);
+        View divider = new View(this);
+        divider.setBackgroundColor(getColor(R.color.border));
+        rows.addView(divider, new LinearLayout.LayoutParams(-1, dp(1)));
     }
 
     private void drives() {
@@ -292,12 +327,25 @@ public final class MediaActivity extends AppCompatActivity {
             if (outputIntent != startingIntent) setStatus(activeStatus);
             syncPendingProgress();
             JSONArray values = result.getJSONArray("drives");
+            JSONObject firstOnline = null;
             for (int i = 0; i < values.length(); i++) {
                 JSONObject drive = values.getJSONObject(i);
                 String id = drive.getString("id");
                 boolean online = drive.optBoolean("online");
-                row(drive.getString("label"), online ? "Available · read-only" : "Disconnected · connect this drive",
-                    v -> { if (online) { driveId = id; path = ""; browse(); } });
+                if (online && firstOnline == null) firstOnline = drive;
+                String label = drive.getString("label");
+                row(label, online ? "Available · read-only" : "Disconnected · connect this drive",
+                    v -> { if (online) { driveId = id; driveLabel = label; path = ""; browse(); } });
+            }
+            if (firstDriveLoad) {
+                firstDriveLoad = false;
+                if (firstOnline != null) {
+                    driveId = firstOnline.getString("id");
+                    driveLabel = firstOnline.getString("label");
+                    path = "";
+                    selectTab(R.id.media_files);
+                    browse();
+                }
             }
         });
     }
@@ -306,6 +354,7 @@ public final class MediaActivity extends AppCompatActivity {
 
     private void browse(int offset, boolean append) {
         showingVideos = false;
+        ((TextView) findViewById(R.id.media_drives)).setText("BROWSING  ·  " + driveLabel + "  ⌄");
         String requestedDrive = driveId, requestedPath = path;
         if (!append) clearRows("Opening " + path + "…");
         request(() -> client.get("/v1/items?driveId=" + MediaClient.enc(requestedDrive) +
@@ -604,6 +653,10 @@ public final class MediaActivity extends AppCompatActivity {
         videoMode = true;
         for (int id : new int[]{R.id.media_sections, R.id.media_search_line, R.id.media_status, R.id.media_list})
             findViewById(id).setVisibility(View.GONE);
+        findViewById(R.id.media_drives).setVisibility(View.GONE);
+        findViewById(R.id.media_actions_toggle).setVisibility(View.GONE);
+        findViewById(R.id.media_actions).setVisibility(View.GONE);
+        findViewById(R.id.media_bottom_nav).setVisibility(View.GONE);
         video.setLayoutParams(new LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
         video.setVisibility(View.VISIBLE);
@@ -627,6 +680,9 @@ public final class MediaActivity extends AppCompatActivity {
         videoMode = false;
         findViewById(R.id.media_nav).setVisibility(View.VISIBLE);
         findViewById(R.id.media_player_controls).setVisibility(View.VISIBLE);
+        findViewById(R.id.media_drives).setVisibility(View.VISIBLE);
+        findViewById(R.id.media_actions_toggle).setVisibility(View.VISIBLE);
+        findViewById(R.id.media_bottom_nav).setVisibility(View.VISIBLE);
         getWindow().getDecorView().setSystemUiVisibility(0);
         for (int id : new int[]{R.id.media_sections, R.id.media_search_line, R.id.media_status, R.id.media_list})
             findViewById(id).setVisibility(View.VISIBLE);
@@ -751,18 +807,26 @@ public final class MediaActivity extends AppCompatActivity {
         } else if ("phone".equals(target)) {
             PhonePlaybackService playback = PhonePlaybackService.current;
             if (playback != null && playback.hasPlayer() && !seeking) {
+                findViewById(R.id.media_player_controls).setVisibility(View.VISIBLE);
+                findViewById(R.id.media_pause).setVisibility(playback.playing() ? View.VISIBLE : View.GONE);
+                findViewById(R.id.media_resume).setVisibility(playback.playing() ? View.GONE : View.VISIBLE);
                 seek.setMax(Math.max(1, playback.duration()));
                 seek.setProgress(playback.position());
-            }
+            } else findViewById(R.id.media_player_controls).setVisibility(View.GONE);
         } else if (stateInFlight.compareAndSet(false, true)) {
             new Thread(() -> {
                 try {
                     JSONObject state = client.get("/v1/player/pi");
                     ui.post(() -> {
                         if (!screenActive || !"pi".equals(target)) return;
-                        nowPlaying.setText("Pi: " + state.optString("state") +
-                            " · volume " + state.optInt("volume", 0) + "%");
-                        output.setText(state.optString("error", ""));
+                        String playerState = state.optString("state");
+                        boolean active = playerState.equals("playing") || playerState.equals("paused") ||
+                            playerState.equals("loading") || playerState.equals("buffering");
+                        findViewById(R.id.media_player_controls).setVisibility(active ? View.VISIBLE : View.GONE);
+                        findViewById(R.id.media_pause).setVisibility(playerState.equals("playing") ? View.VISIBLE : View.GONE);
+                        findViewById(R.id.media_resume).setVisibility(playerState.equals("paused") ? View.VISIBLE : View.GONE);
+                        nowPlaying.setText(state.optString("name", "Pi media"));
+                        output.setText("Pi screen · " + playerState + " · volume " + state.optInt("volume", 0) + "%");
                         if (!seeking) {
                             seek.setMax(Math.max(1, state.optInt("durationMs", 1)));
                             seek.setProgress(state.optInt("positionMs"));
