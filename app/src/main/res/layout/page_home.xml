@@ -103,6 +103,11 @@
                     android:layout_marginStart="6dp"
                     app:icon="@drawable/ic_forum" android:text="Chat"/>
             </LinearLayout>
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/home_media"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="8dp" android:text="Browse and play media"/>
 
         </LinearLayout>
     </ScrollView>

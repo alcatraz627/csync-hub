@@ -26,6 +26,18 @@
         android:orientation="vertical"
         android:padding="16dp">
 
+        <Button android:id="@+id/tools_media"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="Browse and play Pi media"/>
+
+        <Button android:id="@+id/tools_update"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="Update csync from Pi"/>
+        <TextView android:id="@+id/tools_update_status"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:textColor="@color/dim" android:paddingBottom="8dp"
+            android:text="Updates use the Pi connection; Android may ask to approve installation."/>
+
         <!-- xkcd card -->
         <LinearLayout
             android:layout_width="match_parent"

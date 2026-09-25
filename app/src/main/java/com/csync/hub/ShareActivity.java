@@ -1,6 +1,7 @@
 package com.csync.hub;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
@@ -28,18 +29,9 @@ public class ShareActivity extends Activity {
     protected void onCreate(Bundle b) {
         super.onCreate(b);
 
-        final String ip = Prefs.homeIp(this);
-        final String token = Prefs.token(this);
-        if (ip.isEmpty() || token.isEmpty()) {
-            toast("Set the home peer in csync → Devices first");
-            finish();
-            return;
-        }
-
         final Intent intent = getIntent();
         final String action = intent.getAction();
         final String type = intent.getType();
-        final String from = Prefs.deviceName(this);
         android.util.Log.i("csynchub", "share in: action=" + action + " type=" + type
                 + " hasStream=" + intent.hasExtra(Intent.EXTRA_STREAM)
                 + " stream=" + intent.getParcelableExtra(Intent.EXTRA_STREAM)
@@ -71,6 +63,71 @@ public class ShareActivity extends Activity {
             return;
         }
 
+        boolean mediaFile = uris.size() == 1 && isPlayableMedia(uris.get(0));
+        String youtubeUrl = sharedText == null ? null : youtubeLink(sharedText);
+        boolean youtube = youtubeUrl != null;
+        if (mediaFile || youtube) {
+            new AlertDialog.Builder(this).setTitle("Share with csync")
+                .setItems(new String[]{"Play on Pi screen", "Send to peer"}, (dialog, choice) -> {
+                    if (choice == 0) {
+                        Intent cast = new Intent(this, MediaActivity.class).setAction(Intent.ACTION_SEND)
+                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        if (mediaFile) {
+                            cast.setType(getContentResolver().getType(uris.get(0)));
+                            cast.putExtra(Intent.EXTRA_STREAM, uris.get(0));
+                            cast.setClipData(android.content.ClipData.newUri(getContentResolver(),
+                                "Media to cast", uris.get(0)));
+                        } else {
+                            cast.setType("text/plain");
+                            cast.putExtra(Intent.EXTRA_TEXT, youtubeUrl);
+                        }
+                        startActivity(cast);
+                        finish();
+                    } else sendToPeer(sharedText, uris);
+                }).setNegativeButton("Cancel", (dialog, choice) -> finish())
+                .setOnCancelListener(dialog -> finish()).show();
+            return;
+        }
+        sendToPeer(sharedText, uris);
+    }
+
+    private boolean isPlayableMedia(Uri uri) {
+        String mime = getContentResolver().getType(uri);
+        return mime != null && (mime.startsWith("video/") || mime.startsWith("audio/"));
+    }
+
+    private String youtubeLink(String sharedText) {
+        try {
+            java.util.regex.Matcher links = java.util.regex.Pattern.compile("https://[^\\s]+", java.util.regex.Pattern.CASE_INSENSITIVE)
+                .matcher(sharedText);
+            if (!links.find()) return null;
+            String value = links.group().replaceAll("[.,;!?)]+$", "");
+            if (links.find()) return null;
+            Uri uri = Uri.parse(value);
+            String host = uri.getHost();
+            if (host == null || !"https".equalsIgnoreCase(uri.getScheme())) return null;
+            host = host.toLowerCase(java.util.Locale.ROOT);
+            boolean allowed = host.equals("youtube.com") || host.equals("www.youtube.com") ||
+                host.equals("m.youtube.com") || host.equals("music.youtube.com") ||
+                host.equals("youtu.be");
+            if (!allowed) return null;
+            String id = host.endsWith("youtu.be") ? uri.getLastPathSegment() :
+                "/watch".equals(uri.getPath()) ? uri.getQueryParameter("v") :
+                uri.getPath() != null && uri.getPath().matches("/(shorts|live)/[A-Za-z0-9_-]{11}") ?
+                    uri.getLastPathSegment() : null;
+            return id != null && id.matches("[A-Za-z0-9_-]{11}") ? value : null;
+        } catch (Exception error) { return null; }
+    }
+
+    private void sendToPeer(String sharedText, List<Uri> uris) {
+        final String ip = Prefs.homeIp(this);
+        final String token = Prefs.token(this);
+        if (ip.isEmpty() || token.isEmpty()) {
+            toast("Set the home peer in csync → Settings first");
+            finish();
+            return;
+        }
+        final String from = Prefs.deviceName(this);
         new Thread(new Runnable() {
             public void run() {
                 int ok = 0;

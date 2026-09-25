@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:padding="16dp" android:background="@color/bg">
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="Pi camera" android:textSize="24sp" android:textColor="@color/text"
+        android:paddingBottom="12dp"/>
+    <ImageView android:id="@+id/camera_preview" android:layout_width="match_parent"
+        android:layout_height="0dp" android:layout_weight="1" android:contentDescription="Live Pi camera preview"
+        android:background="@color/surface" android:scaleType="fitCenter"/>
+    <TextView android:id="@+id/camera_status" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:text="Open the Camera tab to start the stream"
+        android:textColor="@color/text" android:paddingTop="12dp" android:paddingBottom="8dp"/>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <Button android:id="@+id/camera_photo" android:layout_width="0dp" android:layout_weight="1"
+            android:layout_height="wrap_content" android:text="Photo"/>
+        <Button android:id="@+id/camera_record" android:layout_width="0dp" android:layout_weight="1"
+            android:layout_height="wrap_content" android:text="Record"/>
+        <Button android:id="@+id/camera_captures" android:layout_width="0dp" android:layout_weight="1"
+            android:layout_height="wrap_content" android:text="Captures"/>
+    </LinearLayout>
+    <ScrollView android:layout_width="match_parent" android:layout_height="120dp">
+        <LinearLayout android:id="@+id/camera_files" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:orientation="vertical"/>
+    </ScrollView>
+</LinearLayout>

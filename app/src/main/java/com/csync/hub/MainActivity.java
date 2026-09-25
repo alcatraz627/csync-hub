@@ -30,7 +30,7 @@ import rikka.shizuku.Shizuku;
 
 /**
  * The csync hub: one app to reach the owner's own machines over Tailscale. Five
- * surfaces sit behind a bottom nav (Home, Share, Chat, Tools, Settings): Home is
+ * surfaces sit behind a bottom nav (Home, Share, Chat, Tools, Settings, Camera): Home is
  * a status-and-capabilities map, Share sends to mesh peers, Chat talks to the Pi
  * assistant, Tools holds the xkcd widget help and the Shizuku system monitor, and
  * Settings carries appearance (with more to come). Every page is inflated once at
@@ -43,8 +43,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     // Five surfaces swapped by the bottom nav: Home, Share, Chat, Tools, Settings.
     // Share reuses the old devices page for now; Tools folds the xkcd and system
     // pages into one. current indexes them 0..4 in that order.
-    private View pageHome, pageShare, pageChat, pageTools, pageSettings;
-    private int current = 0; // 0 home, 1 share, 2 chat, 3 tools, 4 settings
+    private View pageHome, pageShare, pageChat, pageTools, pageSettings, pageCamera;
+    private CameraController cameraController;
+    private int current = 0; // 0 home, 1 share, 2 chat, 3 tools, 4 settings, 5 camera
     private boolean resumed;
 
     // system page (Shizuku top)
@@ -76,11 +77,14 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageChat = inf.inflate(R.layout.page_chat, content, false);
         pageTools = inf.inflate(R.layout.page_tools, content, false);
         pageSettings = inf.inflate(R.layout.page_settings, content, false);
+        pageCamera = inf.inflate(R.layout.page_camera, content, false);
         content.addView(pageHome);
         content.addView(pageShare);
         content.addView(pageChat);
         content.addView(pageTools);
         content.addView(pageSettings);
+        content.addView(pageCamera);
+        cameraController = new CameraController(this, pageCamera);
 
         com.google.android.material.bottomnavigation.BottomNavigationView nav = findViewById(R.id.nav);
         nav.setOnItemSelectedListener(item -> {
@@ -90,6 +94,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             else if (id == R.id.nav_chat) show(2);
             else if (id == R.id.nav_tools) show(3);
             else if (id == R.id.nav_settings) show(4);
+            else if (id == R.id.nav_camera) show(5);
             return true;
         });
 
@@ -107,7 +112,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         if (Build.VERSION.SDK_INT >= 33) {
             requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 2002);
         }
-        int[] navIds = {R.id.nav_home, R.id.nav_share, R.id.nav_chat, R.id.nav_tools, R.id.nav_settings};
+        int[] navIds = {R.id.nav_home, R.id.nav_share, R.id.nav_chat, R.id.nav_tools, R.id.nav_settings, R.id.nav_camera};
         int start = b != null ? b.getInt("tab", 0) : 0;
         if (start < 0 || start >= navIds.length) start = 0;
         nav.setSelectedItemId(navIds[start]);
@@ -122,17 +127,20 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     }
 
     private void show(int page) {
+        if (current == 5 && page != 5) cameraController.hide();
         current = page;
         pageHome.setVisibility(page == 0 ? View.VISIBLE : View.GONE);
         pageShare.setVisibility(page == 1 ? View.VISIBLE : View.GONE);
         pageChat.setVisibility(page == 2 ? View.VISIBLE : View.GONE);
         pageTools.setVisibility(page == 3 ? View.VISIBLE : View.GONE);
         pageSettings.setVisibility(page == 4 ? View.VISIBLE : View.GONE);
+        pageCamera.setVisibility(page == 5 ? View.VISIBLE : View.GONE);
         if (page == 0) refreshHome();
         if (page == 1) refreshShare();
         if (page == 2) { warmChat(); if (!chatConvoMode) { renderHistoryList(); refreshAgentStatus(); } }
         if (page == 3) ensureShizuku();
         if (page == 4) { refreshConnection(); refreshAssistant(); }
+        if (page == 5 && resumed) cameraController.show();
     }
 
     // Wake the tailnet path to the assistant so the first message is not the cold
@@ -163,12 +171,14 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         }
         ((android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancel(7002);
         if (current == 3) ensureShizuku();
+        if (current == 5) cameraController.show();
     }
 
     @Override
     protected void onPause() {
         super.onPause();
         resumed = false;
+        cameraController.hide();
         ChatService.uiForeground = false;
         try { unregisterReceiver(chatReceiver); } catch (Throwable ignore) {}
     }
@@ -214,6 +224,10 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         com.google.android.material.bottomnavigation.BottomNavigationView nav = findViewById(R.id.nav);
         pageHome.findViewById(R.id.home_share).setOnClickListener(v -> nav.setSelectedItemId(R.id.nav_share));
         pageHome.findViewById(R.id.home_chat).setOnClickListener(v -> nav.setSelectedItemId(R.id.nav_chat));
+        pageHome.findViewById(R.id.home_media).setOnClickListener(v -> startActivity(new Intent(this, MediaActivity.class)));
+        pageTools.findViewById(R.id.tools_media).setOnClickListener(v -> startActivity(new Intent(this, MediaActivity.class)));
+        pageTools.findViewById(R.id.tools_update).setOnClickListener(v ->
+            AppUpdater.start(this, pageTools.findViewById(R.id.tools_update_status)));
     }
 
     // Probe reachability and pull the assistant's tool list, off the UI thread.

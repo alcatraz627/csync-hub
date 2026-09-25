@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:background="@color/bg">
+    <LinearLayout android:id="@+id/media_nav" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:padding="12dp" android:background="@color/surface">
+        <Button android:id="@+id/media_back" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Back"/>
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical" android:gravity="center" android:text="Media"
+            android:textSize="20sp" android:textStyle="bold" android:textColor="@color/text"/>
+    </LinearLayout>
+    <LinearLayout android:id="@+id/media_sections" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:padding="8dp">
+        <Button android:id="@+id/media_drives" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Drives"/>
+        <Button android:id="@+id/media_videos" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Videos"/>
+        <Button android:id="@+id/media_history" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="History"/>
+        <Button android:id="@+id/media_connections" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Access"/>
+    </LinearLayout>
+    <Button android:id="@+id/media_wallpaper" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:layout_marginLeft="12dp" android:layout_marginRight="12dp"
+        android:text="Choose screen image from phone"/>
+    <Button android:id="@+id/media_cast_youtube" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:layout_marginLeft="12dp" android:layout_marginRight="12dp"
+        android:text="Play YouTube link on Pi"/>
+    <Button android:id="@+id/media_cast_file" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:layout_marginLeft="12dp" android:layout_marginRight="12dp"
+        android:text="Send phone media to Pi screen"/>
+    <LinearLayout android:id="@+id/media_search_line" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:paddingLeft="12dp" android:paddingRight="12dp">
+        <EditText android:id="@+id/media_search" android:layout_width="0dp" android:layout_weight="1"
+            android:layout_height="wrap_content" android:singleLine="true" android:hint="Search file names"
+            android:inputType="text"/>
+        <Button android:id="@+id/media_find" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Find"/>
+    </LinearLayout>
+    <TextView android:id="@+id/media_status" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:paddingLeft="16dp" android:paddingRight="16dp" android:paddingBottom="6dp"
+        android:textColor="@color/dim" android:text="Checking drives…"/>
+    <ScrollView android:id="@+id/media_list" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+        <LinearLayout android:id="@+id/media_rows" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:orientation="vertical" android:padding="10dp"/>
+    </ScrollView>
+    <SurfaceView android:id="@+id/media_video" android:layout_width="match_parent"
+        android:layout_height="180dp" android:visibility="gone"/>
+    <LinearLayout android:id="@+id/media_player_controls" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:background="@color/surface" android:padding="12dp">
+        <TextView android:id="@+id/media_now" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="Nothing playing" android:textSize="16sp" android:textStyle="bold" android:textColor="@color/text"/>
+        <TextView android:id="@+id/media_output" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="" android:textColor="@color/dim" android:textSize="12sp"/>
+        <SeekBar android:id="@+id/media_seek" android:layout_width="match_parent" android:layout_height="wrap_content"/>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+            <Button android:id="@+id/media_pause" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Pause"/>
+            <Button android:id="@+id/media_resume" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Resume"/>
+            <Button android:id="@+id/media_stop" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Stop"/>
+        </LinearLayout>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <Button android:id="@+id/media_mute" android:layout_width="0dp" android:layout_weight="1"
+                android:layout_height="wrap_content" android:text="Mute"/>
+            <Button android:id="@+id/media_volume" android:layout_width="0dp" android:layout_weight="1"
+                android:layout_height="wrap_content" android:text="Volume"/>
+        </LinearLayout>
+        <Button android:id="@+id/media_settings" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:text="Playback settings"/>
+    </LinearLayout>
+</LinearLayout>

@@ -5,8 +5,11 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION"/>
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23"/>
 
     <application
@@ -24,6 +27,16 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+
+        <activity android:name=".MediaActivity" android:exported="false"
+            android:configChanges="orientation|screenSize"/>
+
+        <receiver android:name=".AppUpdateReceiver" android:exported="false"/>
+
+        <provider android:name=".VlcStreamProvider"
+            android:authorities="${applicationId}.media"
+            android:exported="false"
+            android:grantUriPermissions="true"/>
 
         <activity
             android:name=".ShareActivity"
@@ -55,6 +68,11 @@
             android:name=".ChatService"
             android:exported="false"
             android:foregroundServiceType="dataSync"/>
+
+        <service
+            android:name=".PhonePlaybackService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback"/>
 
         <service
             android:name=".XkcdJobService"
