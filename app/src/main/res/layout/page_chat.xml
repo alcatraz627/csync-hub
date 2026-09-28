@@ -1,61 +1,108 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@color/bg">
 
-    <!-- app bar -->
+    <include android:id="@+id/chat_top" layout="@layout/kit_page_top"/>
+
+    <!-- conversation heading -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingLeft="10dp" android:paddingRight="12dp"
-        android:paddingTop="16dp" android:paddingBottom="12dp"
-        android:background="@color/surface">
+        android:paddingStart="@dimen/kit_gutter" android:paddingEnd="12dp"
+        android:paddingTop="6dp" android:paddingBottom="4dp">
         <TextView android:id="@+id/chat_back"
-            android:layout_width="36dp" android:layout_height="wrap_content"
-            android:gravity="center" android:text="‹" android:textSize="24sp"
+            android:layout_width="48dp" android:layout_height="48dp"
+            android:gravity="center" android:text=""
+            android:drawableStart="@drawable/csi_back" android:drawableTint="@color/text"
+            android:contentDescription="Back to conversations"
             android:textColor="@color/text" android:visibility="gone"
             android:background="?attr/selectableItemBackgroundBorderless"/>
         <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
-            android:orientation="vertical" android:paddingLeft="8dp">
-            <TextView android:id="@+id/chat_title"
-                android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="Chats" android:textSize="20sp" android:textStyle="bold" android:textColor="@color/text"/>
-            <TextView android:id="@+id/chat_subtitle"
-                android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="assistant" android:textSize="12sp" android:textColor="@color/dim"/>
+            android:orientation="vertical">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical">
+                <TextView android:id="@+id/chat_title"
+                    android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+                    style="@style/Kit.Text.PageTitle" android:text="Chats"/>
+                <EditText android:id="@+id/chat_title_edit"
+                    android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+                    android:singleLine="true" android:imeOptions="actionDone" android:visibility="gone"
+                    android:textSize="22sp" android:textStyle="bold" android:textColor="@color/text"/>
+                <ImageView android:id="@+id/chat_edit"
+                    android:layout_width="48dp" android:layout_height="48dp" android:padding="14dp"
+                    android:src="@drawable/csi_edit" app:tint="@color/dim"
+                    android:contentDescription="Edit conversation title" android:visibility="gone"
+                    android:background="?attr/selectableItemBackgroundBorderless"/>
+                <ImageView android:id="@+id/chat_favorite"
+                    android:layout_width="48dp" android:layout_height="48dp" android:padding="14dp"
+                    android:src="@drawable/csi_favorite" app:tint="@color/dim"
+                    android:contentDescription="Favorite conversation" android:visibility="gone"
+                    android:background="?attr/selectableItemBackgroundBorderless"/>
+                <ImageView android:id="@+id/chat_archive"
+                    android:layout_width="48dp" android:layout_height="48dp" android:padding="14dp"
+                    android:src="@drawable/csi_archive" app:tint="@color/dim"
+                    android:contentDescription="Archive conversation" android:visibility="gone"
+                    android:background="?attr/selectableItemBackgroundBorderless"/>
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical">
+                <View android:id="@+id/chat_presence_dot" android:layout_width="8dp"
+                    android:layout_height="8dp" android:layout_marginEnd="5dp"
+                    android:background="@drawable/dot_circle"/>
+                <TextView android:id="@+id/chat_subtitle"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    style="@style/Kit.Text.PageSub" android:text="Checking Pi"/>
+            </LinearLayout>
         </LinearLayout>
-        <Button android:id="@+id/chat_new" style="?android:attr/buttonStyleSmall"
-            android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="New"/>
     </LinearLayout>
 
-    <!-- filter bar (list mode) -->
+    <!-- one filter row and one search field (list mode) -->
     <LinearLayout
         android:id="@+id/chat_filterbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingLeft="12dp" android:paddingRight="12dp"
-        android:paddingTop="6dp" android:paddingBottom="6dp">
-        <EditText
-            android:id="@+id/chat_search"
-            android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
-            android:hint="search chats" android:textSize="14sp" android:maxLines="1"
-            android:inputType="text" android:textColor="@color/text" android:textColorHint="@color/dim"/>
-        <TextView android:id="@+id/chat_toggle_fav"
-            android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="★" android:textSize="16sp" android:textColor="@color/dim"
-            android:paddingLeft="10dp" android:paddingRight="10dp" android:paddingTop="6dp" android:paddingBottom="6dp"
-            android:background="?attr/selectableItemBackgroundBorderless"/>
-        <TextView android:id="@+id/chat_toggle_archived"
-            android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="Archived" android:textSize="12sp" android:textColor="@color/dim"
-            android:paddingLeft="10dp" android:paddingRight="6dp" android:paddingTop="6dp" android:paddingBottom="6dp"
-            android:background="?attr/selectableItemBackgroundBorderless"/>
+        android:orientation="vertical"
+        android:paddingStart="@dimen/kit_gutter" android:paddingEnd="@dimen/kit_gutter"
+        android:paddingTop="8dp" android:paddingBottom="0dp">
+        <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:fillViewport="true" android:scrollbars="none"
+            android:background="@drawable/card_bg">
+        <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center">
+            <TextView android:id="@+id/chat_filter_all" style="@style/CsyncChatTab"
+                android:drawableStart="@drawable/csi_menu" android:drawablePadding="4dp"
+                android:text="All"/>
+            <TextView android:id="@+id/chat_toggle_fav" style="@style/CsyncChatTab"
+                android:drawableStart="@drawable/csi_favorite" android:drawablePadding="4dp"
+                android:text="Favorites"/>
+            <TextView android:id="@+id/chat_toggle_archived" style="@style/CsyncChatTab"
+                android:drawableStart="@drawable/csi_archive" android:drawablePadding="4dp"
+                android:text="Archived"/>
+            <TextView android:id="@+id/chat_filter_tools" style="@style/CsyncChatTab"
+                android:drawableStart="@drawable/csi_tools" android:drawablePadding="4dp"
+                android:text="Tools"/>
+        </LinearLayout>
+        </HorizontalScrollView>
+        <LinearLayout android:id="@+id/chat_search_wrap"
+            android:layout_width="match_parent" android:layout_height="48dp"
+            android:layout_marginTop="8dp" android:gravity="center_vertical"
+            android:paddingStart="12dp" android:paddingEnd="10dp"
+            android:background="@drawable/card_bg">
+            <ImageView android:layout_width="20dp" android:layout_height="20dp"
+                android:src="@drawable/csi_search" app:tint="@color/dim"
+                android:importantForAccessibility="no"/>
+            <EditText android:id="@+id/chat_search"
+                android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent"
+                android:layout_marginStart="9dp" android:background="@android:color/transparent"
+                android:hint="Search conversations" android:textSize="14sp" android:maxLines="1"
+                android:inputType="text" android:textColor="@color/text" android:textColorHint="@color/dim"/>
+        </LinearLayout>
     </LinearLayout>
 
     <!-- history list -->
@@ -64,12 +111,41 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:padding="10dp">
+        android:paddingStart="@dimen/kit_gutter" android:paddingEnd="@dimen/kit_gutter">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical">
+        <TextView android:id="@+id/chat_recent_heading" style="@style/Kit.Text.Section"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="16dp" android:layout_marginBottom="8dp"
+            android:text="Recent conversations"/>
         <LinearLayout
             android:id="@+id/chat_history_list"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"/>
+        <LinearLayout android:id="@+id/chat_tools_list"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:visibility="gone"/>
+        <LinearLayout android:id="@+id/chat_list_actions"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:layout_marginTop="14dp">
+            <TextView android:id="@+id/chat_list_new"
+                android:layout_width="wrap_content" android:layout_height="48dp"
+                android:gravity="center" android:paddingStart="15dp" android:paddingEnd="15dp"
+                android:drawableStart="@drawable/csi_plus" android:drawablePadding="6dp"
+                android:drawableTint="@color/onAccent" android:text="New chat"
+                android:textSize="13sp" android:textStyle="bold" android:textColor="@color/onAccent"
+                android:background="@drawable/player_primary_bg"/>
+            <TextView android:id="@+id/chat_list_settings"
+                android:layout_width="wrap_content" android:layout_height="48dp"
+                android:layout_marginStart="8dp" android:gravity="center"
+                android:paddingStart="15dp" android:paddingEnd="15dp"
+                android:drawableStart="@drawable/csi_sliders" android:drawablePadding="6dp"
+                android:drawableTint="@color/dim" android:text="Settings"
+                android:textSize="13sp" android:textStyle="bold" android:textColor="@color/text"
+                android:background="@drawable/card_bg"/>
+        </LinearLayout>
+        </LinearLayout>
     </ScrollView>
 
     <!-- conversation -->
@@ -86,55 +162,75 @@
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
-            android:padding="14dp">
+            android:paddingStart="14dp" android:paddingEnd="14dp"
+            android:paddingTop="4dp" android:paddingBottom="6dp">
             <LinearLayout
                 android:id="@+id/chat_list"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:paddingTop="4dp"
+                android:paddingTop="0dp"
                 android:paddingBottom="8dp"/>
         </ScrollView>
 
-        <!-- composer -->
+        <!-- composer: a drag handle shows once the message outgrows two lines -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="bottom"
-            android:padding="10dp"
-            android:background="@color/surface">
-            <TextView
+            android:orientation="vertical"
+            android:background="@color/bg">
+            <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:scrollbars="none" android:paddingStart="8dp" android:paddingEnd="8dp">
+                <com.google.android.material.chip.ChipGroup android:id="@+id/chat_attachments"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    app:singleLine="true" android:visibility="gone"/>
+            </HorizontalScrollView>
+            <FrameLayout
                 android:id="@+id/chat_expand"
-                android:layout_width="40dp"
+                android:layout_width="match_parent"
+                android:layout_height="18dp"
+                android:visibility="gone">
+                <View android:layout_width="36dp" android:layout_height="4dp"
+                    android:layout_gravity="center" android:background="@drawable/kit_handle"/>
+            </FrameLayout>
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="4dp"
-                android:gravity="center"
-                android:paddingTop="8dp" android:paddingBottom="8dp"
-                android:text="⌄"
-                android:textSize="18sp"
-                android:textColor="@color/dim"
-                android:background="?attr/selectableItemBackgroundBorderless"/>
-            <EditText
-                android:id="@+id/chat_input"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:hint="message"
-                android:gravity="top|start"
-                android:inputType="textMultiLine|textCapSentences"
-                android:minLines="2"
-                android:maxLines="2"
-                android:scrollbars="vertical"
-                android:textColor="@color/text"
-                android:textColorHint="@color/dim"/>
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/chat_send"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:layout_marginBottom="2dp"
-                android:text="Send"/>
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingStart="8dp" android:paddingEnd="8dp"
+                android:paddingTop="6dp" android:paddingBottom="6dp">
+                <ImageView
+                    android:id="@+id/chat_attach"
+                    android:layout_width="40dp" android:layout_height="40dp"
+                    android:layout_marginEnd="6dp" android:padding="10dp"
+                    android:src="@drawable/csi_plus" app:tint="@color/text"
+                    android:contentDescription="Add to message"
+                    android:background="@drawable/kit_action_bg"/>
+                <EditText
+                    android:id="@+id/chat_input"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content" android:minHeight="44dp"
+                    android:layout_weight="1"
+                    android:hint="Message the Pi" android:paddingStart="12dp" android:paddingEnd="12dp"
+                    android:paddingTop="10dp" android:paddingBottom="10dp"
+                    android:background="@drawable/card_bg"
+                    android:gravity="top|start"
+                    android:inputType="textMultiLine|textCapSentences"
+                    android:minLines="1"
+                    android:maxLines="1"
+                    android:scrollbars="vertical"
+                    android:textSize="14sp"
+                    android:textColor="@color/text"
+                    android:textColorHint="@color/dim"/>
+                <ImageView
+                    android:id="@+id/chat_send"
+                    android:layout_width="44dp" android:layout_height="44dp"
+                    android:layout_marginStart="6dp" android:padding="12dp"
+                    android:src="@drawable/csi_send" app:tint="@color/onAccent"
+                    android:contentDescription="Send message"
+                    android:background="@drawable/chat_send_bg"/>
+            </LinearLayout>
         </LinearLayout>
     </LinearLayout>
 </LinearLayout>

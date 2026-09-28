@@ -22,12 +22,51 @@
     <style name="Theme.Csync.Rust" parent="Theme.Csync">
         <item name="colorPrimary">@color/rust</item>
     </style>
+    <style name="Theme.Csync.Blue" parent="Theme.Csync">
+        <item name="colorPrimary">@color/blue</item>
+    </style>
+    <style name="Theme.Csync.Leaf" parent="Theme.Csync">
+        <item name="colorPrimary">@color/leaf</item>
+    </style>
+    <style name="Theme.Csync.Rose" parent="Theme.Csync">
+        <item name="colorPrimary">@color/rose</item>
+    </style>
 
     <style name="Theme.Csync.Dialog" parent="Theme.Material3.DayNight.Dialog"/>
 
-    <!-- No pill behind the active nav item; the accent-tinted icon is the cue. -->
+    <style name="CsyncAppearanceHeading">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/dim</item>
+        <item name="android:letterSpacing">0.08</item>
+    </style>
+
+    <style name="CsyncAppearanceTabs">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">8dp</item>
+        <item name="android:orientation">horizontal</item>
+    </style>
+
+    <style name="CsyncAppearanceTab" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:layout_height">48dp</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:textSize">12sp</item>
+    </style>
+
+    <style name="CsyncAccentSwatch">
+        <item name="android:layout_width">40dp</item>
+        <item name="android:layout_height">40dp</item>
+        <item name="android:layout_marginEnd">4dp</item>
+        <item name="android:foreground">?attr/selectableItemBackgroundBorderless</item>
+    </style>
+
     <style name="Csync.NavIndicator" parent="Widget.Material3.BottomNavigationView.ActiveIndicator">
-        <item name="android:color">@android:color/transparent</item>
+        <item name="android:color">@color/nav_indicator</item>
     </style>
 
     <style name="CsyncMediaTab">
@@ -35,9 +74,9 @@
         <item name="android:layout_height">48dp</item>
         <item name="android:minWidth">72dp</item>
         <item name="android:gravity">center</item>
-        <item name="android:paddingStart">10dp</item>
-        <item name="android:paddingEnd">10dp</item>
-        <item name="android:textSize">14sp</item>
+        <item name="android:paddingStart">7dp</item>
+        <item name="android:paddingEnd">7dp</item>
+        <item name="android:textSize">12sp</item>
         <item name="android:textColor">@color/text</item>
         <item name="android:background">?attr/selectableItemBackground</item>
     </style>
@@ -46,6 +85,8 @@
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">48dp</item>
         <item name="android:gravity">center_vertical</item>
+        <item name="android:paddingStart">14dp</item>
+        <item name="android:paddingEnd">14dp</item>
         <item name="android:textSize">14sp</item>
         <item name="android:textColor">@color/text</item>
         <item name="android:background">?attr/selectableItemBackground</item>
@@ -59,5 +100,148 @@
         <item name="android:textSize">12sp</item>
         <item name="android:textColor">@color/text</item>
         <item name="android:background">?attr/selectableItemBackground</item>
+    </style>
+
+    <style name="CsyncPlayerIcon">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:layout_height">48dp</item>
+        <item name="android:layout_marginEnd">3dp</item>
+        <item name="android:padding">13dp</item>
+        <item name="android:tint">@color/text</item>
+        <item name="android:background">@drawable/card_bg</item>
+    </style>
+
+    <style name="CsyncMiniIcon">
+        <item name="android:layout_width">48dp</item>
+        <item name="android:layout_height">48dp</item>
+        <item name="android:padding">13dp</item>
+        <item name="android:tint">@color/text</item>
+        <item name="android:background">?attr/selectableItemBackgroundBorderless</item>
+    </style>
+
+    <style name="CsyncPlayerTile">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:layout_height">52dp</item>
+        <item name="android:layout_marginEnd">5dp</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:paddingStart">12dp</item>
+        <item name="android:drawablePadding">8dp</item>
+        <item name="android:drawableTint">@color/coral</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:textColor">@color/text</item>
+        <item name="android:background">@drawable/card_bg</item>
+    </style>
+
+    <style name="CsyncHomeCap">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">84dp</item>
+        <item name="android:layout_margin">4dp</item>
+        <item name="android:padding">12dp</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:textColor">@color/text</item>
+        <item name="android:background">@drawable/card_bg</item>
+    </style>
+
+    <style name="CsyncChatTab">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">48dp</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:paddingStart">9dp</item>
+        <item name="android:paddingEnd">9dp</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/dim</item>
+        <item name="android:background">?attr/selectableItemBackground</item>
+    </style>
+
+    <style name="CsyncMoreRow">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">68dp</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:paddingStart">16dp</item>
+        <item name="android:paddingEnd">16dp</item>
+        <item name="android:paddingTop">8dp</item>
+        <item name="android:paddingBottom">8dp</item>
+        <item name="android:background">?attr/selectableItemBackground</item>
+    </style>
+
+    <style name="CsyncMoreNavRow" parent="CsyncMoreRow">
+        <item name="android:orientation">horizontal</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:paddingTop">5dp</item>
+        <item name="android:paddingBottom">5dp</item>
+    </style>
+
+    <style name="CsyncMoreTitle">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/text</item>
+    </style>
+
+    <!-- Matches the Kit row's icon tile so older rows and Kit rows look alike. -->
+    <style name="CsyncMoreIcon">
+        <item name="android:layout_width">@dimen/kit_tile</item>
+        <item name="android:layout_height">@dimen/kit_tile</item>
+        <item name="android:layout_marginEnd">@dimen/kit_row_gap</item>
+        <item name="android:padding">7dp</item>
+        <item name="android:background">@drawable/kit_tile_bg</item>
+        <item name="android:tint">?attr/colorPrimary</item>
+        <item name="android:importantForAccessibility">no</item>
+    </style>
+
+    <style name="CsyncMoreText">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:orientation">vertical</item>
+    </style>
+
+    <style name="CsyncMoreChevron">
+        <item name="android:layout_width">16dp</item>
+        <item name="android:layout_height">16dp</item>
+        <item name="android:src">@drawable/csi_forward</item>
+        <item name="android:tint">@color/dim</item>
+        <item name="android:importantForAccessibility">no</item>
+    </style>
+
+    <style name="CsyncMoreSub">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">3dp</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:textColor">@color/dim</item>
+    </style>
+    <style name="CsyncToolMetric">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">88dp</item>
+        <item name="android:layout_marginEnd">4dp</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:padding">12dp</item>
+        <item name="android:background">@drawable/card_bg</item>
+    </style>
+    <style name="CsyncToolMetricValue">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textSize">21sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/text</item>
+    </style>
+    <style name="CsyncToolMetricIcon">
+        <item name="android:layout_width">18dp</item>
+        <item name="android:layout_height">18dp</item>
+        <item name="android:layout_marginBottom">8dp</item>
+        <item name="android:tint">@color/coral</item>
+        <item name="android:importantForAccessibility">no</item>
     </style>
 </resources>

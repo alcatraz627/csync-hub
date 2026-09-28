@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One capability card: icon and title on one line, a status dot and status text below. Bind with Kit.bindArea. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+    android:layout_margin="4dp" android:minHeight="@dimen/kit_area_min"
+    android:orientation="vertical" android:padding="12dp"
+    android:background="@drawable/kit_area_bg">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical">
+        <ImageView android:id="@+id/kit_icon"
+            android:layout_width="18dp" android:layout_height="18dp" android:layout_marginEnd="8dp"
+            app:tint="?attr/colorPrimary" android:importantForAccessibility="no"/>
+        <TextView android:id="@+id/kit_title" style="@style/Kit.Text.RowTitle"
+            android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"/>
+    </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="8dp" android:orientation="horizontal">
+        <View android:id="@+id/kit_dot"
+            android:layout_width="@dimen/kit_dot" android:layout_height="@dimen/kit_dot"
+            android:layout_marginTop="5dp" android:layout_marginEnd="6dp"
+            android:background="@drawable/kit_dot"/>
+        <TextView android:id="@+id/kit_sub" style="@style/Kit.Text.RowSub"
+            android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"/>
+    </LinearLayout>
+</LinearLayout>

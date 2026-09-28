@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The fixed top bar on every page: back (one level up, never anything else), the
+  breadcrumb, and icon-only actions on the right. Its height never changes and it
+  never scrolls. Kit.pageTop fills the crumbs and actions.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/kit_top"
+    android:layout_width="match_parent" android:layout_height="@dimen/kit_top_height"
+    android:orientation="horizontal" android:gravity="center_vertical"
+    android:paddingStart="8dp" android:paddingEnd="8dp" android:background="@color/bg">
+    <ImageView android:id="@+id/kit_back"
+        android:layout_width="40dp" android:layout_height="40dp" android:padding="10dp"
+        android:src="@drawable/csi_back" app:tint="@color/text"
+        android:contentDescription="Back"
+        android:background="?attr/selectableItemBackgroundBorderless"/>
+    <HorizontalScrollView android:id="@+id/kit_crumbs_scroll"
+        android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent"
+        android:scrollbars="none" android:overScrollMode="never">
+        <LinearLayout android:id="@+id/kit_crumbs"
+            android:layout_width="wrap_content" android:layout_height="match_parent"
+            android:orientation="horizontal" android:gravity="center_vertical"/>
+    </HorizontalScrollView>
+    <LinearLayout android:id="@+id/kit_actions"
+        android:layout_width="wrap_content" android:layout_height="match_parent"
+        android:orientation="horizontal" android:gravity="center_vertical"/>
+</LinearLayout>

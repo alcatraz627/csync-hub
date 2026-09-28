@@ -22,9 +22,10 @@
     <com.csync.hub.SixTabNavigationView
         android:id="@+id/nav"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="64dp"
         android:background="@color/surface"
-        app:labelVisibilityMode="labeled"
+        app:labelVisibilityMode="unlabeled"
+        app:itemIconSize="24dp"
         app:itemIconTint="@color/nav_icon_tint"
         app:itemActiveIndicatorStyle="@style/Csync.NavIndicator"
         app:menu="@menu/nav_menu"/>

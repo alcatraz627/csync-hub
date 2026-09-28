@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home: devices, capabilities and pick-up, built from the shared kit_* pieces. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:background="@color/bg">
+
+    <include android:id="@+id/home_top" layout="@layout/kit_page_top"/>
+
+    <ScrollView android:layout_width="match_parent" android:layout_height="0dp"
+        android:layout_weight="1" android:fillViewport="true">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="@dimen/kit_gutter" android:paddingEnd="@dimen/kit_gutter"
+            android:paddingBottom="24dp">
+            <TextView android:id="@+id/home_headline" style="@style/Kit.Text.PageTitle"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="6dp" android:textSize="18sp"
+                android:text="Checking your devices"/>
+
+            <include android:id="@+id/home_devices_head" layout="@layout/kit_section_head"/>
+            <LinearLayout android:id="@+id/home_devices_content"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:background="@drawable/card_bg"
+                android:clipToOutline="true">
+                <include android:id="@+id/home_media" layout="@layout/kit_row"/>
+                <View android:layout_width="match_parent" android:layout_height="1dp"
+                    android:background="@color/border"/>
+                <include android:id="@+id/home_mac" layout="@layout/kit_row"/>
+            </LinearLayout>
+
+            <include android:id="@+id/home_cap_head" layout="@layout/kit_section_head"/>
+            <LinearLayout android:id="@+id/home_cap_grid"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginStart="-4dp" android:layout_marginEnd="-4dp"
+                android:orientation="vertical">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <include android:id="@+id/home_cap_media" layout="@layout/kit_area_card"/>
+                    <include android:id="@+id/home_share" layout="@layout/kit_area_card"/>
+                </LinearLayout>
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <include android:id="@+id/home_chat" layout="@layout/kit_area_card"/>
+                    <include android:id="@+id/home_camera" layout="@layout/kit_area_card"/>
+                </LinearLayout>
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <include android:id="@+id/home_notes" layout="@layout/kit_area_card"/>
+                    <include android:id="@+id/home_display" layout="@layout/kit_area_card"/>
+                </LinearLayout>
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <include android:id="@+id/home_tools" layout="@layout/kit_area_card"/>
+                    <View android:layout_width="0dp" android:layout_weight="1"
+                        android:layout_height="1dp" android:layout_margin="4dp"/>
+                </LinearLayout>
+            </LinearLayout>
+
+            <include android:id="@+id/home_pickup_head" layout="@layout/kit_section_head"/>
+            <LinearLayout android:id="@+id/home_pickup_content"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:background="@drawable/card_bg"
+                android:clipToOutline="true">
+                <include android:id="@+id/home_recent" layout="@layout/kit_row"/>
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

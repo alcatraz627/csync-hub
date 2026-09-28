@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:background="@color/bg">
+    <include android:id="@+id/camera_top" layout="@layout/kit_page_top"/>
+    <ScrollView android:id="@+id/camera_page" android:layout_width="match_parent"
+        android:layout_height="0dp" android:layout_weight="1" android:fillViewport="true">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:paddingStart="@dimen/kit_gutter"
+            android:paddingEnd="@dimen/kit_gutter" android:paddingTop="6dp" android:paddingBottom="16dp">
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                style="@style/Kit.Text.PageTitle" android:text="Pi camera"/>
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="4dp" android:layout_marginBottom="12dp"
+                style="@style/Kit.Text.PageSub" android:text="Preview live while this tab is open."/>
+            <ImageView android:id="@+id/camera_preview" android:layout_width="match_parent"
+                android:layout_height="220dp" android:background="@drawable/card_bg"
+                android:scaleType="centerCrop" android:contentDescription="Live Pi camera preview"/>
+            <TextView android:id="@+id/camera_status" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:layout_marginTop="10dp"
+                android:text="Connecting to Pi camera" android:textSize="13sp"
+                android:textColor="@color/dim" android:accessibilityLiveRegion="polite"/>
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="3dp" android:text="Closes when leaving Camera"
+                android:textSize="12sp" android:textColor="@color/dim"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="16dp" android:gravity="center" android:orientation="horizontal">
+                <ImageButton android:id="@+id/camera_captures" android:layout_width="56dp"
+                    android:layout_height="56dp" android:padding="15dp" android:src="@drawable/csi_history"
+                    android:background="@drawable/camera_action_bg" app:tint="@color/text"
+                    android:foreground="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Open captures"/>
+                <ImageButton android:id="@+id/camera_photo" android:layout_width="64dp"
+                    android:layout_height="64dp" android:layout_marginStart="28dp"
+                    android:layout_marginEnd="28dp" android:padding="16dp"
+                    android:src="@drawable/csi_camera"
+                    android:background="@drawable/camera_shutter_bg" app:tint="@color/onAccent"
+                    android:foreground="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Take photo"/>
+                <ImageButton android:id="@+id/camera_record" android:layout_width="56dp"
+                    android:layout_height="56dp" android:padding="15dp" android:src="@drawable/camera_record_dot"
+                    android:background="@drawable/camera_action_bg" app:tint="@color/text"
+                    android:foreground="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Start recording"/>
+            </LinearLayout>
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="24dp" android:layout_marginBottom="10dp"
+                style="@style/Kit.Text.Section" android:text="After Capture"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:background="@drawable/card_bg"
+                android:clipToOutline="true">
+                <include android:id="@+id/camera_captures_row" layout="@layout/kit_row"/>
+                <View android:layout_width="match_parent" android:layout_height="1dp"
+                    android:background="@color/border"/>
+                <include android:id="@+id/camera_show_display" layout="@layout/kit_row"/>
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+    <ScrollView android:id="@+id/captures_page" android:layout_width="match_parent"
+        android:layout_height="0dp" android:layout_weight="1" android:fillViewport="true"
+        android:visibility="gone">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:paddingStart="@dimen/kit_gutter"
+            android:paddingEnd="@dimen/kit_gutter" android:paddingTop="6dp" android:paddingBottom="16dp">
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                style="@style/Kit.Text.PageTitle" android:text="Captures"/>
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="4dp" style="@style/Kit.Text.PageSub" android:text="Choose a photo or recording, then open, share, or save it."/>
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="25dp" android:layout_marginBottom="10dp"
+                style="@style/Kit.Text.Section" android:text="Saved On Pi"/>
+            <TextView android:id="@+id/captures_status" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:paddingBottom="8dp"
+                android:text="Loading captures" android:textSize="13sp" android:textColor="@color/dim"
+                android:accessibilityLiveRegion="polite"/>
+            <LinearLayout android:id="@+id/camera_files" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:orientation="vertical"
+                android:background="@drawable/card_bg" android:clipToOutline="true"/>
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="24dp" android:layout_marginBottom="10dp"
+                style="@style/Kit.Text.Section" android:text="Storage"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:background="@drawable/card_bg" android:clipToOutline="true">
+                <include android:id="@+id/captures_storage" layout="@layout/kit_row"/>
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

@@ -112,20 +112,36 @@ public class MeshService extends Service {
                 try { len = Integer.parseInt(val(h.get("content-length"), "0")); } catch (Exception ignore) {}
 
                 File dir = new File(getExternalFilesDir("inbox"), from);
-                dir.mkdirs();
-                File dest = new File(dir, name);
+                if (!dir.exists() && !dir.mkdirs()) throw new java.io.IOException("Inbox unavailable");
 
                 InputStream in = s.getInputStream();
-                byte[] body = new byte[Math.max(len, 0)];
+                if (len < 0 || len > 20 * 1024 * 1024)
+                    return newFixedLengthResponse(Response.Status.BAD_REQUEST,
+                        "text/plain", "item exceeds 20 MB");
+                byte[] body = new byte[len];
                 int off = 0;
                 while (off < len) {
                     int r = in.read(body, off, len - off);
                     if (r < 0) break;
                     off += r;
                 }
-                FileOutputStream fo = new FileOutputStream(dest);
-                fo.write(body, 0, off);
-                fo.close();
+                if (off != len) throw new java.io.IOException("Received an incomplete item");
+                String stem = name;
+                String extension = "";
+                int dot = name.lastIndexOf('.');
+                if (dot > 0) {
+                    stem = name.substring(0, dot);
+                    extension = name.substring(dot);
+                }
+                File dest = null;
+                for (int number = 0; number < 10000; number++) {
+                    File candidate = new File(dir, number == 0 ? name : stem + "-" + number + extension);
+                    if (candidate.createNewFile()) { dest = candidate; break; }
+                }
+                if (dest == null) throw new java.io.IOException("Inbox has too many items with this name");
+                try (FileOutputStream output = new FileOutputStream(dest)) {
+                    output.write(body);
+                }
 
                 if (kind.equals("text")) {
                     final String text = new String(body, 0, off, "UTF-8");

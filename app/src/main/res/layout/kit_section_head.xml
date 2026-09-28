@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A section heading. With a toggle target it shows a caret on the right and collapses its content. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent" android:layout_height="40dp"
+    android:layout_marginTop="@dimen/kit_section_gap"
+    android:orientation="horizontal" android:gravity="center_vertical"
+    android:background="?attr/selectableItemBackground">
+    <ImageView android:id="@+id/kit_icon"
+        android:layout_width="14dp" android:layout_height="14dp" android:layout_marginEnd="8dp"
+        app:tint="?attr/colorPrimary" android:importantForAccessibility="no"/>
+    <TextView android:id="@+id/kit_title" style="@style/Kit.Text.Section"
+        android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"/>
+    <ImageView android:id="@+id/kit_chevron"
+        android:layout_width="16dp" android:layout_height="16dp"
+        android:src="@drawable/csi_chevron" app:tint="@color/dim"
+        android:importantForAccessibility="no"/>
+</LinearLayout>

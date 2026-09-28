@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:background="@color/bg">
+
+    <include android:id="@+id/search_top" layout="@layout/kit_page_top"/>
+
+    <ScrollView android:layout_width="match_parent" android:layout_height="0dp"
+        android:layout_weight="1" android:fillViewport="true">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:paddingStart="20dp" android:paddingEnd="20dp"
+            android:paddingBottom="24dp">
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="6dp" style="@style/Kit.Text.PageTitle" android:text="Search your hub"/>
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="4dp" android:layout_marginBottom="16dp"
+                android:text="Find media, chats, transfers, and devices."
+                style="@style/Kit.Text.PageSub"/>
+
+            <LinearLayout android:layout_width="match_parent" android:layout_height="48dp"
+                android:orientation="horizontal" android:gravity="center_vertical"
+                android:paddingStart="12dp" android:paddingEnd="8dp"
+                android:background="@drawable/card_bg">
+                <ImageView android:layout_width="20dp" android:layout_height="20dp"
+                    android:src="@drawable/csi_search" app:tint="@color/dim"
+                    android:importantForAccessibility="no"/>
+                <EditText android:id="@+id/search_query" android:layout_width="0dp"
+                    android:layout_weight="1" android:layout_height="match_parent"
+                    android:paddingStart="10dp" android:paddingEnd="10dp"
+                    android:singleLine="true" android:imeOptions="actionSearch"
+                    android:inputType="text" android:textSize="14sp"
+                    android:textColor="@color/text" android:textColorHint="@color/dim"
+                    android:hint="Search across your hub" android:background="@android:color/transparent"/>
+                <ImageView android:id="@+id/search_clear" android:layout_width="40dp"
+                    android:layout_height="40dp" android:padding="10dp"
+                    android:src="@drawable/csi_close" app:tint="@color/dim"
+                    android:contentDescription="Clear search"
+                    android:background="?attr/selectableItemBackgroundBorderless"/>
+            </LinearLayout>
+
+            <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="14dp" android:fillViewport="true"
+                android:scrollbars="none">
+                <LinearLayout android:id="@+id/search_scopes" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" android:orientation="horizontal"
+                    android:padding="3dp" android:background="@drawable/card_bg"/>
+            </HorizontalScrollView>
+
+            <TextView android:id="@+id/search_count" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:layout_marginTop="22dp"
+                android:layout_marginBottom="12dp" android:text="RESULTS"
+                android:textStyle="bold" android:textSize="11sp" android:letterSpacing="0.12"
+                android:textColor="@color/dim"/>
+            <LinearLayout android:id="@+id/search_results"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:background="@drawable/card_bg"/>
+            <TextView android:id="@+id/search_source_state"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="12dp" android:textSize="12sp"
+                android:textColor="@color/dim"/>
+        </LinearLayout>
+    </ScrollView>
+
+    <com.csync.hub.SixTabNavigationView android:id="@+id/search_nav"
+        android:layout_width="match_parent" android:layout_height="64dp"
+        android:background="@color/surface" app:labelVisibilityMode="unlabeled"
+        app:itemIconSize="24dp" app:itemIconTint="@color/nav_icon_tint"
+        app:itemActiveIndicatorStyle="@style/Csync.NavIndicator"
+        app:menu="@menu/nav_menu"/>
+</LinearLayout>

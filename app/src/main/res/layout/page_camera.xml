@@ -2,6 +2,10 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="match_parent"
     android:orientation="vertical" android:padding="16dp" android:background="@color/bg">
+    <TextView android:id="@+id/camera_back" android:layout_width="wrap_content"
+        android:layout_height="48dp" android:minWidth="48dp" android:gravity="center_vertical"
+        android:text="‹ More" android:textSize="15sp" android:textColor="@color/dim"
+        android:background="?attr/selectableItemBackground"/>
     <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
         android:text="Pi camera" android:textSize="24sp" android:textColor="@color/text"
         android:paddingBottom="12dp"/>

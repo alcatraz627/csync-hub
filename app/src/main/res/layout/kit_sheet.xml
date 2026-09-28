@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A bottom drawer: a title, an optional subtitle, then rows. It closes by dragging down or tapping outside, never by a button. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="vertical" android:paddingBottom="16dp">
+    <View android:layout_width="36dp" android:layout_height="4dp"
+        android:layout_gravity="center_horizontal" android:layout_marginTop="10dp"
+        android:background="@drawable/kit_handle"/>
+    <TextView android:id="@+id/kit_title" style="@style/Kit.Text.RowTitle"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:paddingStart="@dimen/kit_gutter" android:paddingEnd="@dimen/kit_gutter"/>
+    <TextView android:id="@+id/kit_sub" style="@style/Kit.Text.RowSub"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="3dp"
+        android:paddingStart="@dimen/kit_gutter" android:paddingEnd="@dimen/kit_gutter"/>
+    <LinearLayout android:id="@+id/kit_rows"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="10dp" android:orientation="vertical"
+        android:layout_marginStart="@dimen/kit_gutter" android:layout_marginEnd="@dimen/kit_gutter"/>
+</LinearLayout>

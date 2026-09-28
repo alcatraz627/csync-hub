@@ -150,8 +150,16 @@ public final class PhonePlaybackService extends Service {
 
     JSONObject item() { return item; }
     boolean hasPlayer() { return player != null; }
+    String playbackState() {
+        if (player == null) return "stopped";
+        if (!prepared) return "loading";
+        if (completed) return "finished";
+        return playing() ? "playing" : "paused";
+    }
     int position() { try { return player == null || !prepared ? 0 : player.getCurrentPosition(); } catch (Exception e) { return 0; } }
     int duration() { try { return player == null || !prepared ? 0 : player.getDuration(); } catch (Exception e) { return 0; } }
+    int volume() { return volume; }
+    float speed() { return speed; }
     boolean playing() { try { return player != null && prepared && player.isPlaying(); } catch (Exception e) { return false; } }
 
     void play(JSONObject next, int resumeMs) {
@@ -163,7 +171,7 @@ public final class PhonePlaybackService extends Service {
         volume = 100;
         speed = 1f;
         int version = ++requestVersion;
-        changed("Opening stream…");
+        changed("Opening stream");
         progressQueue.execute(() -> {
             try {
                 JSONObject registered = client.post("/v1/phone/sessions",

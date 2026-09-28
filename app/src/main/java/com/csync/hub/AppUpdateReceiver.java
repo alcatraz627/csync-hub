@@ -18,9 +18,16 @@ public final class AppUpdateReceiver extends BroadcastReceiver {
                 consent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 context.startActivity(consent);
             }
-        } else if (status != PackageInstaller.STATUS_SUCCESS) {
-            Toast.makeText(context, "csync update failed: " +
-                result.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE), Toast.LENGTH_LONG).show();
+        } else if (status == PackageInstaller.STATUS_SUCCESS) {
+            context.getSharedPreferences("csync_update", Context.MODE_PRIVATE).edit()
+                .remove("failure").apply();
+            Toast.makeText(context, "csync update installed", Toast.LENGTH_LONG).show();
+        } else {
+            String message = result.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE);
+            context.getSharedPreferences("csync_update", Context.MODE_PRIVATE).edit()
+                .remove("expected_version")
+                .putString("failure", message == null ? "Installer rejected the update" : message).apply();
+            Toast.makeText(context, "csync update failed: " + message, Toast.LENGTH_LONG).show();
         }
     }
 }

@@ -8,6 +8,7 @@ import android.appwidget.AppWidgetProvider;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Build;
 import android.widget.RemoteViews;
 
 /**
@@ -43,7 +44,7 @@ public class XkcdWidgetProvider extends AppWidgetProvider {
 
     private void showLoading(Context context, AppWidgetManager mgr, int id) {
         RemoteViews rv = new RemoteViews(context.getPackageName(), R.layout.xkcd_widget);
-        rv.setTextViewText(R.id.widget_title, "loading…");
+        rv.setTextViewText(R.id.widget_title, "Loading");
         rv.setOnClickPendingIntent(R.id.widget_refresh, refreshIntent(context));
         mgr.updateAppWidget(id, rv);
     }
@@ -53,14 +54,16 @@ public class XkcdWidgetProvider extends AppWidgetProvider {
         JobScheduler js = (JobScheduler) context.getSystemService(Context.JOB_SCHEDULER_SERVICE);
         if (js == null) return;
         ComponentName service = new ComponentName(context, XkcdJobService.class);
-        try {
-            JobInfo expedited = new JobInfo.Builder(JOB_ID, service)
-                    .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
-                    .setExpedited(true)
-                    .build();
-            if (js.schedule(expedited) == JobScheduler.RESULT_SUCCESS) return;
-        } catch (Throwable ignore) {
-            // expedited quota exhausted; fall back to a normal job
+        if (Build.VERSION.SDK_INT >= 31) {
+            try {
+                JobInfo expedited = new JobInfo.Builder(JOB_ID, service)
+                        .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+                        .setExpedited(true)
+                        .build();
+                if (js.schedule(expedited) == JobScheduler.RESULT_SUCCESS) return;
+            } catch (RuntimeException ignore) {
+                // expedited quota exhausted; fall back to a normal job
+            }
         }
         js.schedule(new JobInfo.Builder(JOB_ID, service)
                 .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)

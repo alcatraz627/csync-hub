@@ -37,6 +37,8 @@ final class MediaClient {
 
     JSONObject get(String path) throws Exception { return request("GET", path, null); }
     JSONObject post(String path, JSONObject body) throws Exception { return request("POST", path, body); }
+    JSONObject put(String path, JSONObject body) throws Exception { return request("PUT", path, body); }
+    JSONObject delete(String path, JSONObject body) throws Exception { return request("DELETE", path, body); }
 
     JSONObject uploadWallpaper(byte[] jpeg) throws Exception {
         HttpURLConnection connection = (HttpURLConnection) new URL(url("/v1/display/wallpaper")).openConnection();
@@ -102,6 +104,51 @@ final class MediaClient {
             JSONObject result = new JSONObject(output.toString("UTF-8"));
             if (status >= 400) throw new MediaException(result.optString("code", "MEDIA_ERROR"),
                 result.optString("message", "Media upload failed"));
+            return result;
+        } finally { connection.disconnect(); }
+    }
+
+    byte[] getBytes(String path, int maxBytes) throws Exception {
+        HttpURLConnection connection = (HttpURLConnection) new URL(url(path)).openConnection();
+        connection.setConnectTimeout(5000);
+        connection.setReadTimeout(15000);
+        connection.setRequestProperty("X-Csync-Token", token);
+        try {
+            if (connection.getResponseCode() != 200) throw new Exception("Note image unavailable");
+            try (InputStream input = connection.getInputStream()) {
+                ByteArrayOutputStream output = new ByteArrayOutputStream();
+                byte[] buffer = new byte[8192];
+                int count;
+                while ((count = input.read(buffer)) != -1) {
+                    if (output.size() + count > maxBytes) throw new Exception("Note image is too large");
+                    output.write(buffer, 0, count);
+                }
+                return output.toByteArray();
+            }
+        } finally { connection.disconnect(); }
+    }
+
+    JSONObject uploadNoteImage(String path, byte[] png) throws Exception {
+        if (png.length < 8 || png.length > 1024 * 1024) throw new Exception("Choose a PNG under 1 MB");
+        HttpURLConnection connection = (HttpURLConnection) new URL(url(path)).openConnection();
+        connection.setRequestMethod("POST");
+        connection.setConnectTimeout(5000);
+        connection.setReadTimeout(15000);
+        connection.setRequestProperty("X-Csync-Token", token);
+        connection.setRequestProperty("Content-Type", "image/png");
+        connection.setDoOutput(true);
+        connection.setFixedLengthStreamingMode(png.length);
+        try {
+            try (OutputStream output = connection.getOutputStream()) { output.write(png); }
+            int status = connection.getResponseCode();
+            InputStream input = status < 400 ? connection.getInputStream() : connection.getErrorStream();
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            byte[] buffer = new byte[4096];
+            int count;
+            while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
+            JSONObject result = new JSONObject(output.toString("UTF-8"));
+            if (status >= 400) throw new MediaException(result.optString("code", "IMAGE_ERROR"),
+                result.optString("message", "Could not add image"));
             return result;
         } finally { connection.disconnect(); }
     }

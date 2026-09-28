@@ -24,6 +24,32 @@ final class AppUpdater {
     private static final long MAX_APK = 100L * 1024 * 1024;
     private static final AtomicBoolean updating = new AtomicBoolean();
 
+    static void refreshStatus(Activity activity, TextView status) {
+        android.content.SharedPreferences prefs = activity.getSharedPreferences("csync_update", Activity.MODE_PRIVATE);
+        String failure = prefs.getString("failure", "");
+        if (!failure.isEmpty()) {
+            status.setText("Update failed: " + failure);
+            return;
+        }
+        long expected = prefs.getLong("expected_version", 0);
+        String lastInstalled = prefs.getString("last_installed", "");
+        if (expected == 0 && lastInstalled.isEmpty()) return;
+        try {
+            PackageInfo current = activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0);
+            long installed = Build.VERSION.SDK_INT >= 28 ? current.getLongVersionCode() : current.versionCode;
+            if (expected > 0 && installed >= expected) {
+                status.setText("Installed csync " + current.versionName + " from Pi");
+                prefs.edit().remove("expected_version").putString("last_installed", current.versionName).apply();
+            } else if (expected > 0) {
+                status.setText("Installing csync update " + prefs.getString("expected_name", ""));
+            } else if (lastInstalled.equals(current.versionName)) {
+                status.setText("Installed csync " + current.versionName + " from Pi");
+            }
+        } catch (Exception error) {
+            status.setText("Could not check installed csync version");
+        }
+    }
+
     static void start(Activity activity, TextView status) {
         String host = Prefs.assistIp(activity);
         String token = Prefs.token(activity);
@@ -35,7 +61,7 @@ final class AppUpdater {
             status.setText("An app update is already in progress");
             return;
         }
-        status.setText("Downloading the app update from Pi…");
+        status.setText("Downloading the app update from Pi");
         Handler ui = new Handler(Looper.getMainLooper());
         new Thread(() -> {
             File apk = new File(activity.getCacheDir(), "csync-update.apk");
@@ -80,7 +106,11 @@ final class AppUpdater {
                     });
                     return;
                 }
-                ui.post(() -> status.setText("Installing csync update " + archive.versionName + "…"));
+                activity.getSharedPreferences("csync_update", Activity.MODE_PRIVATE).edit()
+                    .putLong("expected_version", newVersion)
+                    .putString("expected_name", archive.versionName)
+                    .remove("failure").apply();
+                ui.post(() -> status.setText("Installing csync update " + archive.versionName));
                 PackageInstaller installer = activity.getPackageManager().getPackageInstaller();
                 PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(
                     PackageInstaller.SessionParams.MODE_FULL_INSTALL);
@@ -107,6 +137,8 @@ final class AppUpdater {
                     if (!committed) installer.abandonSession(sessionId);
                 }
             } catch (Exception error) {
+                activity.getSharedPreferences("csync_update", Activity.MODE_PRIVATE).edit()
+                    .remove("expected_version").putString("failure", error.getMessage()).apply();
                 ui.post(() -> status.setText("Update failed: " + error.getMessage()));
             } finally {
                 if (connection != null) connection.disconnect();

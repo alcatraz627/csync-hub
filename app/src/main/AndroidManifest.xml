@@ -28,6 +28,9 @@
             </intent-filter>
         </activity>
 
+        <activity android:name=".NotesActivity" android:exported="false"/>
+        <activity android:name=".SearchActivity" android:exported="false"/>
+
         <activity android:name=".MediaActivity" android:exported="false"
             android:configChanges="orientation|screenSize"/>
 
@@ -37,6 +40,14 @@
             android:authorities="${applicationId}.media"
             android:exported="false"
             android:grantUriPermissions="true"/>
+
+        <provider android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.share"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/share_paths"/>
+        </provider>
 
         <activity
             android:name=".ShareActivity"

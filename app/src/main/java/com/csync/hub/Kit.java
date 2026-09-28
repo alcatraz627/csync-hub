@@ -1,0 +1,320 @@
+package com.csync.hub;
+
+import android.content.Context;
+import android.content.res.ColorStateList;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+
+import androidx.core.content.ContextCompat;
+
+/**
+ * The app's shared building blocks, matched to the clickthrough mock.
+ *
+ * Screens build rows, capability cards, section headings, status dots and the top
+ * bar through these helpers instead of styling views themselves, so one change here
+ * reaches every page. Layouts live in res/layout/kit_*.xml and sizes in values/kit.xml.
+ */
+final class Kit {
+    private Kit() {}
+
+    /** One icon per concept, so two different things never share a glyph. */
+    static final class Icon {
+        static final int HOME = R.drawable.csi_home, MEDIA = R.drawable.csi_media,
+            SHARE = R.drawable.csi_share, CHAT = R.drawable.csi_chat, MORE = R.drawable.csi_more,
+            CAMERA = R.drawable.csi_camera, SEARCH = R.drawable.csi_search,
+            DISPLAY = R.drawable.csi_screen, HISTORY = R.drawable.csi_history,
+            FILES = R.drawable.csi_files, ACCESS = R.drawable.csi_access,
+            TOOLS = R.drawable.csi_tools, SETTINGS = R.drawable.csi_settings,
+            NOTES = R.drawable.csi_note, DEVICE = R.drawable.csi_device,
+            FOLDER = R.drawable.csi_folder, FILE = R.drawable.csi_file, VIDEO = R.drawable.csi_video,
+            PHOTO = R.drawable.csi_photo, VOLUME = R.drawable.csi_volume, SPEED = R.drawable.csi_speed,
+            ROTATE = R.drawable.csi_rotate, LOOP = R.drawable.csi_loop, SOURCE = R.drawable.csi_source;
+        private Icon() {}
+    }
+
+    enum Status { GOOD, WARN, BAD, IDLE }
+
+    static int statusColor(Context c, Status s) {
+        switch (s) {
+            case GOOD: return ContextCompat.getColor(c, R.color.online);
+            case WARN: return ContextCompat.getColor(c, R.color.warn);
+            case BAD: return ContextCompat.getColor(c, R.color.danger);
+            default: return ContextCompat.getColor(c, R.color.offline);
+        }
+    }
+
+    static void setStatus(View dot, Status s) {
+        dot.setBackgroundTintList(ColorStateList.valueOf(statusColor(dot.getContext(), s)));
+    }
+
+    // ---- rows ----
+
+    static View row(ViewGroup parent) {
+        return LayoutInflater.from(parent.getContext()).inflate(R.layout.kit_row, parent, false);
+    }
+
+    /** Fill a row. A null subtitle or end label hides it; the chevron shows when the row opens something. */
+    static View bindRow(View row, int icon, CharSequence title, CharSequence sub, CharSequence end,
+                        boolean opens) {
+        ((ImageView) row.findViewById(R.id.kit_icon)).setImageResource(icon);
+        ((TextView) row.findViewById(R.id.kit_title)).setText(title);
+        setOptional(row.findViewById(R.id.kit_sub), sub);
+        setOptional(row.findViewById(R.id.kit_end), end);
+        row.findViewById(R.id.kit_chevron).setVisibility(opens ? View.VISIBLE : View.GONE);
+        row.setContentDescription(sub == null ? title : title + ", " + sub);
+        return row;
+    }
+
+    /** Show a bordered icon button at the row's end, for a row that has its own actions menu. */
+    static void rowAction(View row, int icon, String label, View.OnClickListener click) {
+        ImageView action = row.findViewById(R.id.kit_action);
+        action.setImageResource(icon);
+        action.setContentDescription(label);
+        action.setOnClickListener(click);
+        action.setVisibility(View.VISIBLE);
+    }
+
+    /** A card that holds rows separated by thin dividers, like every list in the mock. */
+    static LinearLayout group(ViewGroup parent) {
+        Context c = parent.getContext();
+        LinearLayout group = new LinearLayout(c);
+        group.setOrientation(LinearLayout.VERTICAL);
+        group.setBackgroundResource(R.drawable.card_bg);
+        group.setClipToOutline(true);
+        parent.addView(group, new LinearLayout.LayoutParams(-1, -2));
+        return group;
+    }
+
+    /** Add a fresh row to a group, with a divider above it when it is not the first. */
+    static View addRow(LinearLayout group) {
+        if (group.getChildCount() > 0) {
+            View divider = new View(group.getContext());
+            divider.setBackgroundColor(ContextCompat.getColor(group.getContext(), R.color.border));
+            group.addView(divider, new LinearLayout.LayoutParams(-1, dp(group.getContext(), 1)));
+        }
+        View row = row(group);
+        group.addView(row);
+        return row;
+    }
+
+    /** A section label between groups, such as FOLDERS or FILES. */
+    static TextView label(ViewGroup parent, CharSequence text) {
+        Context c = parent.getContext();
+        TextView label = new TextView(c);
+        label.setTextAppearance(R.style.Kit_Text_Section);
+        label.setText(text);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+        params.topMargin = dp(c, 16);
+        params.bottomMargin = dp(c, 8);
+        parent.addView(label, params);
+        return label;
+    }
+
+    // ---- bottom drawers ----
+
+    /** One choice in a drawer. */
+    static final class Action {
+        final int icon; final String label; final String sub; final Runnable run;
+        Action(int icon, String label, String sub, Runnable run) {
+            this.icon = icon; this.label = label; this.sub = sub; this.run = run;
+        }
+    }
+
+    /**
+     * Open a bottom drawer of choices. It closes by dragging down, tapping outside, or
+     * picking a choice; there is no close button, by the owner's rule.
+     */
+    static com.google.android.material.bottomsheet.BottomSheetDialog sheet(
+            Context c, CharSequence title, CharSequence sub, Action... actions) {
+        com.google.android.material.bottomsheet.BottomSheetDialog dialog =
+            new com.google.android.material.bottomsheet.BottomSheetDialog(c);
+        View body = LayoutInflater.from(c).inflate(R.layout.kit_sheet, null, false);
+        ((TextView) body.findViewById(R.id.kit_title)).setText(title);
+        setOptional(body.findViewById(R.id.kit_sub), sub);
+        LinearLayout rows = actions.length == 0 ? null : group(body.findViewById(R.id.kit_rows));
+        for (Action action : actions) {
+            View row = addRow(rows);
+            bindRow(row, action.icon, action.label, action.sub, null, false);
+            row.setOnClickListener(v -> { dialog.dismiss(); action.run.run(); });
+        }
+        dialog.setContentView(scrolling(body));
+        dialog.show();
+        return dialog;
+    }
+
+    /** An information drawer: a title and a message, closed by dragging down or tapping outside. */
+    static void sheet(Context c, CharSequence title, CharSequence message) {
+        sheet(c, title, message, new Action[0]);
+    }
+
+    interface Format { String of(float value); }
+    interface Change { void to(float value); }
+
+    /** A drawer with one slider. The value applies when the finger lifts, so dragging does not flood the Pi. */
+    static void sliderSheet(Context c, CharSequence title, float from, float to, float step,
+                            float value, Format format, Change change) {
+        com.google.android.material.bottomsheet.BottomSheetDialog dialog =
+            new com.google.android.material.bottomsheet.BottomSheetDialog(c);
+        View body = LayoutInflater.from(c).inflate(R.layout.kit_sheet, null, false);
+        TextView heading = body.findViewById(R.id.kit_title);
+        TextView reading = body.findViewById(R.id.kit_sub);
+        heading.setText(title);
+        com.google.android.material.slider.Slider slider = new com.google.android.material.slider.Slider(c);
+        slider.setValueFrom(from);
+        slider.setValueTo(to);
+        slider.setStepSize(step);
+        slider.setValue(Math.max(from, Math.min(to, Math.round(value / step) * step)));
+        slider.setLabelFormatter(format::of);
+        reading.setText(format.of(slider.getValue()));
+        slider.addOnChangeListener((s, v, fromUser) -> reading.setText(format.of(v)));
+        slider.addOnSliderTouchListener(new com.google.android.material.slider.Slider.OnSliderTouchListener() {
+            @Override public void onStartTrackingTouch(com.google.android.material.slider.Slider s) {}
+            @Override public void onStopTrackingTouch(com.google.android.material.slider.Slider s) { change.to(s.getValue()); }
+        });
+        ((LinearLayout) body.findViewById(R.id.kit_rows)).addView(slider,
+            new LinearLayout.LayoutParams(-1, -2));
+        dialog.setContentView(scrolling(body));
+        dialog.show();
+    }
+
+    /** Long drawers (many devices, many models) scroll inside the sheet instead of running off screen. */
+    private static View scrolling(View body) {
+        androidx.core.widget.NestedScrollView scroll = new androidx.core.widget.NestedScrollView(body.getContext());
+        scroll.addView(body);
+        return scroll;
+    }
+
+    // ---- capability cards ----
+
+    static View bindArea(View card, int icon, CharSequence title, Status status, CharSequence sub) {
+        ((ImageView) card.findViewById(R.id.kit_icon)).setImageResource(icon);
+        ((TextView) card.findViewById(R.id.kit_title)).setText(title);
+        ((TextView) card.findViewById(R.id.kit_sub)).setText(sub);
+        setStatus(card.findViewById(R.id.kit_dot), status);
+        card.setContentDescription(title + ", " + sub);
+        return card;
+    }
+
+    // ---- section headings ----
+
+    /**
+     * Fill a section heading. With content to collapse, tapping the heading shows or
+     * hides it and turns the caret; without, the caret is hidden.
+     */
+    static void bindSection(View head, int icon, CharSequence title, View collapses) {
+        ((ImageView) head.findViewById(R.id.kit_icon)).setImageResource(icon);
+        ((TextView) head.findViewById(R.id.kit_title)).setText(title);
+        View caret = head.findViewById(R.id.kit_chevron);
+        if (collapses == null) {
+            caret.setVisibility(View.GONE);
+            head.setClickable(false);
+            head.setBackground(null);
+            return;
+        }
+        head.setContentDescription("Collapse " + title);
+        head.setOnClickListener(v -> {
+            boolean open = collapses.getVisibility() != View.VISIBLE;
+            collapses.setVisibility(open ? View.VISIBLE : View.GONE);
+            caret.animate().rotation(open ? 0f : -90f).setDuration(160).start();
+            head.setContentDescription((open ? "Collapse " : "Expand ") + title);
+        });
+    }
+
+    // ---- top bar ----
+
+    /** One breadcrumb step. A null target marks the current page, which is not tappable. */
+    static final class Crumb {
+        final int icon; final String label; final Runnable open;
+        Crumb(int icon, String label, Runnable open) { this.icon = icon; this.label = label; this.open = open; }
+    }
+
+    /**
+     * Fill the fixed top bar. Back goes exactly one level up via {@code up}; pass null
+     * on a top-level page to hide it. Each crumb always shows its own icon.
+     */
+    static void pageTop(View top, Runnable up, Crumb... crumbs) {
+        Context c = top.getContext();
+        View back = top.findViewById(R.id.kit_back);
+        back.setVisibility(up == null ? View.GONE : View.VISIBLE);
+        if (up != null) back.setOnClickListener(v -> up.run());
+        LinearLayout row = top.findViewById(R.id.kit_crumbs);
+        row.removeAllViews();
+        if (up == null) row.setPadding(dp(c, 8), 0, 0, 0);
+        for (int i = 0; i < crumbs.length; i++) {
+            Crumb crumb = crumbs[i];
+            boolean current = i == crumbs.length - 1;
+            if (i > 0) {
+                TextView slash = new TextView(c);
+                slash.setTextAppearance(R.style.Kit_Text_Crumb);
+                slash.setText("/");
+                slash.setPadding(dp(c, 6), 0, dp(c, 6), 0);
+                slash.setAlpha(0.55f);
+                row.addView(slash);
+            }
+            LinearLayout step = new LinearLayout(c);
+            step.setOrientation(LinearLayout.HORIZONTAL);
+            step.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            step.setPadding(dp(c, 2), dp(c, 6), dp(c, 2), dp(c, 6));
+            ImageView symbol = new ImageView(c);
+            symbol.setImageResource(crumb.icon);
+            symbol.setImageTintList(ColorStateList.valueOf(ContextCompat.getColor(c,
+                current ? R.color.text : R.color.dim)));
+            step.addView(symbol, new LinearLayout.LayoutParams(dp(c, 14), dp(c, 14)));
+            TextView label = new TextView(c);
+            label.setTextAppearance(current ? R.style.Kit_Text_CrumbCurrent : R.style.Kit_Text_Crumb);
+            label.setText(crumb.label);
+            label.setSingleLine(true);
+            label.setPadding(dp(c, 5), 0, 0, 0);
+            step.addView(label);
+            if (!current && crumb.open != null) {
+                step.setBackgroundResource(outValue(c));
+                step.setOnClickListener(v -> crumb.open.run());
+                step.setContentDescription("Go to " + crumb.label);
+            }
+            row.addView(step);
+        }
+        ((LinearLayout) top.findViewById(R.id.kit_actions)).removeAllViews();
+    }
+
+    /** Add an icon-only action to the right of the top bar. */
+    static ImageView topAction(View top, int icon, String label, View.OnClickListener click) {
+        Context c = top.getContext();
+        ImageView action = new ImageView(c);
+        action.setImageResource(icon);
+        action.setImageTintList(ColorStateList.valueOf(ContextCompat.getColor(c, R.color.text)));
+        action.setPadding(dp(c, 10), dp(c, 10), dp(c, 10), dp(c, 10));
+        action.setBackgroundResource(outValueBorderless(c));
+        action.setContentDescription(label);
+        action.setOnClickListener(click);
+        ((LinearLayout) top.findViewById(R.id.kit_actions)).addView(action,
+            new LinearLayout.LayoutParams(dp(c, 40), dp(c, 40)));
+        return action;
+    }
+
+    // ---- helpers ----
+
+    private static void setOptional(TextView view, CharSequence text) {
+        view.setVisibility(text == null || text.length() == 0 ? View.GONE : View.VISIBLE);
+        view.setText(text);
+    }
+
+    static int dp(Context c, int value) {
+        return Math.round(value * c.getResources().getDisplayMetrics().density);
+    }
+
+    private static int outValue(Context c) {
+        android.util.TypedValue v = new android.util.TypedValue();
+        c.getTheme().resolveAttribute(android.R.attr.selectableItemBackground, v, true);
+        return v.resourceId;
+    }
+
+    private static int outValueBorderless(Context c) {
+        android.util.TypedValue v = new android.util.TypedValue();
+        c.getTheme().resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, v, true);
+        return v.resourceId;
+    }
+}

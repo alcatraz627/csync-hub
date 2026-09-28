@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One list row: icon tile, title over subtitle, optional end label and chevron. Bind with Kit.bindRow. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:minHeight="@dimen/kit_row_min"
+    android:orientation="horizontal" android:gravity="center_vertical"
+    android:paddingStart="@dimen/kit_row_pad_h" android:paddingEnd="@dimen/kit_row_pad_h"
+    android:paddingTop="@dimen/kit_row_pad_v" android:paddingBottom="@dimen/kit_row_pad_v"
+    android:background="?attr/selectableItemBackground">
+    <FrameLayout android:id="@+id/kit_tile"
+        android:layout_width="@dimen/kit_tile" android:layout_height="@dimen/kit_tile"
+        android:layout_marginEnd="@dimen/kit_row_gap" android:background="@drawable/kit_tile_bg">
+        <ImageView android:id="@+id/kit_icon"
+            android:layout_width="@dimen/kit_tile_icon" android:layout_height="@dimen/kit_tile_icon"
+            android:layout_gravity="center" app:tint="?attr/colorPrimary"
+            android:importantForAccessibility="no"/>
+    </FrameLayout>
+    <LinearLayout android:layout_width="0dp" android:layout_weight="1"
+        android:layout_height="wrap_content" android:orientation="vertical">
+        <TextView android:id="@+id/kit_title" style="@style/Kit.Text.RowTitle"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:maxLines="2"/>
+        <TextView android:id="@+id/kit_sub" style="@style/Kit.Text.RowSub"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"/>
+    </LinearLayout>
+    <TextView android:id="@+id/kit_end" style="@style/Kit.Text.Meta"
+        android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"/>
+    <ImageView android:id="@+id/kit_action"
+        android:layout_width="34dp" android:layout_height="34dp" android:layout_marginStart="8dp"
+        android:padding="8dp" android:visibility="gone" app:tint="@color/text"
+        android:background="@drawable/kit_action_bg"/>
+    <ImageView android:id="@+id/kit_chevron"
+        android:layout_width="16dp" android:layout_height="16dp" android:layout_marginStart="4dp"
+        android:src="@drawable/csi_forward" app:tint="@color/dim"
+        android:importantForAccessibility="no"/>
+</LinearLayout>

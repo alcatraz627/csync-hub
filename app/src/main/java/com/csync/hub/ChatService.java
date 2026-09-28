@@ -47,6 +47,7 @@ public class ChatService extends Service {
         final String message = intent.getStringExtra("message");
         final String model = intent.getStringExtra("model");
         final String effort = intent.getStringExtra("effort");
+        final String attached = intent.getStringExtra("attachments");
 
         active.incrementAndGet();
         startForeground(FG_ID, sendingNote());
@@ -58,7 +59,8 @@ public class ChatService extends Service {
         new Thread(() -> {
             final JSONArray acc = new JSONArray();
             final String[] err = {null};
-            MeshClient.chatStream(assist, token, session, message, model, effort, new MeshClient.TurnSink() {
+            MeshClient.chatStream(assist, token, session, message, model, effort, encodeAttachments(attached),
+                    new MeshClient.TurnSink() {
                 public void onTurn(JSONObject turn) {
                     if (turn != null) { acc.put(turn); ChatStore.append(ctx, session, null, turn); }
                     Intent b = new Intent(ACTION_REPLY).setPackage(getPackageName());
@@ -95,7 +97,7 @@ public class ChatService extends Service {
         ensureChannel();
         Notification.Builder b = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 ? new Notification.Builder(this, CHANNEL) : new Notification.Builder(this);
-        return b.setContentTitle("Asking the assistant…")
+        return b.setContentTitle("Asking the assistant")
                 .setSmallIcon(android.R.drawable.stat_notify_sync)
                 .setOngoing(true).build();
     }
@@ -103,7 +105,7 @@ public class ChatService extends Service {
     private void notifyReply(String text) {
         if (text == null || text.isEmpty()) return;
         ensureChannel();
-        String preview = text.length() > 160 ? text.substring(0, 160) + "…" : text;
+        String preview = text.length() > 160 ? text.substring(0, 160) : text;
         int piFlags = PendingIntent.FLAG_UPDATE_CURRENT
                 | (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0);
         PendingIntent pi = PendingIntent.getActivity(this, 0,
@@ -141,5 +143,23 @@ public class ChatService extends Service {
         } catch (Throwable e) {
             return "";
         }
+    }
+
+    /** Read the cached files the app picked and turn them into {name, mime, data} for the Pi, then delete them. */
+    private static JSONArray encodeAttachments(String listed) {
+        JSONArray out = new JSONArray();
+        if (listed == null || listed.isEmpty()) return out;
+        try {
+            JSONArray files = new JSONArray(listed);
+            for (int i = 0; i < files.length(); i++) {
+                JSONObject f = files.getJSONObject(i);
+                java.io.File file = new java.io.File(f.getString("path"));
+                byte[] raw = java.nio.file.Files.readAllBytes(file.toPath());
+                out.put(new JSONObject().put("name", f.optString("name")).put("mime", f.optString("mime"))
+                    .put("data", android.util.Base64.encodeToString(raw, android.util.Base64.NO_WRAP)));
+                file.delete();
+            }
+        } catch (Exception ignored) { }
+        return out;
     }
 }

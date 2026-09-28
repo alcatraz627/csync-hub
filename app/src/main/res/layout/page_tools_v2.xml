@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:background="@color/bg">
+    <include android:id="@+id/tools_back" layout="@layout/kit_page_top"/>
+    <ScrollView android:id="@+id/tools_scroll" android:layout_width="match_parent" android:layout_height="0dp"
+        android:layout_weight="1" android:fillViewport="true">
+        <LinearLayout android:id="@+id/tools_main" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:paddingStart="@dimen/kit_gutter" android:paddingEnd="@dimen/kit_gutter"
+            android:paddingTop="6dp" android:paddingBottom="16dp">
+            <TextView android:id="@+id/tools_title" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="4dp" android:text="Tools"
+                style="@style/Kit.Text.PageTitle" android:textColor="@color/text"/>
+            <TextView android:id="@+id/tools_subtitle" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="4dp" android:layout_marginBottom="12dp"
+                android:text="Pi service health and phone utilities."
+                android:textSize="13sp" android:textColor="@color/dim"/>
+            <LinearLayout android:id="@+id/tools_health" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical">
+                <TextView android:id="@+id/tools_health_headline" android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Checking Pi" android:textSize="22sp" android:textStyle="bold"
+                    android:textColor="@color/text"/>
+                <TextView android:id="@+id/tools_health_detail" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:layout_marginTop="4dp"
+                    android:text="Reading service and power state" android:textSize="13sp"
+                    android:textColor="@color/dim"/>
+                <Button android:id="@+id/tools_recheck" android:layout_width="wrap_content"
+                    android:layout_height="48dp" android:layout_marginTop="8dp"
+                    android:text="Recheck"/>
+            </LinearLayout>
+            <TextView android:id="@+id/tools_service_heading" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="16dp" android:layout_marginBottom="8dp"
+                android:text="SERVICE HEALTH" style="@style/Kit.Text.Section"/>
+            <LinearLayout android:id="@+id/tools_service_rows" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:background="@drawable/card_bg">
+                <LinearLayout android:id="@+id/tools_media_health_row" style="@style/CsyncMoreNavRow">
+                    <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_media"/>
+                    <LinearLayout style="@style/CsyncMoreText">
+                        <TextView style="@style/CsyncMoreTitle" android:text="Pi media service"/>
+                        <TextView android:id="@+id/tools_media_status" style="@style/CsyncMoreSub"
+                            android:text="Checking authenticated health"/>
+                    </LinearLayout>
+                    <ImageView style="@style/CsyncMoreChevron"/>
+                </LinearLayout>
+                <View android:layout_width="match_parent" android:layout_height="1dp"
+                    android:background="@color/border"/>
+                <LinearLayout android:id="@+id/tools_power_health_row" style="@style/CsyncMoreNavRow">
+                    <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_alert"/>
+                    <LinearLayout style="@style/CsyncMoreText">
+                        <TextView style="@style/CsyncMoreTitle" android:text="Pi power"/>
+                        <TextView android:id="@+id/tools_power_status" style="@style/CsyncMoreSub"
+                            android:text="Checking voltage status"/>
+                    </LinearLayout>
+                    <ImageView style="@style/CsyncMoreChevron"/>
+                </LinearLayout>
+                <View android:layout_width="match_parent" android:layout_height="1dp"
+                    android:background="@color/border"/>
+                <LinearLayout android:id="@+id/tools_performance_row" style="@style/CsyncMoreNavRow">
+                    <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_speed"/>
+                    <LinearLayout style="@style/CsyncMoreText">
+                        <TextView style="@style/CsyncMoreTitle" android:text="App performance"/>
+                        <TextView style="@style/CsyncMoreSub"
+                            android:text="Planned · capture a trace during lag"/>
+                    </LinearLayout>
+                    <ImageView style="@style/CsyncMoreChevron"/>
+                </LinearLayout>
+            </LinearLayout>
+            <TextView android:id="@+id/tools_utility_heading" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="24dp" android:layout_marginBottom="10dp"
+                android:text="UTILITIES" style="@style/Kit.Text.Section"/>
+            <LinearLayout android:id="@+id/tools_utility_rows" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:background="@drawable/card_bg">
+                <LinearLayout android:id="@+id/tools_media" style="@style/CsyncMoreNavRow">
+                    <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_files"/>
+                    <LinearLayout style="@style/CsyncMoreText">
+                        <TextView style="@style/CsyncMoreTitle" android:text="Browse Pi media"/>
+                        <TextView style="@style/CsyncMoreSub" android:text="Drives, files, and playback"/>
+                    </LinearLayout>
+                    <ImageView style="@style/CsyncMoreChevron"/>
+                </LinearLayout>
+                <View android:layout_width="match_parent" android:layout_height="1dp"
+                    android:background="@color/border"/>
+                <LinearLayout android:id="@+id/tools_process_route" style="@style/CsyncMoreNavRow">
+                    <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_device"/>
+                    <LinearLayout style="@style/CsyncMoreText">
+                        <TextView style="@style/CsyncMoreTitle" android:text="Process monitor"/>
+                        <TextView style="@style/CsyncMoreSub" android:text="Phone processes via Shizuku"/>
+                    </LinearLayout>
+                    <ImageView style="@style/CsyncMoreChevron"/>
+                </LinearLayout>
+                <View android:layout_width="match_parent" android:layout_height="1dp"
+                    android:background="@color/border"/>
+                <LinearLayout android:id="@+id/tools_widgets_route" style="@style/CsyncMoreNavRow">
+                    <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_launcher"/>
+                    <LinearLayout style="@style/CsyncMoreText">
+                        <TextView style="@style/CsyncMoreTitle" android:text="Widgets &amp; quick actions"/>
+                        <TextView style="@style/CsyncMoreSub" android:text="xkcd built; other shortcuts planned"/>
+                    </LinearLayout>
+                    <ImageView style="@style/CsyncMoreChevron"/>
+                </LinearLayout>
+                <View android:layout_width="match_parent" android:layout_height="1dp"
+                    android:background="@color/border"/>
+                <LinearLayout style="@style/CsyncMoreRow">
+                    <TextView style="@style/CsyncMoreTitle" android:text="App updates"/>
+                    <TextView android:id="@+id/tools_update_status" style="@style/CsyncMoreSub"
+                        android:text="Use the Pi connection to install a newer csync."/>
+                    <Button android:id="@+id/tools_update" android:layout_width="match_parent"
+                        android:layout_height="48dp" android:layout_marginTop="8dp"
+                        android:text="Update csync from Pi"/>
+                </LinearLayout>
+            </LinearLayout>
+            <LinearLayout android:id="@+id/tools_widget_section" android:visibility="gone"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="14dp" android:orientation="vertical">
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:text="CURRENT" style="@style/Kit.Text.Section"/>
+                <LinearLayout android:id="@+id/tools_widget_xkcd" style="@style/CsyncMoreNavRow" android:layout_marginTop="8dp"
+                    android:background="@drawable/card_bg">
+                    <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_image"/>
+                    <LinearLayout style="@style/CsyncMoreText">
+                        <TextView style="@style/CsyncMoreTitle" android:text="xkcd widget"/>
+                        <TextView style="@style/CsyncMoreSub" android:text="Companion widget on the launcher"/>
+                    </LinearLayout>
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="Built" android:textSize="12sp" android:textColor="@color/dim"/>
+                    <ImageView style="@style/CsyncMoreChevron" android:layout_marginStart="6dp"/>
+                </LinearLayout>
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp" android:text="IDEAS TO TEST"
+                    style="@style/Kit.Text.Section"/>
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp" android:orientation="vertical" android:background="@drawable/card_bg">
+                    <LinearLayout android:id="@+id/tools_widget_media" style="@style/CsyncMoreNavRow">
+                        <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_play"/>
+                        <LinearLayout style="@style/CsyncMoreText">
+                            <TextView style="@style/CsyncMoreTitle" android:text="Media remote widget"/>
+                            <TextView style="@style/CsyncMoreSub" android:text="Play, pause, stop"/>
+                        </LinearLayout>
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Planned" android:textSize="12sp" android:textColor="@color/dim"/>
+                        <ImageView style="@style/CsyncMoreChevron" android:layout_marginStart="6dp"/>
+                    </LinearLayout>
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/border"/>
+                    <LinearLayout android:id="@+id/tools_widget_quick" style="@style/CsyncMoreNavRow">
+                        <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_sliders"/>
+                        <LinearLayout style="@style/CsyncMoreText">
+                            <TextView style="@style/CsyncMoreTitle" android:text="Quick Settings actions"/>
+                            <TextView style="@style/CsyncMoreSub" android:text="Camera or Share"/>
+                        </LinearLayout>
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Planned" android:textSize="12sp" android:textColor="@color/dim"/>
+                        <ImageView style="@style/CsyncMoreChevron" android:layout_marginStart="6dp"/>
+                    </LinearLayout>
+                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/border"/>
+                    <LinearLayout android:id="@+id/tools_widget_shortcuts" style="@style/CsyncMoreNavRow">
+                        <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_link"/>
+                        <LinearLayout style="@style/CsyncMoreText">
+                            <TextView style="@style/CsyncMoreTitle" android:text="App shortcuts"/>
+                            <TextView style="@style/CsyncMoreSub" android:text="Media, Share, Chat"/>
+                        </LinearLayout>
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Planned" android:textSize="12sp" android:textColor="@color/dim"/>
+                        <ImageView style="@style/CsyncMoreChevron" android:layout_marginStart="6dp"/>
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+            <LinearLayout android:id="@+id/tools_process_section" android:visibility="gone"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="14dp" android:orientation="vertical">
+                <Button android:id="@+id/sys_refresh" android:layout_width="wrap_content"
+                    android:layout_height="48dp" android:text="Refresh sample"/>
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp" android:orientation="horizontal">
+                    <LinearLayout style="@style/CsyncToolMetric">
+                        <ImageView style="@style/CsyncToolMetricIcon" android:src="@drawable/csi_sliders"/>
+                        <TextView style="@style/CsyncToolMetricValue" android:text="—"/>
+                        <TextView style="@style/CsyncMoreSub" android:text="Available · live sample needed"/>
+                    </LinearLayout>
+                    <LinearLayout style="@style/CsyncToolMetric">
+                        <ImageView style="@style/CsyncToolMetricIcon" android:src="@drawable/csi_sliders"/>
+                        <TextView style="@style/CsyncToolMetricValue" android:text="—"/>
+                        <TextView style="@style/CsyncMoreSub" android:text="CPU · live sample needed"/>
+                    </LinearLayout>
+                </LinearLayout>
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp" android:orientation="horizontal">
+                    <LinearLayout style="@style/CsyncToolMetric">
+                        <ImageView style="@style/CsyncToolMetricIcon" android:src="@drawable/csi_sliders"/>
+                        <TextView style="@style/CsyncToolMetricValue" android:text="—"/>
+                        <TextView style="@style/CsyncMoreSub" android:text="Thermal · live sample needed"/>
+                    </LinearLayout>
+                    <LinearLayout style="@style/CsyncToolMetric">
+                        <ImageView style="@style/CsyncToolMetricIcon" android:src="@drawable/csi_sliders"/>
+                        <TextView style="@style/CsyncToolMetricValue" android:text="—"/>
+                        <TextView style="@style/CsyncMoreSub" android:text="Swap pressure · planned"/>
+                    </LinearLayout>
+                </LinearLayout>
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp" android:text="PROCESSES" style="@style/Kit.Text.Section"/>
+                <TextView android:id="@+id/sys_status" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:layout_marginTop="8dp"
+                    android:padding="14dp" android:background="@drawable/card_bg"
+                    android:text="Shizuku status pending" android:textSize="13sp" android:textColor="@color/dim"/>
+                <ScrollView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:maxHeight="240dp">
+                    <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content">
+                        <TextView android:id="@+id/sys_output" android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" android:fontFamily="monospace"
+                            android:textSize="11sp" android:textColor="@color/text"/>
+                    </HorizontalScrollView>
+                </ScrollView>
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp" android:text="TRACES"
+                    style="@style/Kit.Text.Section"/>
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp" android:padding="14dp"
+                    android:background="@drawable/card_bg" android:text="Capture a trace during lag · Planned"
+                    android:textSize="13sp" android:textColor="@color/text"/>
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp" android:padding="14dp"
+                    android:background="@drawable/card_bg" android:text="Safe Pi process actions · Planned"
+                    android:textSize="13sp" android:textColor="@color/text"/>
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

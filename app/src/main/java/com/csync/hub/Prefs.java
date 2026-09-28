@@ -2,6 +2,7 @@ package com.csync.hub;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.res.Configuration;
 import android.os.Build;
 
 /** Stores the home peer (this Mac) address and the shared mesh token. */
@@ -27,19 +28,45 @@ public final class Prefs {
         p(c).edit().putString("assist_ip", ip.trim()).apply();
     }
 
-    // Appearance. Light is the default theme; accent is one of coral, teal,
-    // violet, rust (coral default). Both survive restarts and are applied at
-    // MainActivity startup before the content view is set.
-    static boolean darkTheme(Context c) { return p(c).getBoolean("dark_theme", false); }
+    static String themeMode(Context c) {
+        SharedPreferences prefs = p(c);
+        return prefs.getString("theme_mode", prefs.getBoolean("dark_theme", false) ? "dark" : "light");
+    }
+
+    static boolean darkTheme(Context c) {
+        String mode = themeMode(c);
+        return "dark".equals(mode) || ("system".equals(mode) &&
+            (c.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
+                == Configuration.UI_MODE_NIGHT_YES);
+    }
+
+    static void saveThemeMode(Context c, String mode) {
+        p(c).edit().putString("theme_mode", mode)
+            .putBoolean("dark_theme", "dark".equals(mode)).apply();
+    }
 
     static void saveDarkTheme(Context c, boolean dark) {
-        p(c).edit().putBoolean("dark_theme", dark).apply();
+        saveThemeMode(c, dark ? "dark" : "light");
     }
 
     static String accent(Context c) { return p(c).getString("accent", "coral"); }
 
     static void saveAccent(Context c, String accent) {
         p(c).edit().putString("accent", accent).apply();
+    }
+
+    static int customAccent(Context c) {
+        return p(c).getInt("custom_accent", 0xFF8B5CF6);
+    }
+
+    static void saveCustomAccent(Context c, int color) {
+        p(c).edit().putInt("custom_accent", color).putString("accent", "custom").apply();
+    }
+
+    static String textSize(Context c) { return p(c).getString("text_size", "md"); }
+
+    static void saveTextSize(Context c, String size) {
+        p(c).edit().putString("text_size", size).apply();
     }
 
     /** This device's name on the mesh; the phone model, sanitised for a folder name. */

@@ -15,9 +15,15 @@
     <color name="mini_bg">#17212B</color>
     <color name="mini_text">#FFFFFF</color>
     <color name="mini_muted">#B6C2CE</color>
+    <color name="nav_indicator">#FCE8E2</color>
+    <color name="player_poster_top">#E8EEF2</color>
+    <color name="player_poster_bottom">#DDE6EA</color>
     <!-- accents -->
     <color name="coral">#E4572E</color>
     <color name="teal">#0D9488</color>
     <color name="violet">#7C5CFF</color>
     <color name="rust">#C2410C</color>
+    <color name="blue">#2768B2</color>
+    <color name="leaf">#287D45</color>
+    <color name="rose">#B23773</color>
 </resources>

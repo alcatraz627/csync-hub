@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:id="@+id/nav_home" android:icon="@drawable/ic_home" android:title="Home"/>
-    <item android:id="@+id/nav_media" android:icon="@drawable/ic_grid" android:title="Media"/>
-    <item android:id="@+id/nav_share" android:icon="@drawable/ic_share" android:title="Share"/>
-    <item android:id="@+id/nav_chat" android:icon="@drawable/ic_forum" android:title="Chat"/>
-    <item android:id="@+id/nav_more" android:icon="@drawable/ic_tune" android:title="More"/>
+    <item android:id="@+id/nav_home" android:icon="@drawable/csi_home" android:title="Home"/>
+    <item android:id="@+id/nav_media" android:icon="@drawable/csi_media" android:title="Media"/>
+    <item android:id="@+id/nav_share" android:icon="@drawable/csi_share" android:title="Share"/>
+    <item android:id="@+id/nav_chat" android:icon="@drawable/csi_chat" android:title="Chat"/>
+    <item android:id="@+id/nav_more" android:icon="@drawable/csi_more" android:title="More"/>
 </menu>
