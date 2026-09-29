@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Slate neutral, dark -->
-    <color name="bg">#0F1216</color>
-    <color name="surface">#171B21</color>
-    <color name="surface2">#1F242C</color>
-    <color name="text">#ECEEF2</color>
-    <color name="dim">#8A94A2</color>
-    <color name="border">#2A313B</color>
-    <color name="offline">#525A66</color>
-    <color name="nav_indicator">#252C35</color>
-    <color name="player_poster_top">#294151</color>
-    <color name="player_poster_bottom">#344148</color>
+    <!-- Warm neutral dark. Deeper base, raised surfaces with a hint of warmth. -->
+    <color name="bg">#0C0D11</color>
+    <color name="surface">#16181E</color>
+    <color name="surface2">#1C1F27</color>
+    <color name="text">#F4F3F1</color>
+    <color name="dim">#9298A3</color>
+    <color name="border">#23262F</color>
+    <color name="offline">#6B7079</color>
+    <color name="nav_indicator">#2A1A14</color>
+    <color name="player_poster_top">#21252D</color>
+    <color name="player_poster_bottom">#16181E</color>
 </resources>

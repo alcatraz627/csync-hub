@@ -266,15 +266,12 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         View top = pageHome.findViewById(R.id.home_top);
         Kit.pageTop(top, null, new Kit.Crumb(Kit.Icon.HOME, "Home", null));
         Kit.topAction(top, Kit.Icon.SEARCH, "Search your hub", v -> openHomeSearch());
-        Kit.bindSection(pageHome.findViewById(R.id.home_devices_head), Kit.Icon.DEVICE, "Devices",
-            pageHome.findViewById(R.id.home_devices_content));
-        Kit.bindSection(pageHome.findViewById(R.id.home_cap_head), Kit.Icon.HOME, "Capabilities",
+        Kit.bindSection(pageHome.findViewById(R.id.home_cap_head), Kit.Icon.HOME, "Do something",
             pageHome.findViewById(R.id.home_cap_grid));
-        Kit.bindSection(pageHome.findViewById(R.id.home_pickup_head), Kit.Icon.HISTORY, "Pick up",
+        Kit.bindSection(pageHome.findViewById(R.id.home_pickup_head), Kit.Icon.HISTORY, "Pick up where you left off",
             pageHome.findViewById(R.id.home_pickup_content));
         pageHome.findViewById(R.id.home_share).setOnClickListener(v -> nav.setSelectedItemId(R.id.nav_share));
         pageHome.findViewById(R.id.home_chat).setOnClickListener(v -> nav.setSelectedItemId(R.id.nav_chat));
-        pageHome.findViewById(R.id.home_media).setOnClickListener(v -> startActivity(new Intent(this, MediaActivity.class)));
         pageHome.findViewById(R.id.home_cap_media).setOnClickListener(v -> startActivity(new Intent(this, MediaActivity.class)));
         pageHome.findViewById(R.id.home_mac).setOnClickListener(v -> nav.setSelectedItemId(R.id.nav_share));
         pageHome.findViewById(R.id.home_camera).setOnClickListener(v -> { nav.setSelectedItemId(R.id.nav_more); show(5); });
@@ -477,6 +474,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                 String powerSummary = lowNow ? "Undervoltage now" :
                     lowEarlier ? "Past undervoltage" : "No undervoltage reported by Pi";
                 powerStatus.setText(fix.isEmpty() ? powerSummary : powerSummary + " · " + fix);
+                ((android.widget.ImageView) pageTools.findViewById(R.id.tools_power_icon))
+                    .setColorFilter(col(lowNow || lowEarlier ? R.color.warn : R.color.online));
             });
         }, "csync-tools-health").start();
     }
@@ -517,19 +516,30 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     }
 
     /** Fill Home's device rows and capability cards. A null reading means it is still being checked. */
+    private void setPill(int id, boolean on) {
+        TextView pill = pageHome.findViewById(id);
+        pill.setBackgroundResource(on ? R.drawable.pill_on : R.drawable.pill_off);
+        pill.setTextColor(col(on ? R.color.coral_soft : R.color.dim));
+    }
+
     private void bindHomeStatus(Boolean pi, boolean media, Boolean mac) {
         boolean checking = pi == null;
         boolean piUp = !checking && (pi || media);
-        ((TextView) pageHome.findViewById(R.id.home_headline)).setText(checking ? "Checking your devices"
-            : pi && media ? "Raspberry Pi is ready" : "Your devices at a glance");
-        Kit.bindRow(pageHome.findViewById(R.id.home_media), Kit.Icon.DISPLAY, "Raspberry Pi",
-            checking ? "Checking media, assistant, camera"
-                : pi ? (media ? "Online · media, assistant, camera" : "Online · assistant ready, media offline")
-                : (media ? "Media online · assistant offline" : "Offline · check the Pi connection"),
-            checking ? "Checking" : piUp ? "Online" : "Offline", true);
-        Kit.bindRow(pageHome.findViewById(R.id.home_mac), Kit.Icon.SHARE, "Mac",
-            mac == null ? "Checking sharing receiver" : mac ? "Online · sharing receiver" : "Offline · sharing receiver",
-            mac == null ? "Checking" : mac ? "Online" : "Offline", true);
+        ((TextView) pageHome.findViewById(R.id.home_hero_status)).setText(
+            checking ? "Checking your hub"
+                : piUp ? "Reachable now over Tailscale" : "Offline, check the Pi connection");
+        pageHome.findViewById(R.id.home_hero_dot).setBackgroundResource(
+            !checking && piUp ? R.drawable.dot_live : R.drawable.dot_off);
+        setPill(R.id.home_pill_media, !checking && media);
+        setPill(R.id.home_pill_assistant, !checking && Boolean.TRUE.equals(pi));
+        setPill(R.id.home_pill_camera, !checking && media);
+        setPill(R.id.home_pill_screen, !checking && media);
+
+        boolean macUp = Boolean.TRUE.equals(mac);
+        ((TextView) pageHome.findViewById(R.id.home_mac_text)).setText(
+            mac == null ? "Mac, checking" : macUp ? "Mac online, sharing receiver" : "Mac, sharing receiver offline");
+        pageHome.findViewById(R.id.home_mac_dot).setBackgroundResource(macUp ? R.drawable.dot_live : R.drawable.dot_off);
+        pageHome.findViewById(R.id.home_mac_go).setVisibility(macUp ? View.GONE : View.VISIBLE);
 
         int threads = ChatStore.index(this).length();
         String saved = threads == 1 ? "1 thread" : threads + " threads";
@@ -1678,8 +1688,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         chatHistoryList.setVisibility(tools ? View.GONE : View.VISIBLE);
         chatToolsList.setVisibility(tools ? View.VISIBLE : View.GONE);
         TextView heading = pageChat.findViewById(R.id.chat_recent_heading);
-        heading.setText(showArchived ? "ARCHIVED CONVERSATIONS" : showFavOnly ?
-            "FAVORITE CONVERSATIONS" : tools ? "ASSISTANT TOOLS" : "RECENT CONVERSATIONS");
+        heading.setText(showArchived ? "Archived" : showFavOnly ?
+            "Favorites" : tools ? "Assistant tools" : "Recent");
         if (tools) refreshChatTools();
         else renderHistoryList();
         chatHistory.post(() -> chatHistory.smoothScrollTo(0, 0));

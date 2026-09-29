@@ -9,6 +9,8 @@
     <color name="border">#DDE4EC</color>
     <!-- semantic (same both themes) -->
     <color name="online">#16A34A</color>
+    <color name="live">#39C07A</color>
+    <color name="coral_soft">#F2A48C</color>
     <color name="offline">#AEB6C2</color>
     <color name="danger">#DC2626</color>
     <color name="onAccent">#FFFFFF</color>

@@ -31,7 +31,7 @@
             </LinearLayout>
             <TextView android:id="@+id/tools_service_heading" android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:layout_marginTop="16dp" android:layout_marginBottom="8dp"
-                android:text="SERVICE HEALTH" style="@style/Kit.Text.Section"/>
+                android:text="Service health" style="@style/Kit.Text.Section"/>
             <LinearLayout android:id="@+id/tools_service_rows" android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg">
                 <LinearLayout android:id="@+id/tools_media_health_row" style="@style/CsyncMoreNavRow">
@@ -46,7 +46,8 @@
                 <View android:layout_width="match_parent" android:layout_height="1dp"
                     android:background="@color/border"/>
                 <LinearLayout android:id="@+id/tools_power_health_row" style="@style/CsyncMoreNavRow">
-                    <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_alert"/>
+                    <ImageView android:id="@+id/tools_power_icon" style="@style/CsyncMoreIcon"
+                        android:src="@drawable/csi_alert" android:tint="@color/warn"/>
                     <LinearLayout style="@style/CsyncMoreText">
                         <TextView style="@style/CsyncMoreTitle" android:text="Pi power"/>
                         <TextView android:id="@+id/tools_power_status" style="@style/CsyncMoreSub"
@@ -68,7 +69,7 @@
             </LinearLayout>
             <TextView android:id="@+id/tools_utility_heading" android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:layout_marginTop="24dp" android:layout_marginBottom="10dp"
-                android:text="UTILITIES" style="@style/Kit.Text.Section"/>
+                android:text="Utilities" style="@style/Kit.Text.Section"/>
             <LinearLayout android:id="@+id/tools_utility_rows" android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg">
                 <LinearLayout android:id="@+id/tools_media" style="@style/CsyncMoreNavRow">
@@ -114,7 +115,7 @@
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:layout_marginTop="14dp" android:orientation="vertical">
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:text="CURRENT" style="@style/Kit.Text.Section"/>
+                    android:text="Current" style="@style/Kit.Text.Section"/>
                 <LinearLayout android:id="@+id/tools_widget_xkcd" style="@style/CsyncMoreNavRow" android:layout_marginTop="8dp"
                     android:background="@drawable/card_bg">
                     <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_image"/>
@@ -127,7 +128,7 @@
                     <ImageView style="@style/CsyncMoreChevron" android:layout_marginStart="6dp"/>
                 </LinearLayout>
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:layout_marginTop="20dp" android:text="IDEAS TO TEST"
+                    android:layout_marginTop="20dp" android:text="Ideas to test"
                     style="@style/Kit.Text.Section"/>
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:layout_marginTop="8dp" android:orientation="vertical" android:background="@drawable/card_bg">
@@ -197,7 +198,7 @@
                     </LinearLayout>
                 </LinearLayout>
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:layout_marginTop="20dp" android:text="PROCESSES" style="@style/Kit.Text.Section"/>
+                    android:layout_marginTop="20dp" android:text="Processes" style="@style/Kit.Text.Section"/>
                 <TextView android:id="@+id/sys_status" android:layout_width="match_parent"
                     android:layout_height="wrap_content" android:layout_marginTop="8dp"
                     android:padding="14dp" android:background="@drawable/card_bg"
@@ -211,7 +212,7 @@
                     </HorizontalScrollView>
                 </ScrollView>
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:layout_marginTop="20dp" android:text="TRACES"
+                    android:layout_marginTop="20dp" android:text="Traces"
                     style="@style/Kit.Text.Section"/>
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:layout_marginTop="8dp" android:padding="14dp"

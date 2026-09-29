@@ -16,7 +16,7 @@
                 android:textSize="13sp" android:textColor="@color/dim"/>
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:layout_marginTop="14dp" android:layout_marginBottom="8dp"
-                android:text="AREAS" style="@style/Kit.Text.Section"/>
+                android:text="Areas" style="@style/Kit.Text.Section"/>
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg">
                 <LinearLayout android:id="@+id/more_camera" style="@style/CsyncMoreNavRow">
@@ -48,7 +48,7 @@
             </LinearLayout>
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:layout_marginTop="18dp" android:layout_marginBottom="8dp"
-                android:text="REFERENCE" style="@style/Kit.Text.Section"/>
+                android:text="Reference" style="@style/Kit.Text.Section"/>
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg">
                 <LinearLayout android:id="@+id/more_assistant_tools" style="@style/CsyncMoreNavRow">
@@ -92,13 +92,13 @@
                 android:layout_marginTop="4dp" android:text="What the Pi assistant can help with."
                 android:textSize="13sp" android:textColor="@color/dim"/>
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="20dp" android:text="ASK AND INSPECT"
+                android:layout_marginTop="20dp" android:text="Ask and inspect"
                 style="@style/Kit.Text.Section"/>
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:layout_marginTop="8dp" android:text="Search media, discuss results, and inspect device context."
                 android:textSize="14sp" android:textColor="@color/text"/>
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="20dp" android:text="AVAILABLE PI TOOLS"
+                android:layout_marginTop="20dp" android:text="Available Pi tools"
                 style="@style/Kit.Text.Section"/>
             <LinearLayout android:id="@+id/home_caps" android:layout_width="match_parent"
                 android:layout_height="wrap_content" android:layout_marginTop="8dp"
@@ -120,13 +120,13 @@
                 android:layout_marginTop="4dp" android:text="csync across phone, Pi, and named peers."
                 android:textSize="13sp" android:textColor="@color/dim"/>
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="20dp" android:text="WHERE THINGS LIVE"
+                android:layout_marginTop="20dp" android:text="Where things live"
                 style="@style/Kit.Text.Section"/>
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:layout_marginTop="8dp" android:text="Media browses Pi storage. Share sends to named devices. Chat uses the Pi assistant. Tools checks service health and offers app updates from Pi."
                 android:textSize="14sp" android:textColor="@color/text"/>
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="20dp" android:text="SUPPORT"
+                android:layout_marginTop="20dp" android:text="Support"
                 style="@style/Kit.Text.Section"/>
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:layout_marginTop="8dp" android:text="Check Tools for service health, then inspect the named device and source in Settings."

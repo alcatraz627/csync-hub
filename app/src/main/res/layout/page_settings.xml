@@ -33,7 +33,7 @@
                 android:textSize="13sp" android:textColor="@color/dim"/>
 
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginBottom="8dp" android:text="DEVICES &amp; CONNECTIONS"
+                android:layout_marginBottom="8dp" android:text="Devices &amp; connections"
                 style="@style/Kit.Text.Section"/>
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg">
@@ -66,7 +66,7 @@
             </LinearLayout>
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:layout_marginTop="18dp" android:layout_marginBottom="8dp"
-                android:text="MEDIA &amp; DISPLAY" style="@style/Kit.Text.Section"/>
+                android:text="Media &amp; display" style="@style/Kit.Text.Section"/>
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg">
                 <LinearLayout android:id="@+id/settings_playback" style="@style/CsyncMoreNavRow">
@@ -80,7 +80,7 @@
             </LinearLayout>
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:layout_marginTop="18dp" android:layout_marginBottom="8dp"
-                android:text="ASSISTANT" style="@style/Kit.Text.Section"/>
+                android:text="Assistant" style="@style/Kit.Text.Section"/>
             <LinearLayout android:id="@+id/settings_assistant_row" style="@style/CsyncMoreNavRow"
                 android:background="@drawable/card_bg">
                 <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_chat"/>
@@ -92,7 +92,7 @@
             </LinearLayout>
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:layout_marginTop="18dp" android:layout_marginBottom="8dp"
-                android:text="APP" style="@style/Kit.Text.Section"/>
+                android:text="App" style="@style/Kit.Text.Section"/>
             <LinearLayout android:id="@+id/settings_appearance_row" style="@style/CsyncMoreNavRow"
                 android:background="@drawable/card_bg">
                 <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_palette"/>
@@ -116,7 +116,7 @@
                     android:layout_marginTop="4dp" android:text="Set the whole phone interface."
                     android:textSize="13sp" android:textColor="@color/dim"/>
                 <TextView style="@style/CsyncAppearanceHeading" android:layout_marginTop="24dp"
-                    android:text="THEME"/>
+                    android:text="Theme"/>
                 <LinearLayout
                     android:id="@+id/set_theme_group" style="@style/CsyncAppearanceTabs"
                     android:orientation="horizontal">
@@ -128,7 +128,7 @@
                         style="@style/CsyncAppearanceTab" android:text="Dark" app:icon="@drawable/csi_moon"/>
                 </LinearLayout>
                 <TextView style="@style/CsyncAppearanceHeading" android:layout_marginTop="22dp"
-                    android:text="TEXT SIZE"/>
+                    android:text="Text size"/>
                 <LinearLayout
                     android:id="@+id/set_text_size_group" style="@style/CsyncAppearanceTabs"
                     android:orientation="horizontal">
@@ -140,7 +140,7 @@
                         style="@style/CsyncAppearanceTab" android:text="lg" app:icon="@drawable/csi_text"/>
                 </LinearLayout>
                 <TextView style="@style/CsyncAppearanceHeading" android:layout_marginTop="22dp"
-                    android:text="PRIMARY COLOR"/>
+                    android:text="Primary colour"/>
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="horizontal" android:layout_marginTop="8dp">
                     <View android:id="@+id/set_accent_coral" style="@style/CsyncAccentSwatch" android:contentDescription="Coral accent"/>
@@ -169,7 +169,7 @@
                 android:padding="14dp"
                 android:layout_marginTop="14dp">
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="CONNECTION" style="@style/Kit.Text.Section" android:letterSpacing="0.06" android:layout_marginBottom="10dp"/>
+                    android:text="Connection" style="@style/Kit.Text.Section" android:letterSpacing="0.06" android:layout_marginBottom="10dp"/>
 
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                     android:text="Home peer" android:textSize="13sp" android:textColor="@color/text"/>
@@ -221,7 +221,7 @@
                 android:padding="14dp"
                 android:layout_marginTop="14dp">
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="ASSISTANT" style="@style/Kit.Text.Section" android:letterSpacing="0.06" android:layout_marginBottom="10dp"/>
+                    android:text="Assistant" style="@style/Kit.Text.Section" android:letterSpacing="0.06" android:layout_marginBottom="10dp"/>
 
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                     android:text="Provider" android:textSize="13sp" android:textColor="@color/text"/>

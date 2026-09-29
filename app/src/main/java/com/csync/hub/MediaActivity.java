@@ -295,7 +295,7 @@ public final class MediaActivity extends AppCompatActivity {
             } else {
                 path = parentPath;
                 search.setHint("Search " + driveLabel);
-                showItems(new JSONArray().put(item), "SELECTED FILE");
+                showItems(new JSONArray().put(item), "Selected file");
                 chooseTarget(item);
             }
         });
@@ -668,7 +668,7 @@ public final class MediaActivity extends AppCompatActivity {
                 boolean foldersOnly = items.length() > 0;
                 for (int i = 0; i < items.length(); i++)
                     foldersOnly &= items.getJSONObject(i).optBoolean("directory");
-                clearRows(path.isEmpty() && foldersOnly ? "FOLDERS" : path.isEmpty() ? "FILES" : path);
+                clearRows(path.isEmpty() && foldersOnly ? "Folders" : path.isEmpty() ? "Files" : path);
             }
             if (!append && !path.isEmpty()) {
                 int slash = path.lastIndexOf('/');
@@ -1195,7 +1195,7 @@ public final class MediaActivity extends AppCompatActivity {
     }
 
     private void showHistory(JSONArray remote, boolean offline) throws Exception {
-        clearRows(offline ? "SAVED ON THIS PHONE" : "HISTORY");
+        clearRows(offline ? "Saved on this phone" : "History");
         Map<String, JSONObject> entries = new LinkedHashMap<>();
         for (int i = 0; i < remote.length(); i++) {
             JSONObject item = remote.getJSONObject(i);
@@ -1224,7 +1224,7 @@ public final class MediaActivity extends AppCompatActivity {
         boolean hasContinue = false;
         for (JSONObject entry : sorted) {
             if (!entry.optBoolean("completed") && entry.optInt("positionMs") > 0) {
-                if (!hasContinue) { historySection("CONTINUE"); hasContinue = true; }
+                if (!hasContinue) { historySection("Continue"); hasContinue = true; }
                 historyRow(entry, true);
             }
         }
@@ -1232,7 +1232,7 @@ public final class MediaActivity extends AppCompatActivity {
         for (JSONObject entry : sorted) {
             if (entry.optBoolean("completed") || entry.optInt("positionMs") <= 0) {
                 if (!hasEarlier) {
-                    historySection("EARLIER");
+                    historySection("Earlier");
                     hasEarlier = true;
                 }
                 historyRow(entry, false);
@@ -1277,20 +1277,20 @@ public final class MediaActivity extends AppCompatActivity {
         long listing = ++listingIntent;
         String host = Prefs.assistIp(this);
         clearRows("");
-        accessSection("PI USB ACCESS");
+        accessSection("Pi USB access");
         LinearLayout primary = accessGroup();
         accessAddress(primary, "SMB address", "smb://" + host + "/sandisk");
         accessAddress(primary, "FTP address", "ftp://" + host + "/Media");
-        accessSection("SOURCES");
+        accessSection("Sources");
         LinearLayout sources = accessGroup();
         accessRow(sources, "Checking Pi drives", "Reading mounted storage", Kit.Icon.FILES,
             R.drawable.csi_forward, "Check Pi drives", v -> connections());
-        accessSection("CONNECTION");
+        accessSection("Connection");
         LinearLayout connection = accessGroup();
         accessRow(connection, "Check Pi media service", "Checking reachability and drive mounts",
             Kit.Icon.ACCESS, R.drawable.csi_forward, "Recheck Pi media service",
             v -> connections());
-        accessSection("OTHER PI ADDRESSES");
+        accessSection("Other Pi addresses");
         LinearLayout extra = accessGroup();
         accessAddress(extra, "SMB media", "smb://" + host + "/media");
         accessAddress(extra, "SMB files", "smb://" + host + "/files");
