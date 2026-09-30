@@ -65,6 +65,21 @@ public class ShareActivity extends AppCompatActivity {
     private ItemActions.Kind kind;
     private LinearLayout body;
     private TextView progress;
+    // From inside csync the page is a step, not a place: it shows the item and the progress of the
+    // one action asked for, and a drawer closed without a pick puts the item's own page back.
+    private boolean step;
+    private boolean continuing;
+
+    /** In a step, a drawer closed without choosing ends the page; a choice sets {@code continuing} first. */
+    private void endsStep(android.app.Dialog drawer) {
+        if (!step) return;
+        continuing = false;
+        drawer.setOnDismissListener(d -> { if (!continuing && !isFinishing()) finish(); });
+    }
+
+    private Runnable go(Runnable next) {
+        return () -> { continuing = true; next.run(); };
+    }
 
     @Override
     protected void onCreate(Bundle b) {
@@ -77,8 +92,9 @@ public class ShareActivity extends AppCompatActivity {
         Appearance.column(this, body);
         final Intent intent = getIntent();
         final String place = intent.getStringExtra(PLACE);
+        step = place != null;
         Kit.pageTop(findViewById(R.id.share_top), this::finish,
-            new Kit.Crumb(Kit.Icon.SHARE, place == null ? "From another app" : "Send", null));
+            new Kit.Crumb(Kit.Icon.SHARE, step ? "Send" : "From another app", null));
 
         CharSequence caption = intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
         if (caption != null && caption.length() > 0) text = caption.toString();
@@ -161,6 +177,8 @@ public class ShareActivity extends AppCompatActivity {
         progress.setPadding(Kit.dp(this, 4), Kit.dp(this, 10), 0, 0);
         progress.setVisibility(View.GONE);
         body.addView(progress);
+        // A step already knows its action; the list it came from is not offered a second time.
+        if (step) return;
 
         // The same list every other place uses. This page does each choice itself, since the item is already here.
         ItemActions.Item shared = new ItemActions.Item(kind, itemTitle());
@@ -188,7 +206,7 @@ public class ShareActivity extends AppCompatActivity {
         else if (kind == ItemActions.Kind.DOCUMENT && ItemActions.isPdf(displayName(files.get(0)), fileType(files.get(0))))
             sendDocumentToPi(files.get(0));
         else if (text != null && files.isEmpty()) showTextOnPi();
-        else Kit.sheet(this, "It cannot be shown on the Pi screen", "The Pi screen shows video, audio, pictures, PDFs and words.");
+        else endsStep(Kit.sheet(this, "It cannot be shown on the Pi screen", "The Pi screen shows video, audio, pictures, PDFs and words."));
     }
 
     /** Send a PDF to the Pi, which draws its pages and shows the first; the pages are turned from the player. */
@@ -222,8 +240,8 @@ public class ShareActivity extends AppCompatActivity {
                         ? (pages > 1 ? "Showing page 1 of " + pages + " on the Pi screen" : "Showing on the Pi screen")
                         : "Sent. The Pi screen is off");
                     finish();
-                } else Kit.sheet(this, "It was not shown", error,
-                    new Kit.Action(R.drawable.csi_refresh, "Try again", null, () -> sendDocumentToPi(document)));
+                } else endsStep(Kit.sheet(this, "It was not shown", error,
+                    new Kit.Action(R.drawable.csi_refresh, "Try again", null, go(() -> sendDocumentToPi(document)))));
             });
         }, "share-pi-document").start();
     }
@@ -356,8 +374,8 @@ public class ShareActivity extends AppCompatActivity {
     }
 
     private void confirmPiCover() {
-        Kit.confirm(this, "Replace the Pi cover with this image?", "It also takes the place of whatever is on the Pi screen now.",
-            R.drawable.csi_image, "Replace", () -> sendImageToPi(files.get(0), true));
+        endsStep(Kit.confirm(this, "Replace the Pi cover with this image?", "It also takes the place of whatever is on the Pi screen now.",
+            R.drawable.csi_image, "Replace", go(() -> sendImageToPi(files.get(0), true))));
     }
 
     /** Put shared words up on the Pi screen, large enough to read from across the room. */
@@ -375,8 +393,8 @@ public class ShareActivity extends AppCompatActivity {
             main.post(() -> {
                 say(null);
                 if (error != null) {
-                    Kit.sheet(this, "It was not shown", error,
-                        new Kit.Action(R.drawable.csi_refresh, "Try again", null, this::showTextOnPi));
+                    endsStep(Kit.sheet(this, "It was not shown", error,
+                        new Kit.Action(R.drawable.csi_refresh, "Try again", null, go(this::showTextOnPi))));
                     return;
                 }
                 toast(shown.optBoolean("sentToDisplay") ? "Showing on the Pi screen" : "Sent. The Pi screen is off");
@@ -386,11 +404,11 @@ public class ShareActivity extends AppCompatActivity {
     }
 
     private void connectFirst() {
-        Kit.sheet(this, "Connect the Pi first", "The Pi address and the token are set in Settings. Share this again afterwards.",
-            new Kit.Action(Kit.Icon.SETTINGS, "Open More", null, () -> {
+        endsStep(Kit.sheet(this, "Connect the Pi first", "The Pi address and the token are set in Settings. Share this again afterwards.",
+            new Kit.Action(Kit.Icon.SETTINGS, "Open More", null, go(() -> {
                 startActivity(new Intent(this, MainActivity.class).putExtra("destination", "more"));
                 finish();
-            }));
+            }))));
     }
 
     /** Send a shared image to the Pi, either to show now or to keep as the cover as well. */
@@ -435,8 +453,8 @@ public class ShareActivity extends AppCompatActivity {
                     toast(asCover ? (lit ? "Saved as the Pi cover and shown" : "Saved as the Pi cover. The Pi screen is off")
                         : (lit ? "Showing on the Pi screen" : "Sent. The Pi screen is off"));
                     finish();
-                } else Kit.sheet(this, asCover ? "The Pi cover was not set" : "It was not shown", error,
-                    new Kit.Action(R.drawable.csi_refresh, "Try again", null, () -> sendImageToPi(image, asCover)));
+                } else endsStep(Kit.sheet(this, asCover ? "The Pi cover was not set" : "It was not shown", error,
+                    new Kit.Action(R.drawable.csi_refresh, "Try again", null, go(() -> sendImageToPi(image, asCover)))));
             });
         }, "share-pi-cover").start();
     }
@@ -476,17 +494,17 @@ public class ShareActivity extends AppCompatActivity {
             if (peer == null || peer.optString("name").isEmpty()) continue;
             String name = peer.optString("name");
             String state = peer.optBoolean("online") ? "Online" : "Offline when last seen";
-            devices.add(new Kit.Action(Kit.Icon.DEVICE, name, name.equals(last) ? state + " · you sent here last" : state, () -> {
+            devices.add(new Kit.Action(Kit.Icon.DEVICE, name, name.equals(last) ? state + " · you sent here last" : state, go(() -> {
                 PeerStore.select(this, name);
                 sendToPeer(name, 0);
-            }));
+            })));
         }
         if (devices.isEmpty()) {
-            Kit.sheet(this, "No devices known yet", "csync looks for your devices through the Pi.",
-                new Kit.Action(R.drawable.csi_refresh, "Look for devices", null, this::scanThenChoose));
+            endsStep(Kit.sheet(this, "No devices known yet", "csync looks for your devices through the Pi.",
+                new Kit.Action(R.drawable.csi_refresh, "Look for devices", null, go(this::scanThenChoose))));
             return;
         }
-        Kit.sheet(this, "Send to a device", itemTitle(), devices.toArray(new Kit.Action[0]));
+        endsStep(Kit.sheet(this, "Send to a device", itemTitle(), devices.toArray(new Kit.Action[0])));
     }
 
     private void scanThenChoose() {
@@ -510,8 +528,8 @@ public class ShareActivity extends AppCompatActivity {
             main.post(() -> {
                 say(null);
                 if (failure == null) chooseDevice();
-                else Kit.sheet(this, "Your devices could not be found", failure,
-                    new Kit.Action(R.drawable.csi_refresh, "Try again", null, this::scanThenChoose));
+                else endsStep(Kit.sheet(this, "Your devices could not be found", failure,
+                    new Kit.Action(R.drawable.csi_refresh, "Try again", null, go(this::scanThenChoose))));
             });
         }, "share-peer-scan").start();
     }
@@ -565,10 +583,10 @@ public class ShareActivity extends AppCompatActivity {
                     finish();
                     return;
                 }
-                Kit.sheet(this, "It was not sent", delivered + " of " + total + " reached " + peer + ". " + error,
+                endsStep(Kit.sheet(this, "It was not sent", delivered + " of " + total + " reached " + peer + ". " + error,
                     new Kit.Action(R.drawable.csi_refresh, delivered == 0 ? "Try again" : "Send the rest", null,
-                        () -> sendToPeer(peer, delivered)),
-                    new Kit.Action(Kit.Icon.DEVICE, "Choose another device", null, this::chooseDevice));
+                        go(() -> sendToPeer(peer, delivered))),
+                    new Kit.Action(Kit.Icon.DEVICE, "Choose another device", null, go(this::chooseDevice))));
             });
         }, "share-send").start();
     }

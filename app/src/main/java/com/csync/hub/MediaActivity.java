@@ -459,7 +459,8 @@ public final class MediaActivity extends AppCompatActivity {
         if (kind == ItemActions.Kind.IMAGE || (kind == ItemActions.Kind.DOCUMENT && ItemActions.isPdf(name, type))) {
             Intent show = new Intent(this, ShareActivity.class).setAction(Intent.ACTION_SEND)
                 .setType(type == null ? "*/*" : type).putExtra(Intent.EXTRA_STREAM, uri)
-                .putExtra(ShareActivity.PLACE, "pi").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                .putExtra(ShareActivity.PLACE, "pi").putExtra(ShareActivity.RETURN, true)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             show.setClipData(android.content.ClipData.newUri(getContentResolver(), "File for the Pi screen", uri));
             startActivity(show);
             return;

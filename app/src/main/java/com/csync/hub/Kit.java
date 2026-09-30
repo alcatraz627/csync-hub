@@ -239,7 +239,8 @@ final class Kit {
      * Ask before something is lost or replaced. The drawer has two buttons: one keeps things
      * as they are, the other goes ahead and is named for what it does.
      */
-    static void confirm(Context c, CharSequence title, CharSequence sub, int icon, String go, Runnable run) {
+    static com.google.android.material.bottomsheet.BottomSheetDialog confirm(
+            Context c, CharSequence title, CharSequence sub, int icon, String go, Runnable run) {
         com.google.android.material.bottomsheet.BottomSheetDialog dialog =
             new com.google.android.material.bottomsheet.BottomSheetDialog(c);
         View body = LayoutInflater.from(c).inflate(R.layout.kit_sheet, null, false);
@@ -257,6 +258,7 @@ final class Kit {
         ((LinearLayout) body.findViewById(R.id.kit_rows)).addView(buttons, row);
         dialog.setContentView(scrolling(body));
         dialog.show();
+        return dialog;
     }
 
     /** An outlined button with an icon and words in one colour, as the mock draws every plain button. */
@@ -576,8 +578,8 @@ final class Kit {
     }
 
     /** An information drawer: a title and a message, closed by dragging down or tapping outside. */
-    static void sheet(Context c, CharSequence title, CharSequence message) {
-        sheet(c, title, message, new Action[0]);
+    static com.google.android.material.bottomsheet.BottomSheetDialog sheet(Context c, CharSequence title, CharSequence message) {
+        return sheet(c, title, message, new Action[0]);
     }
 
     interface Format { String of(float value); }

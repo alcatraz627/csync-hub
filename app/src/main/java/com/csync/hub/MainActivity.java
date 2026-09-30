@@ -362,6 +362,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         Rail.attach(this);
         resumed = true;
         acceptChatDraft(getIntent());
+        // A send made on the share page while this page waited underneath belongs in the list at once.
+        if (current == 1) renderSentHistory();
         ChatService.uiForeground = true;
         android.content.IntentFilter f = new android.content.IntentFilter(ChatService.ACTION_REPLY);
         androidx.core.content.ContextCompat.registerReceiver(this, chatReceiver, f,
