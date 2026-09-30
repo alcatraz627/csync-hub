@@ -68,6 +68,7 @@ public final class SearchActivity extends AppCompatActivity {
         Appearance.apply(this);
         setContentView(R.layout.activity_search);
         Appearance.edgeToEdge(this, findViewById(R.id.search_nav));
+        Rail.attach(this);
         Appearance.column(this, findViewById(R.id.search_page));
         queryView = findViewById(R.id.search_query);
         resultsView = findViewById(R.id.search_results);

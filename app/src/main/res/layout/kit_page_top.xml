@@ -2,14 +2,15 @@
 <!--
   The fixed top bar on every page: back (one level up, never anything else), the
   breadcrumb, and icon-only actions on the right. Its height never changes and it
-  never scrolls. Kit.pageTop fills the crumbs and actions.
+  never scrolls. Kit.pageTop fills the crumbs and actions. The 48dp at each side is
+  the band the quick rail's two floating buttons sit in (Rail.attach).
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/kit_top"
     android:layout_width="match_parent" android:layout_height="@dimen/kit_top_height"
     android:orientation="horizontal" android:gravity="center_vertical"
-    android:paddingStart="4dp" android:paddingEnd="4dp" android:background="@color/bg">
+    android:paddingStart="48dp" android:paddingEnd="48dp" android:background="@color/bg">
     <ImageView android:id="@+id/kit_back"
         android:layout_width="48dp" android:layout_height="48dp" android:padding="14dp"
         android:src="@drawable/csi_back" app:tint="@color/text"

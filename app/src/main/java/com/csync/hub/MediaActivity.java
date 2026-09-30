@@ -103,6 +103,7 @@ public final class MediaActivity extends AppCompatActivity {
         client = new MediaClient(Prefs.assistIp(this), Prefs.token(this));
         setContentView(R.layout.activity_media);
         Appearance.edgeToEdge(this, findViewById(R.id.media_bottom_nav));
+        Rail.attach(this);
         getOnBackPressedDispatcher().addCallback(this, backInApp);
         Kit.pullToRefresh(findViewById(R.id.media_list), () -> openTab(activeTab));
         // The list stays one column on a wide screen; the player page beside it uses the width.
@@ -199,12 +200,22 @@ public final class MediaActivity extends AppCompatActivity {
             try { keepPlaces(client.get("/v1/history").getJSONArray("entries")); } catch (Exception unreachable) { }
         }, "media-places").start();
         String searchItemId = getIntent().getStringExtra("search_item_id");
-        if (searchItemId == null) drives();
+        String openDrive = getIntent().getStringExtra("open_drive_id");
+        if (openDrive != null && !openDrive.isEmpty()) {
+            // A rail item names a folder on a drive: open straight into it.
+            firstDriveLoad = false;
+            driveId = openDrive;
+            driveLabel = getIntent().getStringExtra("open_drive_label") == null ? openDrive : getIntent().getStringExtra("open_drive_label");
+            path = getIntent().getStringExtra("open_path") == null ? "" : getIntent().getStringExtra("open_path");
+            selectTab(FILES);
+            browse();
+        } else if (searchItemId == null) drives();
         else openSearchItem(searchItemId,
             getIntent().getStringExtra("search_drive_id"),
             getIntent().getStringExtra("search_relative_path"),
             getIntent().getStringExtra("search_query"));
         if (requestedTarget != null) showFullPlayer();
+        if (getIntent().getBooleanExtra("share_screen", false)) ui.postDelayed(this::shareScreen, 300);
         Intent incoming = getIntent();
         if (Intent.ACTION_SEND.equals(incoming.getAction())) {
             Uri stream = incoming.getParcelableExtra(Intent.EXTRA_STREAM);

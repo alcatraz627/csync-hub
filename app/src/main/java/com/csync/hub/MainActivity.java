@@ -89,6 +89,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         }
         setContentView(R.layout.activity_main);
         Appearance.edgeToEdge(this, findViewById(R.id.nav));
+        Rail.attach(this);
         FrameLayout content = findViewById(R.id.content);
         LayoutInflater inf = LayoutInflater.from(this);
         pageHome = inf.inflate(R.layout.page_home_v2, content, false);
@@ -163,6 +164,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         int selected = start == 1 ? 1 : start == 2 ? 2 : start >= 3 ? 3 : 0;
         nav.setSelectedItemId(navIds[selected]);
         if (start >= 3 && start <= 5) show(start);
+        if (b == null) acceptDetail(getIntent());
         if (b != null && start == 4 && b.getInt("settings_detail") != 0)
             revealSettingsDetail(b.getInt("settings_detail"));
         if (b != null && start == 3 && b.getInt("tools_detail") != 0)
@@ -247,6 +249,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         nav.setSelectedItemId(tab == 1 ? R.id.nav_share : tab == 2 ? R.id.nav_chat :
             tab >= 3 ? R.id.nav_more : R.id.nav_home);
         show(tab);
+        acceptDetail(intent);
         acceptChatDraft(intent);
         acceptSearchDestination(intent);
         takeShareAction(intent);
@@ -276,9 +279,25 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             case "share": return 1;
             case "chat": case "chat-new": return 2;
             case "tools": return 3;
+            case "settings": return 4;
             case "camera": return 5;
             case "more": return 6;
             default: return 0;
+        }
+    }
+
+    /** A rail item can name a page inside a bar place; open that page once the place is shown. */
+    private void acceptDetail(Intent intent) {
+        String detail = intent == null ? null : intent.getStringExtra("detail");
+        if (detail == null) return;
+        intent.removeExtra("detail");
+        switch (detail) {
+            case "received": setShareMode(true); break;
+            case "process": showToolsDetail(1); break;
+            case "widgets": showToolsDetail(2); break;
+            case "update": showToolsDetail(0); AppUpdater.refreshStatus(this, toolsUpdateStatus); break;
+            case "connection": revealSettingsDetail(R.id.settings_connection_detail); break;
+            default:
         }
     }
 

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The quick rail's overlay, added over every page's content in code. -->
+    <item name="rail_overlay" type="id"/>
+</resources>

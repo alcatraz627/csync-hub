@@ -61,6 +61,7 @@ public class ShareActivity extends AppCompatActivity {
         super.onCreate(b);
         setContentView(R.layout.activity_share);
         Appearance.edgeToEdge(this, null);
+        Rail.attach(this);
         body = findViewById(R.id.share_body);
         Appearance.column(this, body);
         final Intent intent = getIntent();
