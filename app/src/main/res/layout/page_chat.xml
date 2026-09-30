@@ -153,18 +153,15 @@
                 android:paddingBottom="8dp"/>
         </ScrollView>
 
-        <!-- composer: a drag handle shows once the message outgrows two lines -->
+        <!-- The message box: one outlined card holding what is attached, the text, and a row with Add, the model and Send. -->
         <LinearLayout
+            android:id="@+id/chat_composer"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginStart="10dp" android:layout_marginEnd="10dp"
+            android:layout_marginTop="4dp" android:layout_marginBottom="8dp"
             android:orientation="vertical"
-            android:background="@color/bg">
-            <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:scrollbars="none" android:paddingStart="8dp" android:paddingEnd="8dp">
-                <com.google.android.material.chip.ChipGroup android:id="@+id/chat_attachments"
-                    android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    app:singleLine="true" android:visibility="gone"/>
-            </HorizontalScrollView>
+            android:background="@drawable/card_bg">
             <FrameLayout
                 android:id="@+id/chat_expand"
                 android:layout_width="match_parent"
@@ -173,42 +170,57 @@
                 <View android:layout_width="36dp" android:layout_height="4dp"
                     android:layout_gravity="center" android:background="@drawable/kit_handle"/>
             </FrameLayout>
+            <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:scrollbars="none" android:paddingStart="10dp" android:paddingEnd="10dp">
+                <com.google.android.material.chip.ChipGroup android:id="@+id/chat_attachments"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    app:singleLine="true" android:visibility="gone"/>
+            </HorizontalScrollView>
+            <EditText
+                android:id="@+id/chat_input"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:minHeight="48dp"
+                android:hint="Message the Pi" android:paddingStart="16dp" android:paddingEnd="16dp"
+                android:paddingTop="12dp" android:paddingBottom="4dp"
+                android:background="@null"
+                android:gravity="top|start"
+                android:inputType="textMultiLine|textCapSentences"
+                android:minLines="1"
+                android:maxLines="6"
+                android:scrollbars="vertical"
+                android:textSize="15sp"
+                android:textColor="@color/text"
+                android:textColorHint="@color/dim"/>
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:paddingStart="8dp" android:paddingEnd="8dp"
-                android:paddingTop="6dp" android:paddingBottom="6dp">
+                android:paddingStart="4dp" android:paddingEnd="6dp" android:paddingBottom="4dp">
                 <ImageView
                     android:id="@+id/chat_attach"
-                    android:layout_width="40dp" android:layout_height="40dp"
-                    android:layout_marginEnd="6dp" android:padding="10dp"
-                    android:src="@drawable/csi_plus" app:tint="@color/text"
-                    android:contentDescription="Add to message"
-                    android:background="@drawable/kit_action_bg"/>
-                <EditText
-                    android:id="@+id/chat_input"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content" android:minHeight="44dp"
-                    android:layout_weight="1"
-                    android:hint="Message the Pi" android:paddingStart="12dp" android:paddingEnd="12dp"
-                    android:paddingTop="10dp" android:paddingBottom="10dp"
-                    android:background="@drawable/card_bg"
-                    android:gravity="top|start"
-                    android:inputType="textMultiLine|textCapSentences"
-                    android:minLines="1"
-                    android:maxLines="6"
-                    android:scrollbars="vertical"
-                    android:textSize="14sp"
-                    android:textColor="@color/text"
-                    android:textColorHint="@color/dim"/>
+                    android:layout_width="48dp" android:layout_height="48dp"
+                    android:padding="13dp"
+                    android:src="@drawable/csi_plus" app:tint="@color/dim"
+                    android:contentDescription="Add to this message"
+                    android:background="?attr/selectableItemBackgroundBorderless"/>
+                <TextView
+                    android:id="@+id/chat_model_pill"
+                    android:layout_width="wrap_content" android:layout_height="36dp"
+                    android:gravity="center_vertical"
+                    android:paddingStart="12dp" android:paddingEnd="14dp"
+                    android:drawablePadding="6dp"
+                    android:textSize="12sp" android:textColor="@color/dim"
+                    android:maxLines="1"
+                    android:background="@drawable/pill_off"
+                    app:drawableStartCompat="@drawable/csi_speed" app:drawableTint="@color/dim"/>
+                <View android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1"/>
                 <ImageView
                     android:id="@+id/chat_send"
                     android:layout_width="44dp" android:layout_height="44dp"
-                    android:layout_marginStart="6dp" android:padding="12dp"
+                    android:padding="12dp"
                     android:src="@drawable/csi_send" app:tint="@color/onAccent"
-                    android:contentDescription="Send message"
+                    android:contentDescription="Send"
                     android:background="@drawable/chat_send_bg"/>
             </LinearLayout>
         </LinearLayout>

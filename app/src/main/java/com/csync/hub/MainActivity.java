@@ -111,6 +111,12 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         com.google.android.material.bottomnavigation.BottomNavigationView nav = findViewById(R.id.nav);
         nav.setBackgroundColor(col(R.color.surface));
         nav.setElevation(0f);
+        // While the keyboard is up the bar steps aside, so typing gets the whole height above the keys.
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(getWindow().getDecorView(), (v, insets) -> {
+            boolean typing = insets.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime());
+            nav.setVisibility(typing ? View.GONE : View.VISIBLE);
+            return androidx.core.view.ViewCompat.onApplyWindowInsets(v, insets);
+        });
         nav.setItemActiveIndicatorColor(android.content.res.ColorStateList.valueOf(
             androidx.core.graphics.ColorUtils.blendARGB(col(R.color.surface), accent(), 0.13f)));
         nav.setOnItemSelectedListener(item -> {
@@ -1697,7 +1703,6 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         final boolean forChat = "chat".equals(scope);
         if (forChat && chatSession == null) return;
         if (providerData == null) {
-            toast("Checking the Pi assistant");
             final String assist = Prefs.assistIp(this), token = Prefs.token(this);
             new Thread(() -> {
                 JSONObject data = null;
@@ -1991,12 +1996,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         });
         pageChat.findViewById(R.id.chat_send).setOnClickListener(v -> sendChat());
         chatBack.setOnClickListener(v -> showChatList());
-        chatSubtitle.setOnClickListener(v -> { if (chatConvoMode) openConfigDialog(); });
-        // Long-press the Chats title to open the feature roadmap the agent maintains.
-        chatTitle.setOnLongClickListener(v -> {
-            if (!chatConvoMode) openMediaModal("/media/tasks.md", "markdown", "tasks.md");
-            return true;
-        });
+        pageChat.findViewById(R.id.chat_model_pill).setOnClickListener(v -> openConfigDialog());
         chatSearch.addTextChangedListener(new android.text.TextWatcher() {
             public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
             public void onTextChanged(CharSequence s, int a, int b, int c) {}
@@ -2184,8 +2184,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             new Kit.Action(Kit.Icon.PHOTO, "Send image", "Pick a photo for the assistant to see",
                 () -> chatAttachPicker.launch(new String[]{"image/*"})),
             new Kit.Action(Kit.Icon.FILE, "Upload file", "A document or any file, saved on the Pi",
-                () -> chatAttachPicker.launch(new String[]{"*/*"})),
-            new Kit.Action(R.drawable.csi_speed, "Model and effort", configSummary(), this::openConfigDialog));
+                () -> chatAttachPicker.launch(new String[]{"*/*"})));
     }
 
     // Files waiting to go with the next message: {name, mime, path to a private cached copy}.
@@ -2287,17 +2286,19 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     private void updateConfigSubtitle() {
         chatSubtitle.setTextAppearance(R.style.Kit_Text_PageSub);
-        // The owner asked for the effort to read lighter than the model id.
+        // The model lives in the message box, next to Send, where it is chosen. The line under the title counts messages.
         String summary = configSummary();
-        android.text.SpannableString styled = new android.text.SpannableString(summary);
-        int split = summary.indexOf(" · ");
-        if (split > 0) styled.setSpan(new android.text.style.ForegroundColorSpan(
-            androidx.core.graphics.ColorUtils.setAlphaComponent(col(R.color.dim), 150)),
-            split, summary.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        chatSubtitle.setText(styled);
-        chatSubtitle.setCompoundDrawablesWithIntrinsicBounds(0, 0, R.drawable.csi_sliders, 0);
-        chatSubtitle.setCompoundDrawablePadding(dp(6));
-        chatSubtitle.setCompoundDrawableTintList(android.content.res.ColorStateList.valueOf(col(R.color.dim)));
+        ((TextView) pageChat.findViewById(R.id.chat_model_pill)).setText(
+            "Model and effort".equals(summary) ? "Model" : summary.replace(" · ", " "));
+        int said = 0;
+        JSONArray transcript = chatSession == null ? new JSONArray() : ChatStore.transcript(this, chatSession);
+        for (int i = 0; i < transcript.length(); i++) {
+            JSONObject turn = transcript.optJSONObject(i);
+            if (turn != null && ("user".equals(turn.optString("role")) || "text".equals(turn.optString("type")))) said++;
+        }
+        chatSubtitle.setText(said == 0 ? "" : said == 1 ? "1 message" : said + " messages");
+        chatSubtitle.setVisibility(said == 0 ? View.GONE : View.VISIBLE);
+        chatSubtitle.setCompoundDrawablesWithIntrinsicBounds(0, 0, 0, 0);
     }
 
     private void refreshChatConfigSubtitle() {
@@ -2409,8 +2410,11 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                 () -> { ChatStore.patch(this, id, "favorite", !fav); renderHistoryList(); }),
             new Kit.Action(R.drawable.csi_archive, archived ? "Unarchive" : "Archive", null,
                 () -> { ChatStore.patch(this, id, "archived", !archived); renderHistoryList(); }),
-            new Kit.Action(R.drawable.csi_trash, "Delete", null,
-                () -> { ChatStore.delete(this, id); renderHistoryList(); toast("Deleted"); }));
+            // Deleting cannot be undone, so it asks first in its own sheet, with a named button.
+            new Kit.Action(R.drawable.csi_trash, "Delete", null, () -> Kit.sheet(this, "Delete this conversation?", title,
+                new Kit.Action(R.drawable.csi_back, "Keep it", null, () -> { }),
+                new Kit.Action(R.drawable.csi_trash, "Delete", "It is removed from this phone",
+                    () -> { ChatStore.delete(this, id); renderHistoryList(); toast("Deleted"); }))));
     }
 
     private void openConversation(String id, String title) {
