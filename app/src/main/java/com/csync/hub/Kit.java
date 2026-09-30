@@ -415,6 +415,71 @@ final class Kit {
         dialog.show();
     }
 
+    /** A drawer a page fills itself: add views to {@code rows}, then {@code show()}. */
+    static final class Sheet {
+        final com.google.android.material.bottomsheet.BottomSheetDialog dialog;
+        final LinearLayout rows;
+        private final View body;
+        Sheet(Context c, CharSequence title, CharSequence sub) {
+            dialog = new com.google.android.material.bottomsheet.BottomSheetDialog(c);
+            body = LayoutInflater.from(c).inflate(R.layout.kit_sheet, null, false);
+            ((TextView) body.findViewById(R.id.kit_title)).setText(title);
+            setOptional(body.findViewById(R.id.kit_sub), sub);
+            rows = body.findViewById(R.id.kit_rows);
+        }
+        void show() {
+            dialog.setContentView(scrolling(body));
+            openFully(dialog);
+            dialog.show();
+        }
+    }
+
+    /**
+     * A choice among a few options in one control, drawn as a row of pills with the chosen one
+     * filled. Drawn into {@code host}, replacing what was there, so a caller redraws it by calling again.
+     */
+    static void segmented(LinearLayout host, int[] icons, String[] labels, int selected, Pick pick) {
+        Context c = host.getContext();
+        host.removeAllViews();
+        host.setOrientation(LinearLayout.HORIZONTAL);
+        android.graphics.drawable.GradientDrawable track = new android.graphics.drawable.GradientDrawable();
+        track.setColor(ContextCompat.getColor(c, R.color.surface2));
+        track.setCornerRadius(dp(c, 14));
+        host.setBackground(track);
+        host.setPadding(dp(c, 3), dp(c, 3), dp(c, 3), dp(c, 3));
+        int accent = accentText(c), dim = ContextCompat.getColor(c, R.color.dim);
+        for (int i = 0; i < labels.length; i++) {
+            boolean chosen = i == selected;
+            LinearLayout option = new LinearLayout(c);
+            option.setOrientation(LinearLayout.HORIZONTAL);
+            option.setGravity(android.view.Gravity.CENTER);
+            option.setMinimumHeight(dp(c, 42));
+            if (chosen) {
+                android.graphics.drawable.GradientDrawable fill = new android.graphics.drawable.GradientDrawable();
+                fill.setColor(androidx.core.graphics.ColorUtils.blendARGB(ContextCompat.getColor(c, R.color.surface), accent, 0.16f));
+                fill.setCornerRadius(dp(c, 11));
+                option.setBackground(fill);
+            } else option.setBackgroundResource(outValue(c));
+            if (icons != null && icons[i] != 0) {
+                ImageView symbol = new ImageView(c);
+                symbol.setImageResource(icons[i]);
+                symbol.setImageTintList(ColorStateList.valueOf(chosen ? accent : dim));
+                option.addView(symbol, new LinearLayout.LayoutParams(dp(c, 15), dp(c, 15)));
+            }
+            TextView label = new TextView(c);
+            label.setText(labels[i]);
+            label.setTextSize(13);
+            label.setTextColor(chosen ? accent : dim);
+            label.setTypeface(null, chosen ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+            label.setPadding(dp(c, 6), 0, 0, 0);
+            option.addView(label);
+            option.setContentDescription(labels[i] + (chosen ? ", selected" : ""));
+            int index = i;
+            option.setOnClickListener(v -> { if (index != selected) pick.at(index); });
+            host.addView(option, new LinearLayout.LayoutParams(0, -2, 1));
+        }
+    }
+
     interface Typed { void text(String words); }
 
     /**

@@ -860,11 +860,79 @@ public final class MediaActivity extends AppCompatActivity {
         }, "media-note-show").start();
     }
 
-    /** The cover as it is now, with the way to choose another. */
+    /**
+     * The cover as it is now, how it is framed on the screen in use, and the way to choose
+     * another. Fit and Rotate are kept on the Pi with that screen, so a projector and a
+     * monitor each remember their own.
+     */
     private void coverSheet() {
-        Kit.pictureSheet(this, "Cover image",
-            coverStored ? "Shown when nothing is playing" : "No cover is saved. The screen is blank when nothing is playing.",
-            coverPicture, R.drawable.csi_plus, "Choose an image", () -> wallpaperPicker.launch("image/*"));
+        new Thread(() -> {
+            JSONObject screen = DisplaySheet.screenInUse(client);
+            ui.post(() -> { if (screenActive) drawCoverSheet(screen); });
+        }, "media-cover-sheet").start();
+    }
+
+    private static final String[] FITS = {"cover", "contain", "stretch"};
+
+    private void drawCoverSheet(JSONObject screen) {
+        JSONObject kept = screen == null ? null : screen.optJSONObject("settings");
+        String fit = kept == null ? "cover" : kept.optString("coverFit", "cover");
+        int turn = kept == null ? 0 : kept.optInt("coverRotate");
+        Kit.Sheet sheet = new Kit.Sheet(this, "Cover image",
+            coverStored ? "Shown when nothing is playing" : "No cover is saved. The screen is blank when nothing is playing.");
+        if (coverPicture != null) {
+            android.widget.ImageView picture = new android.widget.ImageView(this);
+            // The picture itself is turned, so the preview stays inside its frame whichever way it faces.
+            android.graphics.Matrix quarter = new android.graphics.Matrix();
+            quarter.postRotate(turn);
+            picture.setImageBitmap(turn == 0 ? coverPicture : Bitmap.createBitmap(coverPicture, 0, 0,
+                coverPicture.getWidth(), coverPicture.getHeight(), quarter, true));
+            picture.setScaleType(fit.equals("stretch") ? android.widget.ImageView.ScaleType.FIT_XY
+                : fit.equals("contain") ? android.widget.ImageView.ScaleType.FIT_CENTER
+                : android.widget.ImageView.ScaleType.CENTER_CROP);
+            picture.setBackgroundResource(R.drawable.player_poster_bg);
+            picture.setClipToOutline(true);
+            picture.setContentDescription("The cover, framed as the Pi screen shows it");
+            sheet.rows.addView(picture, new LinearLayout.LayoutParams(-1, dp(190)));
+        }
+        if (screen != null) {
+            Kit.label(sheet.rows, "Fit on " + screen.optString("name", "the Pi screen"));
+            LinearLayout fits = new LinearLayout(this);
+            sheet.rows.addView(fits, new LinearLayout.LayoutParams(-1, -2));
+            Kit.segmented(fits, new int[]{R.drawable.csi_expand, R.drawable.csi_fit, Kit.Icon.DISPLAY},
+                new String[]{"Cover", "Contain", "Stretch"}, java.util.Arrays.asList(FITS).indexOf(fit),
+                index -> saveCoverFraming(sheet, screen, "coverFit", FITS[index]));
+            LinearLayout group = Kit.group(sheet.rows);
+            ((LinearLayout.LayoutParams) group.getLayoutParams()).topMargin = dp(12);
+            View rotate = Kit.addRow(group);
+            Kit.bindRow(rotate, Kit.Icon.ROTATE, "Rotate", "A quarter turn each tap", turn + "°", false);
+            rotate.setOnClickListener(v -> saveCoverFraming(sheet, screen, "coverRotate", (turn + 90) % 360));
+        }
+        LinearLayout.LayoutParams below = new LinearLayout.LayoutParams(-1, -2);
+        below.topMargin = dp(12);
+        sheet.rows.addView(Kit.button(this, R.drawable.csi_plus, "Choose an image", R.color.text, () -> {
+            sheet.dialog.dismiss();
+            wallpaperPicker.launch("image/*");
+        }), below);
+        sheet.show();
+    }
+
+    /** Send one framing change to the Pi and redraw the sheet from what it kept. */
+    private void saveCoverFraming(Kit.Sheet sheet, JSONObject screen, String setting, Object value) {
+        new Thread(() -> {
+            JSONObject after = null;
+            try {
+                after = client.put("/v1/displays/" + MediaClient.enc(screen.optString("id")),
+                    new JSONObject().put("settings", new JSONObject().put(setting, value))).optJSONObject("display");
+            } catch (Exception refused) { }
+            JSONObject saved = after;
+            ui.post(() -> {
+                if (!screenActive) return;
+                sheet.dialog.dismiss();
+                if (saved == null) Kit.sheet(this, "It was not saved", "The Pi did not take the change. Nothing was altered.");
+                else drawCoverSheet(saved);
+            });
+        }, "media-cover-save").start();
     }
 
     private void hideKeyboard() {
@@ -1535,7 +1603,8 @@ public final class MediaActivity extends AppCompatActivity {
     }
 
     @Override public void onBackPressed() {
-        if (videoMode) exitVideoMode();
+        // Full screen is a mode of the player page, so Back returns to that page, not past it.
+        if (videoMode) { exitVideoMode(); showFullPlayer(); }
         else if (fullPlayer) closeFullPlayer();
         else super.onBackPressed();
     }
@@ -1762,6 +1831,8 @@ public final class MediaActivity extends AppCompatActivity {
             PhonePlaybackService playback = PhonePlaybackService.current;
             if (playback != null && playback.hasPlayer() && !seeking) {
                 findViewById(R.id.media_player_controls).setVisibility(fullPlayer ? View.GONE : View.VISIBLE);
+                for (int id : new int[]{R.id.media_stop, R.id.media_mute, R.id.media_settings})
+                    findViewById(id).setVisibility(View.VISIBLE);
                 String phoneState = playback.playbackState();
                 findViewById(R.id.media_pause).setVisibility(phoneState.equals("playing") ? View.VISIBLE : View.GONE);
                 findViewById(R.id.media_resume).setVisibility(phoneState.equals("paused") ? View.VISIBLE : View.GONE);
