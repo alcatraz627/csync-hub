@@ -254,6 +254,92 @@ final class Kit {
         return button;
     }
 
+    /** The one filled button a page may carry, for Send, Save, Install or Create. */
+    static View primaryButton(Context c, int icon, String words, Runnable click) {
+        View button = button(c, icon, words, R.color.onAccent, click);
+        android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
+        shape.setColor(accentFill(c));
+        shape.setCornerRadius(dp(c, 14));
+        button.setBackground(shape);
+        return button;
+    }
+
+    interface Pick { void at(int index); }
+
+    /**
+     * Views of one place, side by side, with a line under the chosen one. The strip is drawn
+     * into {@code host}, replacing what was there, so a caller redraws it by calling again.
+     */
+    static void tabs(LinearLayout host, int[] icons, String[] labels, int selected, Pick pick) {
+        Context c = host.getContext();
+        host.removeAllViews();
+        host.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout strip = new LinearLayout(c);
+        strip.setOrientation(LinearLayout.HORIZONTAL);
+        int accent = accentText(c), dim = ContextCompat.getColor(c, R.color.dim);
+        for (int i = 0; i < labels.length; i++) {
+            boolean chosen = i == selected;
+            LinearLayout tab = new LinearLayout(c);
+            tab.setOrientation(LinearLayout.HORIZONTAL);
+            tab.setGravity(android.view.Gravity.CENTER);
+            tab.setMinimumHeight(dp(c, 48));
+            ImageView symbol = new ImageView(c);
+            symbol.setImageResource(icons[i]);
+            symbol.setImageTintList(ColorStateList.valueOf(chosen ? accent : dim));
+            tab.addView(symbol, new LinearLayout.LayoutParams(dp(c, 16), dp(c, 16)));
+            TextView label = new TextView(c);
+            label.setText(labels[i]);
+            label.setTextSize(13);
+            label.setTextColor(chosen ? accent : dim);
+            label.setTypeface(null, chosen ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+            label.setPadding(dp(c, 7), 0, 0, 0);
+            tab.addView(label);
+            if (chosen) tab.setBackground(underline(c, accent));
+            else tab.setBackgroundResource(outValue(c));
+            tab.setContentDescription(labels[i] + (chosen ? ", selected" : ""));
+            int index = i;
+            tab.setOnClickListener(v -> { if (index != selected) pick.at(index); });
+            strip.addView(tab, new LinearLayout.LayoutParams(0, -2, 1));
+        }
+        host.addView(strip, new LinearLayout.LayoutParams(-1, -2));
+        View line = new View(c);
+        line.setBackgroundColor(ContextCompat.getColor(c, R.color.border));
+        host.addView(line, new LinearLayout.LayoutParams(-1, dp(c, 1)));
+    }
+
+    /** What a page shows when it has nothing: a symbol, one line that says so, one that says why, and a way forward. */
+    static void empty(ViewGroup parent, int icon, String title, String text, View action) {
+        Context c = parent.getContext();
+        LinearLayout box = new LinearLayout(c);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
+        box.setPadding(dp(c, 16), dp(c, 40), dp(c, 16), dp(c, 16));
+        ImageView symbol = new ImageView(c);
+        symbol.setImageResource(icon);
+        symbol.setImageTintList(ColorStateList.valueOf(ContextCompat.getColor(c, R.color.dim)));
+        box.addView(symbol, new LinearLayout.LayoutParams(dp(c, 30), dp(c, 30)));
+        TextView heading = new TextView(c);
+        heading.setTextAppearance(R.style.Kit_Text_RowTitle);
+        heading.setText(title);
+        heading.setGravity(android.view.Gravity.CENTER);
+        heading.setPadding(0, dp(c, 12), 0, 0);
+        box.addView(heading);
+        if (text != null && !text.isEmpty()) {
+            TextView words = new TextView(c);
+            words.setTextAppearance(R.style.Kit_Text_RowSub);
+            words.setText(text);
+            words.setGravity(android.view.Gravity.CENTER);
+            words.setPadding(0, dp(c, 4), 0, 0);
+            box.addView(words);
+        }
+        if (action != null) {
+            LinearLayout.LayoutParams below = new LinearLayout.LayoutParams(-2, -2);
+            below.topMargin = dp(c, 16);
+            box.addView(action, below);
+        }
+        parent.addView(box, new LinearLayout.LayoutParams(-1, -2));
+    }
+
     /** A drawer that shows one picture, for looking at an image without leaving the page. */
     static void pictureSheet(Context c, CharSequence title, android.graphics.Bitmap picture) {
         com.google.android.material.bottomsheet.BottomSheetDialog dialog =
