@@ -2802,15 +2802,70 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         final String text = md == null ? "" : md;
         LinearLayout box = new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL);
         box.setBackground(bg(col(R.color.surface2), 16)); box.setPadding(dp(13), dp(11), dp(13), dp(11));
-        TextView tv = new TextView(this); markwon.setMarkdown(tv, text);
-        tv.setTextColor(col(R.color.text)); tv.setTextSize(14); tv.setLineSpacing(0, 1.2f);
-        tv.setTextIsSelectable(true);
-        tv.setMovementMethod(android.text.method.LinkMovementMethod.getInstance());
-        box.addView(tv);
-        onMessageTap(tv, () -> showMessageActions(box, text, transcriptIndex, false));
+        // Prose and code are drawn apart: code keeps its line breaks, scrolls sideways and has its own Copy.
+        String[] pieces = text.split("```", -1);
+        for (int i = 0; i < pieces.length; i++) {
+            boolean code = i % 2 == 1 && i < pieces.length - 1;
+            String piece = i % 2 == 1 && !code ? "```" + pieces[i] : pieces[i];
+            if (piece.trim().isEmpty()) continue;
+            if (code) { box.addView(codeBlock(piece)); continue; }
+            TextView tv = new TextView(this); markwon.setMarkdown(tv, piece.trim());
+            tv.setTextColor(col(R.color.text)); tv.setTextSize(14); tv.setLineSpacing(0, 1.2f);
+            tv.setTextIsSelectable(true);
+            tv.setMovementMethod(android.text.method.LinkMovementMethod.getInstance());
+            box.addView(tv);
+            onMessageTap(tv, () -> showMessageActions(box, text, transcriptIndex, false));
+        }
         box.setOnClickListener(v -> showMessageActions(box, text, transcriptIndex, false));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         lp.gravity = android.view.Gravity.START; lp.topMargin = dp(12); box.setLayoutParams(lp); chatList.addView(box);
+    }
+
+    /**
+     * One fenced block from a reply: the language and a Copy button on top, the code under it,
+     * coloured and scrolling sideways so a long line is never wrapped mid-word.
+     */
+    private View codeBlock(String fenced) {
+        int firstBreak = fenced.indexOf('\n');
+        String language = firstBreak < 0 ? "" : fenced.substring(0, firstBreak).trim();
+        final String code = (firstBreak < 0 ? fenced : fenced.substring(firstBreak + 1)).replaceAll("\\s+$", "");
+        LinearLayout block = new LinearLayout(this);
+        block.setOrientation(LinearLayout.VERTICAL);
+        block.setBackground(bg(col(R.color.bg), 10));
+        LinearLayout head = new LinearLayout(this);
+        head.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        head.setPadding(dp(12), 0, 0, 0);
+        TextView name = new TextView(this);
+        name.setText(language.isEmpty() ? "Code" : language);
+        name.setTextColor(col(R.color.dim));
+        name.setTextSize(12);
+        head.addView(name, new LinearLayout.LayoutParams(0, -2, 1f));
+        android.widget.ImageView copy = new android.widget.ImageView(this);
+        copy.setImageResource(R.drawable.csi_copy);
+        copy.setColorFilter(col(R.color.dim));
+        copy.setPadding(dp(14), dp(14), dp(14), dp(14));
+        copy.setContentDescription("Copy this code");
+        copy.setBackgroundResource(android.R.drawable.list_selector_background);
+        copy.setOnClickListener(v -> { copyText(code); toast("Copied"); });
+        head.addView(copy, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        block.addView(head);
+        android.widget.HorizontalScrollView across = new android.widget.HorizontalScrollView(this);
+        across.setHorizontalScrollBarEnabled(false);
+        TextView body = new TextView(this);
+        body.setTypeface(android.graphics.Typeface.MONOSPACE);
+        body.setTextSize(12.5f);
+        body.setTextColor(col(R.color.text));
+        body.setTextIsSelectable(true);
+        body.setPadding(dp(12), 0, dp(12), dp(12));
+        // Set as plain text: the block is its own card, and the markdown renderer would draw a second box inside it.
+        body.setText(code);
+        across.addView(body);
+        block.addView(across);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.topMargin = dp(8);
+        lp.bottomMargin = dp(8);
+        block.setLayoutParams(lp);
+        return block;
     }
 
     /**
