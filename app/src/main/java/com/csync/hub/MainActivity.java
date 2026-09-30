@@ -2892,7 +2892,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             else addResultCard(toolName, res);
         } else if ("text".equals(type)) {
             closeWork();
-            addMarkdown(t.optString("text"), transcriptIndex);
+            // A reply stopped before its first word has nothing to show but the note that it was stopped.
+            if (!t.optString("text").isEmpty()) addMarkdown(t.optString("text"), transcriptIndex);
             if (t.optBoolean("stopped")) {
                 TextView note = new TextView(this);
                 note.setText("Stopped before it finished");
@@ -3274,6 +3275,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         chatList.addView(actions, chatList.indexOfChild(bubble) + 1);
         selectedMessageActions = actions;
         selectedMessageBubble = bubble;
+        // Under the newest message the row would open below the edge of the screen, so bring it into view.
+        actions.post(() -> actions.requestRectangleOnScreen(
+            new android.graphics.Rect(0, 0, actions.getWidth(), actions.getHeight()), false));
     }
 
     /** "1,204 in, 388 out · 6.2 s · gpt-6.1-sol", leaving out whatever the provider did not report. */
