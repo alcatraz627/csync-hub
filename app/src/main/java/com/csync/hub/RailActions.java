@@ -135,14 +135,14 @@ final class RailActions {
             case "widgets": main(a, "tools", "widgets"); return;
             case "connection": main(a, "settings", "connection"); return;
             case "update": main(a, "tools", "update"); return;
-            case "search": a.startActivity(new Intent(a, SearchActivity.class)); return;
-            case "notes": a.startActivity(new Intent(a, NotesActivity.class)); return;
-            case "media": a.startActivity(new Intent(a, MediaActivity.class)); return;
+            case "search": jump(a, new Intent(a, SearchActivity.class)); return;
+            case "notes": jump(a, new Intent(a, NotesActivity.class)); return;
+            case "media": jump(a, new Intent(a, MediaActivity.class)); return;
             case "pi-screen":
-                a.startActivity(new Intent(a, MediaActivity.class).putExtra("player_target", "pi"));
+                jump(a, new Intent(a, MediaActivity.class).putExtra("player_target", "pi"));
                 return;
             case "folder":
-                a.startActivity(new Intent(a, MediaActivity.class)
+                jump(a, new Intent(a, MediaActivity.class)
                     .putExtra("open_drive_id", action.optString("driveId"))
                     .putExtra("open_drive_label", action.optString("driveLabel"))
                     .putExtra("open_path", action.optString("path")));
@@ -150,10 +150,18 @@ final class RailActions {
             case "pi-stop": pi(a, "/v1/player/pi/immediate", "{\"action\":\"stop\"}", "The Pi screen is stopped"); return;
             case "pi-camera-show": pi(a, "/v1/display/camera", null, "The Pi camera is on the Pi screen"); return;
             case "screen-share":
-                a.startActivity(new Intent(a, MediaActivity.class).putExtra("player_target", "pi").putExtra("share_screen", true));
+                jump(a, new Intent(a, MediaActivity.class).putExtra("player_target", "pi").putExtra("share_screen", true));
                 return;
             default:
         }
+    }
+
+    /**
+     * Open one of the pages that live in their own activity. A rail item is a jump, never a second
+     * copy: if that page is already open underneath, it is restarted with this intent instead.
+     */
+    private static void jump(Activity a, Intent open) {
+        a.startActivity(open.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP));
     }
 
     private static void main(Activity a, String destination, String detail) {
