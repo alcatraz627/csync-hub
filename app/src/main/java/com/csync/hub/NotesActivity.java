@@ -1128,6 +1128,11 @@ public final class NotesActivity extends AppCompatActivity {
     // back preview runs and leaves Notes.
     private View pageView() { return root; }
 
+    @Override protected void onResume() {
+        super.onResume();
+        Rail.attach(this);
+    }
+
     private final androidx.activity.OnBackPressedCallback backInApp = new androidx.activity.OnBackPressedCallback(false) {
         @Override public void handleOnBackProgressed(androidx.activity.BackEventCompat event) {
             Kit.peekBack(pageView(), event.getProgress());

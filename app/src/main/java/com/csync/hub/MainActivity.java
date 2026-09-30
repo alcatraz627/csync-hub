@@ -355,6 +355,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        Rail.attach(this);
         resumed = true;
         acceptChatDraft(getIntent());
         ChatService.uiForeground = true;
@@ -1026,6 +1027,116 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             android.content.res.ColorStateList.valueOf(android.graphics.Color.WHITE));
         custom.setOnClickListener(v -> showCustomAccentPicker());
         renderIconChoices();
+        renderRailSettings();
+    }
+
+    /** Two rows under Appearance: what bar 1 holds, in order, and the one action on the right. */
+    private void renderRailSettings() {
+        LinearLayout host = pageSettings.findViewById(R.id.set_rail_body);
+        host.removeAllViews();
+        LinearLayout group = Kit.group(host);
+        java.util.List<org.json.JSONObject> rail = RailActions.rail(this);
+        StringBuilder names = new StringBuilder();
+        for (org.json.JSONObject item : rail) names.append(names.length() == 0 ? "" : ", ").append(item.optString("label"));
+        Kit.bindRow(Kit.addRow(group), R.drawable.csi_menu, "Bar 1, top left",
+            rail.isEmpty() ? "Nothing yet. The first item is one tap; the rest open on a pull down" : names,
+            rail.isEmpty() ? null : rail.size() + (rail.size() == 1 ? " item" : " items"), true)
+            .setOnClickListener(v -> railSheet());
+        org.json.JSONObject slot = RailActions.slot(this);
+        Kit.bindRow(Kit.addRow(group), RailActions.icon(slot.optString("id")), "Button, top right", "One tap",
+            slot.optString("label"), true).setOnClickListener(v -> slotSheet());
+    }
+
+    /** Every action the catalog knows, ticked when it is on bar 1; a tap adds it at the end or takes it out. */
+    private void railSheet() {
+        java.util.List<org.json.JSONObject> rail = RailActions.rail(this);
+        java.util.List<Kit.Section> sections = new java.util.ArrayList<>();
+        String group = null;
+        java.util.List<Kit.Action> rows = null;
+        for (String[] entry : RailActions.CATALOG) {
+            if (!entry[0].equals(group)) {
+                if (rows != null) sections.add(new Kit.Section(group, rows));
+                group = entry[0];
+                rows = new java.util.ArrayList<>();
+            }
+            org.json.JSONObject action = RailActions.fixed(entry[1]);
+            int at = indexOf(rail, action);
+            rows.add(new Kit.Action(RailActions.icon(entry[1]), entry[2], null, () -> {
+                java.util.List<org.json.JSONObject> now = RailActions.rail(this);
+                int here = indexOf(now, action);
+                if (here >= 0) now.remove(here); else now.add(action);
+                RailActions.saveRail(this, now);
+                renderRailSettings();
+                railSheet();
+            }).value(at >= 0 ? "On, " + (at + 1) : null));
+        }
+        if (rows != null) sections.add(new Kit.Section(group, rows));
+        java.util.List<Kit.Action> more = new java.util.ArrayList<>();
+        for (org.json.JSONObject item : rail)
+            if ("folder".equals(item.optString("id")))
+                more.add(new Kit.Action(Kit.Icon.FOLDER, item.optString("label"), item.optString("driveLabel") + " / " + item.optString("path"), () -> {
+                    java.util.List<org.json.JSONObject> now = RailActions.rail(this);
+                    int here = indexOf(now, item);
+                    if (here >= 0) now.remove(here);
+                    RailActions.saveRail(this, now);
+                    renderRailSettings();
+                    railSheet();
+                }).value("On, " + (indexOf(rail, item) + 1)));
+        more.add(new Kit.Action(Kit.Icon.FOLDER, "A folder on a drive", "Opens Media inside that folder", this::railFolderSheet, true));
+        if (!rail.isEmpty()) more.add(new Kit.Action(R.drawable.csi_trash, "Clear bar 1", null, () -> {
+            RailActions.saveRail(this, new java.util.ArrayList<>());
+            renderRailSettings();
+        }));
+        sections.add(new Kit.Section("Folders and more", more));
+        Kit.sheet(this, "Bar 1", "Tap to add at the end, or to take out. The order is the order you added them.", sections);
+    }
+
+    /** Pick the drive, then type the folder's path inside it. */
+    private void railFolderSheet() {
+        String host = Prefs.assistIp(this), token = Prefs.token(this);
+        if (host.isEmpty() || token.isEmpty()) { toast("Connect the Pi first"); return; }
+        new Thread(() -> {
+            java.util.List<Kit.Action> drives = new java.util.ArrayList<>();
+            try {
+                org.json.JSONArray listed = new MediaClient(host, token).get("/v1/drives").getJSONArray("drives");
+                for (int i = 0; i < listed.length(); i++) {
+                    org.json.JSONObject drive = listed.getJSONObject(i);
+                    String id = drive.optString("id"), label = drive.optString("label", id);
+                    drives.add(new Kit.Action(Kit.Icon.FOLDER, label, drive.optBoolean("online") ? "Connected" : "Not connected", () ->
+                        Kit.fieldSheet(this, "Folder on " + label, "The path inside the drive, or nothing for its top", "media/films", null,
+                            Kit.Icon.FOLDER, "Add", path -> {
+                                java.util.List<org.json.JSONObject> now = RailActions.rail(this);
+                                now.add(RailActions.folder(id, label, path.trim().replaceAll("^/+|/+$", "")));
+                                RailActions.saveRail(this, now);
+                                renderRailSettings();
+                            }), true));
+                }
+            } catch (Exception unreachable) { }
+            ui.post(() -> {
+                if (drives.isEmpty()) { toast("The Pi did not list its drives"); return; }
+                Kit.sheet(this, "Which drive", null, java.util.Collections.singletonList(new Kit.Section(null, drives)));
+            });
+        }, "rail-drives").start();
+    }
+
+    /** The one action on the right: any fixed action, the theme switch by default. */
+    private void slotSheet() {
+        java.util.List<Kit.Action> rows = new java.util.ArrayList<>();
+        org.json.JSONObject now = RailActions.slot(this);
+        for (String[] entry : RailActions.CATALOG) {
+            org.json.JSONObject action = RailActions.fixed(entry[1]);
+            rows.add(new Kit.Action(RailActions.icon(entry[1]), entry[2], entry[0], () -> {
+                RailActions.saveSlot(this, action);
+                renderRailSettings();
+                recreate();
+            }).value(RailActions.same(now, action) ? "Now" : null));
+        }
+        Kit.sheet(this, "Button, top right", "One action, one tap.", java.util.Collections.singletonList(new Kit.Section(null, rows)));
+    }
+
+    private static int indexOf(java.util.List<org.json.JSONObject> list, org.json.JSONObject action) {
+        for (int i = 0; i < list.size(); i++) if (RailActions.same(list.get(i), action)) return i;
+        return -1;
     }
 
     /** The row of launcher icons under Appearance. The chosen one carries a ring and its name in the accent. */

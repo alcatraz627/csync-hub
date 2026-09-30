@@ -34,10 +34,13 @@ final class Rail {
     private static final int CHIP_DP = 44;
     private static final int OPEN_DRAG_DP = 28;
 
+    /** Draw the buttons over the page; called on create and on resume, so Settings' picks show at once. */
     static void attach(Activity a) {
         ViewGroup content = a.findViewById(android.R.id.content);
         View root = content.getChildAt(0);
-        if (root == null || content.findViewById(R.id.rail_overlay) != null) return;
+        if (root == null) return;
+        View old = content.findViewById(R.id.rail_overlay);
+        if (old != null) content.removeView(old);
         FrameLayout overlay = new FrameLayout(a);
         overlay.setId(R.id.rail_overlay);
         overlay.setClipChildren(false);
@@ -52,6 +55,8 @@ final class Rail {
         });
         overlay.addView(bar1(a, overlay), new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START));
         overlay.addView(slot(a), new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END));
+        // Added after the window's insets went round, the overlay asks for them itself.
+        androidx.core.view.ViewCompat.requestApplyInsets(overlay);
     }
 
     /** A translucent round button the page shows through. */

@@ -96,6 +96,11 @@ public class ShareActivity extends AppCompatActivity {
         if (place != null) go(place);
     }
 
+    @Override protected void onResume() {
+        super.onResume();
+        Rail.attach(this);
+    }
+
     /** Send the item to the place that was chosen before this page opened. */
     private void go(String place) {
         switch (place) {

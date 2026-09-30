@@ -257,6 +257,11 @@ public final class MediaActivity extends AppCompatActivity {
     // Whether the player page is laid out as two panes; Media keeps its instance across rotation.
     private boolean twoPane;
 
+    @Override protected void onResume() {
+        super.onResume();
+        Rail.attach(this);
+    }
+
     @Override public void onConfigurationChanged(android.content.res.Configuration config) {
         super.onConfigurationChanged(config);
         layoutPlayerForWidth();

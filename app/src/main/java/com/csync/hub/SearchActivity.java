@@ -115,6 +115,7 @@ public final class SearchActivity extends AppCompatActivity {
 
     @Override protected void onResume() {
         super.onResume();
+        Rail.attach(this);
         scheduleSearch();
     }
 
