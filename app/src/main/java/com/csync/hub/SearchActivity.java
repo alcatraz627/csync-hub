@@ -2,23 +2,17 @@ package com.csync.hub;
 
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.Editable;
 import android.text.TextWatcher;
-import android.view.Gravity;
 import android.view.View;
 import android.widget.EditText;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
-
-import com.google.android.material.color.MaterialColors;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -40,7 +34,6 @@ public final class SearchActivity extends AppCompatActivity {
     private final ExecutorService worker = Executors.newFixedThreadPool(2);
     private final List<Result> local = new ArrayList<>();
     private final List<Result> media = new ArrayList<>();
-    private final List<TextView> scopeViews = new ArrayList<>();
     private EditText queryView;
     private LinearLayout resultsView;
     private TextView countView, sourceView;
@@ -84,31 +77,6 @@ public final class SearchActivity extends AppCompatActivity {
             new Kit.Crumb(Kit.Icon.HOME, "Home", this::finish), new Kit.Crumb(Kit.Icon.SEARCH, "Search", null));
         clearView.setOnClickListener(v -> queryView.setText(""));
 
-        LinearLayout tabs = findViewById(R.id.search_scopes);
-        for (int i = 0; i < SCOPES.length; i++) {
-            final String target = SCOPES[i];
-            LinearLayout tab = new LinearLayout(this);
-            tab.setGravity(Gravity.CENTER);
-            tab.setMinimumHeight(dp(42));
-            tab.setPadding(dp(8), 0, dp(8), 0);
-            ImageView icon = new ImageView(this);
-            icon.setImageResource(SCOPE_ICONS[i]);
-            icon.setColorFilter(color(R.color.dim));
-            icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-            tab.addView(icon, new LinearLayout.LayoutParams(dp(15), dp(15)));
-            TextView label = new TextView(this);
-            label.setText(target);
-            label.setTextSize(11);
-            label.setTypeface(null, Typeface.BOLD);
-            label.setTextColor(color(R.color.dim));
-            LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(-2, -2);
-            labelParams.leftMargin = dp(4);
-            tab.addView(label, labelParams);
-            tab.setContentDescription(target + " search results");
-            tab.setOnClickListener(v -> { scope = target; render(); });
-            tabs.addView(tab);
-            scopeViews.add(label);
-        }
         queryView.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
@@ -216,7 +184,7 @@ public final class SearchActivity extends AppCompatActivity {
             if (files == null) continue;
             for (File file : files) {
                 if (!file.isFile()) continue;
-                String subtitle = "Inbox · received from " + sender.getName();
+                String subtitle = "Received · from " + sender.getName();
                 if (matches(needle, file.getName(), subtitle)) local.add(new Result("Files",
                     file.getName(), subtitle, R.drawable.csi_file,
                     file.getAbsolutePath(), "", ""));
@@ -248,8 +216,13 @@ public final class SearchActivity extends AppCompatActivity {
                 String mime = item.optString("mime");
                 String drive = item.optString("driveId");
                 String path = item.optString("relativePath");
-                found.add(new Result("Media", item.optString("name"),
-                    "Pi media · " + drive + (path.isEmpty() ? "" : " · " + path),
+                // The row reads like Media's own: the cleaned name, then the drive and the folder it is in.
+                int slash = path.lastIndexOf('/');
+                String folder = slash > 0 ? path.substring(0, slash) : "";
+                slash = folder.lastIndexOf('/');
+                if (slash >= 0) folder = folder.substring(slash + 1);
+                found.add(new Result("Media", MediaActivity.displayMediaName(item.optString("name")),
+                    "Pi media · " + drive + (folder.isEmpty() ? "" : " · " + folder),
                     mime.startsWith("video/") ? R.drawable.csi_video :
                     mime.startsWith("image/") ? R.drawable.csi_photo : R.drawable.csi_file,
                     item.optString("id"), drive, path));
@@ -326,18 +299,9 @@ public final class SearchActivity extends AppCompatActivity {
     }
 
     private void render() {
-        int accent = MaterialColors.getColor(this, com.google.android.material.R.attr.colorPrimary,
-            color(R.color.coral));
-        LinearLayout tabs = findViewById(R.id.search_scopes);
-        for (int i = 0; i < scopeViews.size(); i++) {
-            boolean selected = SCOPES[i].equals(scope);
-            LinearLayout tab = (LinearLayout) tabs.getChildAt(i);
-            TextView label = scopeViews.get(i);
-            label.setTextColor(selected ? Kit.accentText(this) : color(R.color.dim));
-            ((ImageView) tab.getChildAt(0)).setColorFilter(selected ? accent : color(R.color.dim));
-            tab.setBackground(selected ? shape(color(R.color.surface), 9) : null);
-            tab.setSelected(selected);
-        }
+        // The same tab strip Media uses for its views; the mock draws both with one part.
+        Kit.tabs(findViewById(R.id.search_scopes), SCOPE_ICONS, SCOPES,
+            java.util.Arrays.asList(SCOPES).indexOf(scope), i -> { scope = SCOPES[i]; render(); });
 
         List<Result> visible = new ArrayList<>();
         if ("All".equals(scope) || "Media".equals(scope)) visible.addAll(media);
@@ -358,7 +322,10 @@ public final class SearchActivity extends AppCompatActivity {
                 "All".equals(scope) ? null : Kit.button(this, R.drawable.csi_menu, "Search everything", R.color.text,
                     () -> { scope = "All"; render(); }));
         } else {
-            for (Result result : visible) addRow(result);
+            LinearLayout group = Kit.group(resultsView);
+            for (Result result : visible)
+                Kit.bindRow(Kit.addRow(group), result.icon, result.title, result.subtitle, null, true)
+                    .setOnClickListener(v -> openResult(result));
         }
         String status = (mediaLoading && ("All".equals(scope) || "Media".equals(scope)) ?
             "Searching Pi media\n" : "") +
@@ -368,49 +335,6 @@ public final class SearchActivity extends AppCompatActivity {
             (("All".equals(scope) || "Devices".equals(scope)) ? peersState : "");
         sourceView.setText(status.trim());
         sourceView.setVisibility(status.trim().isEmpty() ? View.GONE : View.VISIBLE);
-    }
-
-    private void addRow(Result result) {
-        LinearLayout row = new LinearLayout(this);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setMinimumHeight(dp(68));
-        row.setPadding(dp(12), dp(8), dp(10), dp(8));
-        row.setBackgroundResource(android.R.drawable.list_selector_background);
-        ImageView icon = new ImageView(this);
-        icon.setImageResource(result.icon);
-        icon.setColorFilter(MaterialColors.getColor(this,
-            com.google.android.material.R.attr.colorPrimary, color(R.color.coral)));
-        icon.setPadding(dp(8), dp(8), dp(8), dp(8));
-        icon.setBackground(shape(color(R.color.nav_indicator), 10));
-        icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        row.addView(icon, new LinearLayout.LayoutParams(dp(36), dp(36)));
-        LinearLayout copy = new LinearLayout(this);
-        copy.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout.LayoutParams copyParams = new LinearLayout.LayoutParams(0, -2, 1);
-        copyParams.leftMargin = dp(10);
-        row.addView(copy, copyParams);
-        TextView title = new TextView(this);
-        title.setText(result.title);
-        title.setTextSize(14);
-        title.setTextColor(color(R.color.text));
-        title.setTypeface(null, Typeface.BOLD);
-        copy.addView(title);
-        TextView subtitle = new TextView(this);
-        subtitle.setText(result.subtitle);
-        subtitle.setTextSize(11);
-        subtitle.setTextColor(color(R.color.dim));
-        copy.addView(subtitle);
-        ImageView arrow = new ImageView(this);
-        arrow.setImageResource(R.drawable.csi_forward);
-        arrow.setColorFilter(color(R.color.dim));
-        arrow.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        row.addView(arrow, new LinearLayout.LayoutParams(dp(16), dp(16)));
-        row.setContentDescription(result.title + ", " + result.subtitle);
-        row.setOnClickListener(v -> openResult(result));
-        resultsView.addView(row);
-        View divider = new View(this);
-        divider.setBackgroundColor(color(R.color.border));
-        resultsView.addView(divider, new LinearLayout.LayoutParams(-1, dp(1)));
     }
 
     private void openResult(Result result) {
@@ -443,13 +367,6 @@ public final class SearchActivity extends AppCompatActivity {
     private static boolean matches(String needle, String title, String subtitle) {
         return title.toLowerCase(Locale.ROOT).contains(needle) ||
             subtitle.toLowerCase(Locale.ROOT).contains(needle);
-    }
-
-    private GradientDrawable shape(int fill, int radius) {
-        GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(fill);
-        drawable.setCornerRadius(dp(radius));
-        return drawable;
     }
 
     private int color(int id) { return getColor(id); }

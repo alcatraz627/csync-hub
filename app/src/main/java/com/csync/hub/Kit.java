@@ -329,18 +329,25 @@ final class Kit {
             TextView label = new TextView(c);
             label.setText(labels[i]);
             label.setTextSize(13);
+            label.setSingleLine();
             label.setTextColor(chosen ? accent : dim);
             label.setTypeface(null, chosen ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
             label.setPadding(dp(c, 7), 0, 0, 0);
             tab.addView(label);
+            tab.setPadding(dp(c, 10), 0, dp(c, 10), 0);
             if (chosen) tab.setBackground(underline(c, accent));
             else tab.setBackgroundResource(outValue(c));
             tab.setContentDescription(labels[i] + (chosen ? ", selected" : ""));
             int index = i;
             tab.setOnClickListener(v -> { if (index != selected) pick.at(index); });
-            strip.addView(tab, new LinearLayout.LayoutParams(0, -2, 1));
+            strip.addView(tab, new LinearLayout.LayoutParams(-2, -2, 1));
         }
-        host.addView(strip, new LinearLayout.LayoutParams(-1, -2));
+        // The tabs share the width while they fit; at a large text size the strip scrolls sideways instead of wrapping a word.
+        android.widget.HorizontalScrollView scroller = new android.widget.HorizontalScrollView(c);
+        scroller.setFillViewport(true);
+        scroller.setHorizontalScrollBarEnabled(false);
+        scroller.addView(strip, new ViewGroup.LayoutParams(-2, -2));
+        host.addView(scroller, new LinearLayout.LayoutParams(-1, -2));
         View line = new View(c);
         line.setBackgroundColor(ContextCompat.getColor(c, R.color.border));
         host.addView(line, new LinearLayout.LayoutParams(-1, dp(c, 1)));

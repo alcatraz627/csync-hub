@@ -39,13 +39,9 @@
                     android:background="?attr/selectableItemBackgroundBorderless"/>
             </LinearLayout>
 
-            <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="14dp" android:fillViewport="true"
-                android:scrollbars="none">
-                <LinearLayout android:id="@+id/search_scopes" android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" android:orientation="horizontal"
-                    android:padding="3dp" android:background="@drawable/card_bg"/>
-            </HorizontalScrollView>
+            <LinearLayout android:id="@+id/search_scopes" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:orientation="vertical"
+                android:layout_marginTop="8dp"/>
 
             <TextView android:id="@+id/search_count" android:layout_width="match_parent"
                 android:layout_height="wrap_content" android:layout_marginTop="22dp"

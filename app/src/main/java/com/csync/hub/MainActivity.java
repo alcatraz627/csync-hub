@@ -929,48 +929,15 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     // ---------------- settings page (appearance controls) ----------------
 
+    private static final String[] THEME_MODES = {"system", "light", "dark"};
+    private static final String[] TEXT_SIZES = {"sm", "md", "lg"};
+
     private void setupSettingsPage() {
-        LinearLayout group =
-                pageSettings.findViewById(R.id.set_theme_group);
-        styleAppearanceGroup(group);
-        String mode = Prefs.themeMode(this);
-        selectAppearance(group, "system".equals(mode) ? R.id.set_theme_system :
-            "dark".equals(mode) ? R.id.set_theme_dark : R.id.set_theme_light);
-        for (int i = 0; i < group.getChildCount(); i++) {
-            View button = group.getChildAt(i);
-            button.setOnClickListener(v -> {
-                int checkedId = v.getId();
-                selectAppearance(group, checkedId);
-                String choice = checkedId == R.id.set_theme_system ? "system" :
-                    checkedId == R.id.set_theme_dark ? "dark" : "light";
-                if (!choice.equals(Prefs.themeMode(this))) {
-                    Prefs.saveThemeMode(this, choice);
-                    androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode("system".equals(choice)
-                        ? androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
-                        : "dark".equals(choice) ? androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES
-                        : androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO);
-                }
-            });
-        }
-        LinearLayout sizeGroup =
-            pageSettings.findViewById(R.id.set_text_size_group);
-        styleAppearanceGroup(sizeGroup);
+        renderThemeChoice();
         String size = Prefs.textSize(this);
-        selectAppearance(sizeGroup, "sm".equals(size) ? R.id.set_text_sm :
-            "lg".equals(size) ? R.id.set_text_lg : R.id.set_text_md);
-        for (int i = 0; i < sizeGroup.getChildCount(); i++) {
-            View button = sizeGroup.getChildAt(i);
-            button.setOnClickListener(v -> {
-                int checkedId = v.getId();
-                selectAppearance(sizeGroup, checkedId);
-                String choice = checkedId == R.id.set_text_sm ? "sm" :
-                    checkedId == R.id.set_text_lg ? "lg" : "md";
-                if (!choice.equals(Prefs.textSize(this))) {
-                    Prefs.saveTextSize(this, choice);
-                    recreate();
-                }
-            });
-        }
+        Kit.segmented(pageSettings.findViewById(R.id.set_text_size_group), null,
+            new String[]{"Small", "Medium", "Large"}, Math.max(0, java.util.Arrays.asList(TEXT_SIZES).indexOf(size)),
+            i -> { Prefs.saveTextSize(this, TEXT_SIZES[i]); recreate(); });
         wireAccent(R.id.set_accent_coral, "coral", R.color.coral);
         wireAccent(R.id.set_accent_teal, "teal", R.color.teal);
         wireAccent(R.id.set_accent_violet, "violet", R.color.violet);
@@ -1024,35 +991,21 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         }
     }
 
-    private void styleAppearanceGroup(LinearLayout group) {
-        group.setBackground(bg(col(R.color.surface2), dp(13)));
-        group.setPadding(dp(4), dp(4), dp(4), dp(4));
-        group.setClipToPadding(false);
-        int[][] states = {new int[]{android.R.attr.state_selected}, new int[]{}};
-        android.content.res.ColorStateList fill = new android.content.res.ColorStateList(
-            states, new int[]{col(R.color.surface), android.graphics.Color.TRANSPARENT});
-        android.content.res.ColorStateList ink = new android.content.res.ColorStateList(
-            states, new int[]{Kit.accentText(this), col(R.color.dim)});
-        for (int i = 0; i < group.getChildCount(); i++) {
-            com.google.android.material.button.MaterialButton button =
-                (com.google.android.material.button.MaterialButton) group.getChildAt(i);
-            button.setInsetTop(0);
-            button.setInsetBottom(0);
-            button.setStrokeWidth(0);
-            button.setCornerRadius(dp(10));
-            button.setBackgroundTintList(fill);
-            button.setTextColor(ink);
-            button.setIconTint(ink);
-            button.setIconSize(dp(15));
-            button.setIconPadding(dp(4));
-            button.setIconGravity(com.google.android.material.button.MaterialButton.ICON_GRAVITY_TEXT_START);
-        }
-    }
-
-    private void selectAppearance(LinearLayout group, int selectedId) {
-        for (int i = 0; i < group.getChildCount(); i++) {
-            group.getChildAt(i).setSelected(group.getChildAt(i).getId() == selectedId);
-        }
+    /** The theme control; a tap saves the choice and switches at once, so the control is redrawn to match. */
+    private void renderThemeChoice() {
+        String mode = Prefs.themeMode(this);
+        Kit.segmented(pageSettings.findViewById(R.id.set_theme_group),
+            new int[]{R.drawable.csi_system, R.drawable.csi_sun, R.drawable.csi_moon},
+            new String[]{"System", "Light", "Dark"}, Math.max(0, java.util.Arrays.asList(THEME_MODES).indexOf(mode)),
+            i -> {
+                String choice = THEME_MODES[i];
+                Prefs.saveThemeMode(this, choice);
+                renderThemeChoice();
+                androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode("system".equals(choice)
+                    ? androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+                    : "dark".equals(choice) ? androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES
+                    : androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO);
+            });
     }
 
     private void wireAccent(int viewId, String name, int colorRes) {
