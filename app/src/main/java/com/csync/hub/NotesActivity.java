@@ -59,6 +59,9 @@ public final class NotesActivity extends AppCompatActivity {
     private Page page = Page.LIST;
     // Which of the two views the list shows, and whether its search field is open.
     private boolean showingPins, searching;
+    // Opened from an item on another page (Add to a note, Save as a pin), so Back returns there
+    // from any page of Notes; the Notes crumb climbs to the list and ends the visit.
+    private boolean visiting;
     private String noteId;
     private int revision;
     private boolean noteSaving;
@@ -84,7 +87,8 @@ public final class NotesActivity extends AppCompatActivity {
         root.setBackgroundColor(getColor(R.color.bg));
         setContentView(root);
         getOnBackPressedDispatcher().addCallback(this, backInApp);
-        root.getViewTreeObserver().addOnPreDrawListener(() -> { backInApp.setEnabled(page != Page.LIST); return true; });
+        visiting = getIntent().getBooleanExtra(ShareActivity.RETURN, false);
+        root.getViewTreeObserver().addOnPreDrawListener(() -> { backInApp.setEnabled(page != Page.LIST && !visiting); return true; });
         topBar = (LinearLayout) getLayoutInflater().inflate(R.layout.kit_page_top, root, false);
         root.addView(topBar);
         heading = new TextView(this);
@@ -623,8 +627,8 @@ public final class NotesActivity extends AppCompatActivity {
     /** The page for one pin. With no pin it starts a new one, filled with what was handed over. */
     private void showPin(JSONObject pin, String initialUrl, String initialText) {
         open(Page.PIN, null, null);
-        Runnable back = () -> { showingPins = true; showList(); };
-        Kit.pageTop(topBar, back, moreCrumb(), new Kit.Crumb(Kit.Icon.NOTES, "Notes", back),
+        Runnable back = () -> { visiting = false; showingPins = true; showList(); };
+        Kit.pageTop(topBar, visiting ? this::finish : back, moreCrumb(), new Kit.Crumb(Kit.Icon.NOTES, "Notes", back),
             new Kit.Crumb(R.drawable.ic_pin, "Pin", null));
         JSONObject held = pin == null ? null : pin.optJSONObject("file");
         if (pin != null) {
@@ -768,8 +772,8 @@ public final class NotesActivity extends AppCompatActivity {
         revision = note.optInt("revision");
         String noteTitle = note.optString("title"), source = note.optString("body");
         open(Page.NOTE, noteTitle, edited(note.optLong("updatedAt")));
-        Runnable back = () -> { showingPins = false; showList(); };
-        Kit.pageTop(topBar, back, moreCrumb(), new Kit.Crumb(Kit.Icon.NOTES, "Notes", back),
+        Runnable back = () -> { visiting = false; showingPins = false; showList(); };
+        Kit.pageTop(topBar, visiting ? this::finish : back, moreCrumb(), new Kit.Crumb(Kit.Icon.NOTES, "Notes", back),
             new Kit.Crumb(R.drawable.csi_markdown, "Note", null));
         Kit.topAction(topBar, Kit.Icon.SHARE, "Send or share this note", v -> share(note));
         Kit.topAction(topBar, R.drawable.csi_trash, "Delete this note", v -> Kit.confirm(this, "Delete this note?",
@@ -951,9 +955,9 @@ public final class NotesActivity extends AppCompatActivity {
         editorMode = mode;
         open(Page.EDIT, null, sharedFile != null ? sharedFileName + " is added when you save"
             : sharedImage != null ? "The picture is added when you save" : null);
-        Runnable list = () -> { dropShared(); showingPins = false; showList(); };
+        Runnable list = () -> { visiting = false; dropShared(); showingPins = false; showList(); };
         Runnable leave = () -> { if (noteId == null) list.run(); else loadNote(noteId); };
-        Kit.pageTop(topBar, leave, moreCrumb(), new Kit.Crumb(Kit.Icon.NOTES, "Notes", list),
+        Kit.pageTop(topBar, visiting ? this::finish : leave, moreCrumb(), new Kit.Crumb(Kit.Icon.NOTES, "Notes", list),
             new Kit.Crumb(R.drawable.csi_markdown, noteId == null ? "New note" : "Note", null));
         // A long note puts the Save button far below, so the bar carries one as well.
         Kit.topAction(topBar, R.drawable.csi_check, "Save", v -> saveNote());

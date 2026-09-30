@@ -177,7 +177,7 @@ final class ItemActions {
             }
             Intent send = new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, item.text);
             if (act == Act.SHARE_OUT) { start(a, Intent.createChooser(send, "Share with another app"), null); return; }
-            send.setClass(a, ShareActivity.class).putExtra(ShareActivity.PLACE, place(act));
+            send.setClass(a, ShareActivity.class).putExtra(ShareActivity.PLACE, place(act)).putExtra(ShareActivity.RETURN, true);
             if (item.textName != null) send.putExtra(ShareActivity.TEXT_NAME, item.textName);
             start(a, send, null);
             return;
@@ -207,7 +207,8 @@ final class ItemActions {
                         chooser.setClipData(send.getClipData());
                         chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                         start(a, chooser, null);
-                    } else start(a, send.setClass(a, ShareActivity.class).putExtra(ShareActivity.PLACE, place(act)), null);
+                    } else start(a, send.setClass(a, ShareActivity.class).putExtra(ShareActivity.PLACE, place(act))
+                        .putExtra(ShareActivity.RETURN, true), null);
             }
         });
     }

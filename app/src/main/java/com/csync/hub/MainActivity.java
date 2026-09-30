@@ -136,6 +136,10 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             androidx.core.graphics.ColorUtils.blendARGB(col(R.color.surface), accent(), 0.13f)));
         nav.setOnItemSelectedListener(item -> {
             int id = item.getItemId();
+            if (visitor && id != R.id.nav_media) {
+                leaveVisit(id == R.id.nav_share ? "share" : id == R.id.nav_chat ? "chat" : id == R.id.nav_more ? "more" : "home");
+                return false;
+            }
             if (id == R.id.nav_home) show(0);
             else if (id == R.id.nav_media) { startActivity(new Intent(this, MediaActivity.class)); return false; }
             else if (id == R.id.nav_share) show(1);
@@ -148,7 +152,6 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         setupSystemPage();
         setupSharePage();
         setupChatPage();
-        searchResultChat = b != null && b.getBoolean("search_result_chat");
         setupSettingsPage();
         setupConnectionCard();
         setupAssistantCard();
@@ -163,6 +166,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         int start = b != null ? b.getInt("tab", 0) : tabFromIntent(getIntent());
         int selected = start == 1 ? 1 : start == 2 ? 2 : start >= 3 ? 3 : 0;
         nav.setSelectedItemId(navIds[selected]);
+        // Set after the first selection, which must land in this instance and not be redirected.
+        visitor = getIntent().getBooleanExtra(ShareActivity.RETURN, false);
         if (start >= 3 && start <= 5) show(start);
         if (b == null) acceptDetail(getIntent());
         if (b != null && start == 4 && b.getInt("settings_detail") != 0)
@@ -310,7 +315,6 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         b.putInt("settings_detail", settingsDetail);
         b.putInt("tools_detail", toolsDetail);
         b.putInt("more_detail", moreDetail);
-        b.putBoolean("search_result_chat", searchResultChat);
         if (chatConvoMode && chatInput != null) {
             b.putBoolean("chat_convo", true);
             b.putString("chat_draft", chatInput.getText().toString());
@@ -408,7 +412,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private void setupHomePage() {
         com.google.android.material.bottomnavigation.BottomNavigationView nav = findViewById(R.id.nav);
         View top = pageHome.findViewById(R.id.home_top);
-        Kit.pageTop(top, "home", this::openPlace);
+        Kit.pageTop(top, "home", this::openPlace, visitBack());
         Kit.topAction(top, Kit.Icon.SEARCH, "Search", v -> openHomeSearch());
         Kit.bindSection(pageHome.findViewById(R.id.home_pickup_head), 0, "Pick up", null);
         // Home leads with doing: the four things done most, each one tap from here.
@@ -566,7 +570,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageMore.findViewById(R.id.more_overview).setVisibility(detail == 0 ? View.VISIBLE : View.GONE);
         pageMore.findViewById(R.id.more_guide).setVisibility(detail == 1 ? View.VISIBLE : View.GONE);
         pageMore.findViewById(R.id.more_help).setVisibility(detail == 2 ? View.VISIBLE : View.GONE);
-        Kit.pageTop(pageMore.findViewById(R.id.more_crumb), detail == 0 ? "more" : detail == 1 ? "guide" : "help", this::openPlace);
+        Kit.pageTop(pageMore.findViewById(R.id.more_crumb), detail == 0 ? "more" : detail == 1 ? "guide" : "help", this::openPlace, visitBack());
         if (detail == 1) renderGuide();
         if (detail == 2) renderHelp();
     }
@@ -678,7 +682,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageTools.findViewById(R.id.tools_widget_section).setVisibility(detail == 2 ? View.VISIBLE : View.GONE);
         View top = pageTools.findViewById(R.id.tools_back);
         // Pulling the page down checks again, so the top bar carries no refresh icon.
-        Kit.pageTop(top, overview ? "tools" : detail == 1 ? "process" : "widgets", this::openPlace);
+        Kit.pageTop(top, overview ? "tools" : detail == 1 ? "process" : "widgets", this::openPlace, visitBack());
         ((android.widget.ScrollView) pageTools.findViewById(R.id.tools_scroll)).scrollTo(0, 0);
         if (detail == 1 && resumed) ensureShizuku();
         if (detail == 2) renderWidgetsPage();
@@ -690,7 +694,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         settingsDetail = id;
         pageSettings.findViewById(R.id.settings_overview).setVisibility(View.GONE);
         pageSettings.findViewById(id).setVisibility(View.VISIBLE);
-        Kit.pageTop(pageSettings.findViewById(R.id.settings_back), "connection", this::openPlace);
+        Kit.pageTop(pageSettings.findViewById(R.id.settings_back), "connection", this::openPlace, visitBack());
         refreshConnection();
         pageSettings.findViewById(R.id.settings_scroll).post(() ->
             ((android.widget.ScrollView) pageSettings.findViewById(R.id.settings_scroll))
@@ -701,11 +705,16 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         settingsDetail = 0;
         pageSettings.findViewById(R.id.settings_connection_detail).setVisibility(View.GONE);
         pageSettings.findViewById(R.id.settings_overview).setVisibility(View.VISIBLE);
-        Kit.pageTop(pageSettings.findViewById(R.id.settings_back), "settings", this::openPlace);
+        Kit.pageTop(pageSettings.findViewById(R.id.settings_back), "settings", this::openPlace, visitBack());
     }
 
     /** Go to a place in the map. The top bar's path and Back both come through here. */
     private void openPlace(String id) {
+        if (visitor) {
+            if ("media".equals(id)) { finish(); startActivity(new Intent(this, MediaActivity.class)); }
+            else leaveVisit(id);
+            return;
+        }
         com.google.android.material.bottomnavigation.BottomNavigationView nav = findViewById(R.id.nav);
         switch (id) {
             case "home": nav.setSelectedItemId(R.id.nav_home); break;
@@ -715,7 +724,6 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                 setShareMode(false);
                 break;
             case "chat":
-                if (chatConvoMode && searchResultChat) { finish(); break; }
                 if (current != 2) nav.setSelectedItemId(R.id.nav_chat);
                 showChatList();
                 break;
@@ -820,12 +828,16 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     }
 
     private boolean hasLevelAbove() {
+        // A visitor has nowhere to go up to: Back leaves it, by the system's own preview, once
+        // anything open over the conversation has closed.
+        if (visitor) return current == 2 && chatConvoMode && (chatSuggest.isOpen() || chatFind.isOpen());
         return current != 0;
     }
 
     private void goUp() {
         if (current == 2 && chatConvoMode && chatSuggest.isOpen()) chatSuggest.close();
         else if (current == 2 && chatConvoMode && chatFind.isOpen()) chatFind.close();
+        else if (visitor) finish();
         else if (current == 2 && chatConvoMode) openPlace("chat");
         else if (current == 1 && shareInboxMode) setShareMode(false);
         else if (current == 6 && moreDetail != 0) showMoreDetail(0);
@@ -938,14 +950,29 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     }
 
     private String inboxRevealPath;
-    private boolean searchResultChat;
+    // This instance was opened on top of another page to show one thing (a Search result, or an
+    // item sent to a conversation), so Back and the arrow return there. A crumb or a bar tap goes
+    // to the Main underneath instead, so the app never keeps two of them.
+    private boolean visitor;
+
+    private Runnable visitBack() { return visitor ? this::finish : null; }
+
+    /**
+     * Hand a place to the Main underneath and leave. This one finishes first so the launch finds
+     * the one below it; a finishing activity is skipped when CLEAR_TOP looks for the existing instance.
+     */
+    private void leaveVisit(String destination) {
+        finish();
+        startActivity(new Intent(this, MainActivity.class)
+            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            .putExtra("destination", destination));
+    }
 
     private void acceptSearchDestination(Intent intent) {
         if (intent == null) return;
         String conversationId = intent.getStringExtra("conversation_id");
         if (conversationId != null) {
             intent.removeExtra("conversation_id");
-            searchResultChat = true;
             JSONObject entry = convEntry(conversationId);
             if (entry == null) {
                 showChatList();
@@ -1462,13 +1489,13 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageShare.findViewById(R.id.share_inbox_section).setVisibility(inbox ? View.VISIBLE : View.GONE);
         View top = pageShare.findViewById(R.id.share_top);
         if (inbox) {
-            Kit.pageTop(top, "received", this::openPlace);
+            Kit.pageTop(top, "received", this::openPlace, visitBack());
             // The breadcrumb already names this page, so it carries no heading of its own.
             refreshShareHeading();
             renderInbox();
             return;
         }
-        Kit.pageTop(top, "share", this::openPlace);
+        Kit.pageTop(top, "share", this::openPlace, visitBack());
         Kit.topAction(top, Kit.Icon.DEVICE, "Choose who receives", v -> openRecipientSheet());
         Kit.topAction(top, R.drawable.csi_download, "Received", v -> setShareMode(true));
         refreshShareHeading();
@@ -2485,13 +2512,13 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private void renderChatTop() {
         View top = pageChat.findViewById(R.id.chat_top);
         if (chatConvoMode) {
-            Kit.pageTop(top, "conversation", this::openPlace);
+            Kit.pageTop(top, "conversation", this::openPlace, visitBack());
             Kit.topAction(top, R.drawable.csi_search, "Find in this conversation", v -> chatFind.open());
             Kit.topAction(top, R.drawable.csi_download, "Save this conversation", v -> exportConversation());
             return;
         }
         chatFind.close();
-        Kit.pageTop(top, "chat", this::openPlace);
+        Kit.pageTop(top, "chat", this::openPlace, visitBack());
         Kit.topAction(top, R.drawable.csi_search, "Search conversations", v -> toggleChatSearch());
         Kit.topAction(top, R.drawable.csi_sliders, "Model for new conversations", v -> openModelSheet("default"));
         Kit.topAction(top, R.drawable.csi_plus, "New chat", v -> newConversation());
@@ -2772,7 +2799,6 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     private void showChatList() {
         keepDraft();
-        searchResultChat = false;
         chatConvoMode = false;
         syncChatHeading(false);
         chatHistory.setVisibility(View.VISIBLE);

@@ -361,8 +361,10 @@ public final class SearchActivity extends AppCompatActivity {
         }
     }
 
+    /** The result opens on top of Search as a visit, so Back there returns to these results. */
     private void openMain(String destination, String key, String value) {
-        Intent intent = new Intent(this, MainActivity.class).putExtra("destination", destination);
+        Intent intent = new Intent(this, MainActivity.class).putExtra("destination", destination)
+            .putExtra(ShareActivity.RETURN, true);
         if (key != null) intent.putExtra(key, value);
         startActivity(intent);
     }

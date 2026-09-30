@@ -681,6 +681,15 @@ final class Kit {
      * {@code deeper} adds steps below the place for a view that is not in the map.
      */
     static void pageTop(View top, String placeId, Open open, Crumb... deeper) {
+        pageTop(top, placeId, open, null, deeper);
+    }
+
+    /**
+     * The same, for a page reached sideways from an item on another page (Play on Pi screen,
+     * Send to a conversation). The crumbs still climb this page's own path, but Back is
+     * {@code back}: it returns to the page the item was on.
+     */
+    static void pageTop(View top, String placeId, Open open, Runnable back, Crumb... deeper) {
         java.util.List<Places.Place> path = Places.path(placeId);
         java.util.List<Crumb> crumbs = new java.util.ArrayList<>();
         for (int i = 0; i < path.size(); i++) {
@@ -689,7 +698,7 @@ final class Kit {
             crumbs.add(new Crumb(place.icon, place.label, current ? null : () -> open.place(place.id)));
         }
         crumbs.addAll(java.util.Arrays.asList(deeper));
-        Runnable up = crumbs.size() == 1 ? null : crumbs.get(crumbs.size() - 2).open;
+        Runnable up = back != null ? back : crumbs.size() == 1 ? null : crumbs.get(crumbs.size() - 2).open;
         pageTop(top, up, crumbs.toArray(new Crumb[0]));
     }
 

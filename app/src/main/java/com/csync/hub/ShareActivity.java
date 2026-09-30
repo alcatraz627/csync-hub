@@ -41,6 +41,17 @@ public class ShareActivity extends AppCompatActivity {
     static final String PLACE = "csync_place";
     /** The file name words from inside csync arrive under on another device, such as a note's title. */
     static final String TEXT_NAME = "csync_text_name";
+    /**
+     * True when the item came from a page inside csync, so the page it lands on is a visit:
+     * Back there returns to the page the item was on, instead of climbing the new page's own path.
+     */
+    static final String RETURN = "csync_return";
+
+    /** The visit flag, carried from the item's page to the page it lands on. */
+    private Intent visit(Intent destination) {
+        if (getIntent().getBooleanExtra(RETURN, false)) destination.putExtra(RETURN, true);
+        return destination;
+    }
 
     @Override protected void attachBaseContext(Context base) {
         super.attachBaseContext(Appearance.wrap(base));
@@ -265,7 +276,7 @@ public class ShareActivity extends AppCompatActivity {
         if (kind == ItemActions.Kind.VIDEO_LINK) {
             Intent cast = new Intent(this, MediaActivity.class).setAction(Intent.ACTION_SEND).setType("text/plain");
             cast.putExtra(Intent.EXTRA_TEXT, youtubeLink(text));
-            startActivity(cast);
+            startActivity(visit(cast));
         } else if (kind == ItemActions.Kind.VIDEO || kind == ItemActions.Kind.AUDIO) {
             Uri file = files.get(0);
             Intent cast = new Intent(this, MediaActivity.class).setAction(Intent.ACTION_SEND)
@@ -273,7 +284,7 @@ public class ShareActivity extends AppCompatActivity {
             cast.setType(playableType(file));
             cast.putExtra(Intent.EXTRA_STREAM, file);
             cast.setClipData(android.content.ClipData.newUri(getContentResolver(), "Media to play", file));
-            startActivity(cast);
+            startActivity(visit(cast));
         } else return false;
         finish();
         return true;
@@ -288,7 +299,7 @@ public class ShareActivity extends AppCompatActivity {
             chat.putExtra("chat_attach_uri", file).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             chat.setClipData(android.content.ClipData.newUri(getContentResolver(), "File for the assistant", file));
         }
-        startActivity(chat);
+        startActivity(visit(chat));
         finish();
     }
 
@@ -303,7 +314,7 @@ public class ShareActivity extends AppCompatActivity {
             if (text != null) note.putExtra("note_image_caption", text);
             note.setClipData(android.content.ClipData.newUri(getContentResolver(), "File for a note", file));
         } else note.putExtra("note_prefill_body", text);
-        startActivity(note);
+        startActivity(visit(note));
         finish();
     }
 
@@ -313,13 +324,13 @@ public class ShareActivity extends AppCompatActivity {
             Intent pin = new Intent(this, NotesActivity.class).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 .putExtra("pin_file_uri", file).putExtra("pin_file_name", displayName(file));
             pin.setClipData(android.content.ClipData.newUri(getContentResolver(), "File for a pin", file));
-            startActivity(pin);
+            startActivity(visit(pin));
             finish();
             return;
         }
         boolean link = kind == ItemActions.Kind.LINK || kind == ItemActions.Kind.VIDEO_LINK;
-        startActivity(new Intent(this, NotesActivity.class)
-            .putExtra(link ? "pin_prefill_url" : "pin_prefill_text", text));
+        startActivity(visit(new Intent(this, NotesActivity.class)
+            .putExtra(link ? "pin_prefill_url" : "pin_prefill_text", text)));
         finish();
     }
 

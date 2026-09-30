@@ -62,7 +62,8 @@ public final class MediaActivity extends AppCompatActivity {
     private boolean fullPlayer;
     private boolean videoControlsVisible;
     private boolean screenActive = true;
-    private boolean openedFromSearch;
+    // Opened from an item on another page, so Back returns there until the Media crumb is tapped.
+    private boolean visiting;
     private boolean showingVideos;
     private static final int FILES = 0, VIDEOS = 1, HISTORY = 2, ACCESS = 3;
     private int activeTab = FILES;
@@ -109,12 +110,14 @@ public final class MediaActivity extends AppCompatActivity {
         // The list stays one column on a wide screen; the player page beside it uses the width.
         Appearance.column(this, findViewById(R.id.media_list), findViewById(R.id.player_idle));
         layoutPlayerForWidth();
+        // On a visit the player page is the whole of Media the visitor sees, so Back leaves the
+        // activity (the system's own preview) instead of walking down to the list.
+        visiting = getIntent().getBooleanExtra(ShareActivity.RETURN, false);
         findViewById(R.id.media_full_player).getViewTreeObserver().addOnPreDrawListener(() -> {
-            backInApp.setEnabled(videoMode || fullPlayer);
+            backInApp.setEnabled(videoMode || (fullPlayer && !visiting));
             return true;
         });
         String requestedTarget = getIntent().getStringExtra("player_target");
-        openedFromSearch = getIntent().hasExtra("search_item_id");
         if ("phone".equals(requestedTarget) || "pi".equals(requestedTarget)) target = requestedTarget;
         rows = findViewById(R.id.media_rows);
         status = findViewById(R.id.media_status);
@@ -1131,8 +1134,11 @@ public final class MediaActivity extends AppCompatActivity {
         View top = findViewById(R.id.media_top);
         if (fullPlayer || videoMode) {
             // The page is named for the output it shows, so the path reads Media, then Pi screen or This phone.
+            // Reached from an item elsewhere (Play on Pi screen), Back returns there; the Media crumb still
+            // opens the list, and from then on this is an ordinary stay in Media.
             Kit.pageTop(top, "pi".equals(target) ? "pi-screen" : "phone-player",
-                id -> { if (videoMode) exitVideoMode(); else closeFullPlayer(); });
+                id -> { if (videoMode) exitVideoMode(); else { visiting = false; closeFullPlayer(); } },
+                visiting && !videoMode ? this::finish : null);
             return;
         }
         Kit.pageTop(top, "media", id -> { });
