@@ -841,10 +841,33 @@ public final class MediaActivity extends AppCompatActivity {
         Kit.rowAction(row, R.drawable.csi_menu, "Actions for " + name, v -> {
             if (folder) Kit.sheet(this, name, "Folder",
                 new Kit.Action(Kit.Icon.FOLDER, "Open", null, open),
+                new Kit.Action(Kit.Icon.DISPLAY, "Photos as a slideshow", "Every image in this folder, in turn, on the Pi screen",
+                    () -> slideshow(item.optString("driveId"), item.optString("relativePath"), name)),
                 new Kit.Action(R.drawable.csi_copy, "Copy path", item.optString("relativePath"),
                     () -> copy(item.optString("relativePath"))));
             else chooseTarget(item);
         });
+    }
+
+    /** Show a folder's photos on the Pi screen one after another. The Pi says so when the folder has none. */
+    private void slideshow(String drive, String folder, String name) {
+        setStatus("Starting the slideshow on the Pi screen");
+        new Thread(() -> {
+            String problem = null;
+            boolean lit = false;
+            try {
+                lit = client.post("/v1/display/slideshow", new JSONObject().put("driveId", drive).put("path", folder))
+                    .optBoolean("sentToDisplay");
+            } catch (Exception error) { problem = error.getMessage() == null ? "The Pi did not answer." : error.getMessage(); }
+            String failure = problem;
+            boolean shown = lit;
+            runOnUiThread(() -> {
+                if (failure != null) {
+                    setStatus("The slideshow did not start");
+                    Kit.sheet(this, "The slideshow did not start", failure);
+                } else setStatus(shown ? "Showing the photos in " + name + " on the Pi screen" : "Sent. The Pi screen is off");
+            });
+        }, "media-slideshow").start();
     }
 
     private void chooseTarget(JSONObject item) {
