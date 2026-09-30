@@ -81,6 +81,13 @@ final class ChatFind {
         search(true);
     }
 
+    /** Open already looking for something, such as the words a search of all conversations found. */
+    void open(String wanted) {
+        open();
+        input.setText(wanted);
+        input.setSelection(input.length());
+    }
+
     void close() {
         if (!isOpen()) return;
         clear();

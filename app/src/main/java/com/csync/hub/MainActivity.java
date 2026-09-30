@@ -115,12 +115,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(getWindow().getDecorView(), (v, insets) -> {
             boolean typing = insets.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime());
             nav.setVisibility(typing ? View.GONE : View.VISIBLE);
-            // In a conversation the large title steps aside too, unless it is the title being typed.
-            if (pageChat != null && chatTitleEdit != null) {
-                boolean renaming = chatTitleEdit.getVisibility() == View.VISIBLE;
-                pageChat.findViewById(R.id.chat_heading).setVisibility(
-                    typing && chatConvoMode && !renaming ? View.GONE : View.VISIBLE);
-            }
+            syncChatHeading(typing);
             return androidx.core.view.ViewCompat.onApplyWindowInsets(v, insets);
         });
         nav.setItemActiveIndicatorColor(android.content.res.ColorStateList.valueOf(
@@ -242,6 +237,20 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         acceptChatDraft(intent);
         acceptSearchDestination(intent);
         takeShareAction(intent);
+    }
+
+    /** In a conversation the large title steps aside while the keyboard is up, unless it is the title being typed. */
+    private void syncChatHeading(boolean typing) {
+        if (pageChat == null || chatTitleEdit == null) return;
+        boolean renaming = chatTitleEdit.getVisibility() == View.VISIBLE;
+        pageChat.findViewById(R.id.chat_heading).setVisibility(
+            typing && chatConvoMode && !renaming ? View.GONE : View.VISIBLE);
+    }
+
+    private boolean keyboardUp() {
+        androidx.core.view.WindowInsetsCompat insets =
+            androidx.core.view.ViewCompat.getRootWindowInsets(getWindow().getDecorView());
+        return insets != null && insets.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime());
     }
 
     private int tabFromIntent(Intent intent) {
@@ -2474,6 +2483,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private void showChatList() {
         searchResultChat = false;
         chatConvoMode = false;
+        syncChatHeading(false);
         chatHistory.setVisibility(View.VISIBLE);
         chatConvo.setVisibility(View.GONE);
         chatBack.setVisibility(View.GONE);
@@ -2515,10 +2525,12 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             if (showFavOnly && !fav) continue;
             final String id = o.optString("id");
             final String title = o.optString("title").isEmpty() ? "(untitled)" : o.optString("title");
-            if (!q.isEmpty() && !title.toLowerCase().contains(q)) continue;
+            JSONArray transcript = ChatStore.transcript(this, id);
+            // A search looks at what was said as well as the title, and shows the words it found.
+            final String found = q.isEmpty() || title.toLowerCase().contains(q) ? null : saidWith(transcript, q);
+            if (!q.isEmpty() && !title.toLowerCase().contains(q) && found == null) continue;
             long updated = o.optLong("updated");
             int messages = 0;
-            JSONArray transcript = ChatStore.transcript(this, id);
             for (int j = 0; j < transcript.length(); j++) {
                 JSONObject turn = transcript.optJSONObject(j);
                 if (turn != null && ("user".equals(turn.optString("role")) ||
@@ -2526,9 +2538,13 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             }
             if (historyGroup == null) historyGroup = Kit.group(chatHistoryList);
             View row = Kit.addRow(historyGroup);
-            Kit.bindRow(row, fav ? R.drawable.csi_favorite : Kit.Icon.CHAT, title,
+            Kit.bindRow(row, fav ? R.drawable.csi_favorite : Kit.Icon.CHAT, title, found != null ? found :
                 relTime(updated) + " · " + messages + (messages == 1 ? " message" : " messages"), null, true);
-            row.setOnClickListener(v -> openConversation(id, o.optString("title")));
+            row.setOnClickListener(v -> {
+                openConversation(id, o.optString("title"));
+                // Opened from words found inside it: land on those words.
+                if (found != null) chatFind.open(q);
+            });
             row.setOnLongClickListener(v -> { chatOptions(id, title, fav, archived); return true; });
             shown++;
         }
@@ -2538,6 +2554,23 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             e.setTextColor(col(R.color.dim)); e.setTextSize(13); e.setPadding(dp(6), dp(12), 0, 0);
             chatHistoryList.addView(e);
         }
+    }
+
+    /** The words around the first place a conversation says this, cut at whole words, or null when it never does. */
+    private static String saidWith(JSONArray transcript, String wanted) {
+        for (int i = 0; i < transcript.length(); i++) {
+            JSONObject entry = transcript.optJSONObject(i);
+            if (entry == null) continue;
+            if (!"user".equals(entry.optString("role")) && !"text".equals(entry.optString("type"))) continue;
+            String said = entry.optString("text").replace('\n', ' ');
+            int at = said.toLowerCase().indexOf(wanted);
+            if (at < 0) continue;
+            int from = Math.max(0, at - 30), to = Math.min(said.length(), at + wanted.length() + 50);
+            if (from > 0) { int space = said.indexOf(' ', from); if (space >= 0 && space < at) from = space + 1; }
+            if (to < said.length()) { int space = said.lastIndexOf(' ', to); if (space > at + wanted.length()) to = space; }
+            return said.substring(from, to).trim();
+        }
+        return null;
     }
 
     private void chatOptions(String id, String title, boolean fav, boolean archived) {
@@ -2574,6 +2607,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         refreshChatConfigSubtitle();
         renderTranscript(ChatStore.transcript(this, id));
         scrollDown();
+        syncChatHeading(keyboardUp());
     }
 
     private void newConversation() {
