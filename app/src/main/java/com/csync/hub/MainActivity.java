@@ -2005,6 +2005,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageChat.findViewById(R.id.chat_send).setOnClickListener(v -> sendChat());
         chatBack.setOnClickListener(v -> showChatList());
         pageChat.findViewById(R.id.chat_model_pill).setOnClickListener(v -> openConfigDialog());
+        setupChatFollowing();
         chatSearch.addTextChangedListener(new android.text.TextWatcher() {
             public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
             public void onTextChanged(CharSequence s, int a, int b, int c) {}
@@ -2776,10 +2777,42 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         lp.gravity = gravity; lp.topMargin = dp(topMargin); v.setLayoutParams(lp); chatList.addView(v); }
     // Scroll to the bottom WITHOUT fullScroll, which would move focus to the last
     // view and drop the keyboard off the input while a reply streams in.
-    private void scrollDown() { chatScroll.post(() -> chatScroll.smoothScrollTo(0, chatList.getBottom())); }
+    private void scrollDown() {
+        if (!chatFollowing) { if (chatJump != null) chatJump.setVisibility(View.VISIBLE); return; }
+        chatScroll.post(() -> chatScroll.smoothScrollTo(0, chatList.getBottom()));
+    }
+
+    // Reading back through a long reply: the view stops following once you scroll up, and a row offers the way back.
+    private boolean chatFollowing = true;
+    private TextView chatJump;
+
+    private void setupChatFollowing() {
+        chatJump = new TextView(this);
+        chatJump.setText("Jump to the latest");
+        chatJump.setTextColor(accent());
+        chatJump.setTextSize(13);
+        chatJump.setGravity(android.view.Gravity.CENTER);
+        chatJump.setMinHeight(dp(48));
+        chatJump.setCompoundDrawablesWithIntrinsicBounds(R.drawable.ic_chevron_down, 0, 0, 0);
+        chatJump.setCompoundDrawableTintList(android.content.res.ColorStateList.valueOf(accent()));
+        chatJump.setCompoundDrawablePadding(dp(6));
+        chatJump.setVisibility(View.GONE);
+        chatJump.setOnClickListener(v -> { chatFollowing = true; chatJump.setVisibility(View.GONE); scrollDown(); });
+        LinearLayout.LayoutParams at = new LinearLayout.LayoutParams(-2, -2);
+        at.gravity = android.view.Gravity.CENTER_HORIZONTAL;
+        chatConvo.addView(chatJump, 1, at);
+        chatScroll.setOnScrollChangeListener((v, x, y, oldX, oldY) -> {
+            boolean atEnd = chatList.getBottom() - (y + chatScroll.getHeight()) < dp(96);
+            if (atEnd) { chatFollowing = true; chatJump.setVisibility(View.GONE); }
+            else if (y < oldY) chatFollowing = false;
+        });
+    }
 
     private void addUserBubble(String text, int transcriptIndex) {
         workBody = null;
+        // Sending, or opening a conversation, always lands on the newest message.
+        chatFollowing = true;
+        if (chatJump != null) chatJump.setVisibility(View.GONE);
         TextView tv = new TextView(this); markwon.setMarkdown(tv, text);
         tv.setTextColor(col(R.color.onAccent)); tv.setTextIsSelectable(true);
         tv.setLinkTextColor(col(R.color.onAccent));
