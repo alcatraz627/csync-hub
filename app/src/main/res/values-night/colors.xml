@@ -1,13 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Warm neutral dark. Deeper base, raised surfaces with a hint of warmth. -->
-    <color name="bg">#0C0D11</color>
-    <color name="surface">#16181E</color>
-    <color name="surface2">#1C1F27</color>
-    <color name="text">#F4F3F1</color>
-    <color name="dim">#9298A3</color>
-    <color name="border">#23262F</color>
-    <color name="offline">#6B7079</color>
+    <!-- The dark palette, value for value from the design system (csync docs/android-ui-system.md, Colour). -->
+    <color name="bg">#0F1014</color>
+    <color name="surface">#181A20</color>
+    <color name="surface2">#20232B</color>
+    <color name="text">#F4F2EF</color>
+    <color name="dim">#A7ACB5</color>
+    <color name="faint">#8B909A</color>
+    <color name="border">#2A2E38</color>
+    <color name="online">#3CCB84</color>
+    <color name="danger">#F26A6F</color>
+    <color name="offline">#8B909A</color>
     <color name="nav_indicator">#2A1A14</color>
     <color name="player_poster_top">#21252D</color>
     <color name="player_poster_bottom">#16181E</color>

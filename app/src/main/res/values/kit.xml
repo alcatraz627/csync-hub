@@ -1,26 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   The shared look of every screen: one type scale, one set of spacing values, and
-  one style per building block, taken from the clickthrough mock
-  (csync/assets/android-ui-clickthrough/styles.css). Screens use these instead of
-  setting sizes and colors themselves, so a fix here reaches every page.
+  one style per building block. The values are the design system's
+  (csync docs/android-ui-system.md, Type and Space and shape). Screens use these
+  instead of setting sizes and colors themselves, so a fix here reaches every page.
 -->
 <resources>
-    <color name="warn">#B7791F</color>
+    <color name="warn">#8A5D00</color>
 
-    <dimen name="kit_gutter">20dp</dimen>
+    <dimen name="kit_gutter">16dp</dimen>
     <dimen name="kit_top_height">52dp</dimen>
-    <dimen name="kit_row_min">59dp</dimen>
+    <dimen name="kit_row_min">60dp</dimen>
     <dimen name="kit_row_pad_v">10dp</dimen>
     <dimen name="kit_row_pad_h">12dp</dimen>
-    <dimen name="kit_row_gap">10dp</dimen>
-    <dimen name="kit_tile">32dp</dimen>
-    <dimen name="kit_tile_icon">17dp</dimen>
+    <dimen name="kit_row_gap">12dp</dimen>
+    <dimen name="kit_tile">38dp</dimen>
+    <dimen name="kit_tile_icon">18dp</dimen>
     <dimen name="kit_card_radius">16dp</dimen>
     <dimen name="kit_area_radius">14dp</dimen>
     <dimen name="kit_area_min">68dp</dimen>
-    <dimen name="kit_section_gap">15dp</dimen>
-    <dimen name="kit_dot">6dp</dimen>
+    <dimen name="kit_section_gap">18dp</dimen>
+    <dimen name="kit_dot">8dp</dimen>
 
     <!-- Type scale. Sizes are in sp so the app's text-size setting scales all of them together. -->
     <style name="Kit.Text" parent="">
@@ -51,16 +51,16 @@
         <item name="android:textAllCaps">false</item>
     </style>
     <style name="Kit.Text.RowTitle">
-        <item name="android:textSize">14sp</item>
+        <item name="android:textSize">15sp</item>
         <item name="android:textStyle">bold</item>
     </style>
     <style name="Kit.Text.RowSub">
-        <item name="android:textSize">11sp</item>
+        <item name="android:textSize">13sp</item>
         <item name="android:textColor">@color/dim</item>
         <item name="android:lineSpacingMultiplier">1.2</item>
     </style>
     <style name="Kit.Text.Meta">
-        <item name="android:textSize">11sp</item>
+        <item name="android:textSize">13sp</item>
         <item name="android:textColor">@color/dim</item>
     </style>
     <style name="Kit.Pill" parent="">
@@ -76,11 +76,11 @@
         <item name="android:includeFontPadding">false</item>
     </style>
     <style name="Kit.Text.Crumb">
-        <item name="android:textSize">12sp</item>
+        <item name="android:textSize">13.5sp</item>
         <item name="android:textColor">@color/dim</item>
     </style>
     <style name="Kit.Text.CrumbCurrent">
-        <item name="android:textSize">12sp</item>
+        <item name="android:textSize">13.5sp</item>
         <item name="android:textStyle">bold</item>
     </style>
 </resources>

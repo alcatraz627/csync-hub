@@ -134,7 +134,7 @@
         <item name="android:gravity">center_vertical</item>
         <item name="android:paddingStart">12dp</item>
         <item name="android:drawablePadding">8dp</item>
-        <item name="android:drawableTint">@color/coral</item>
+        <item name="android:drawableTint">@color/dim</item>
         <item name="android:textSize">13sp</item>
         <item name="android:textColor">@color/text</item>
         <item name="android:background">@drawable/card_bg</item>
@@ -200,7 +200,7 @@
         <item name="android:layout_marginEnd">@dimen/kit_row_gap</item>
         <item name="android:padding">7dp</item>
         <item name="android:background">@drawable/kit_tile_bg</item>
-        <item name="android:tint">?attr/colorPrimary</item>
+        <item name="android:tint">@color/dim</item>
         <item name="android:importantForAccessibility">no</item>
     </style>
 
@@ -247,7 +247,7 @@
         <item name="android:layout_width">18dp</item>
         <item name="android:layout_height">18dp</item>
         <item name="android:layout_marginBottom">8dp</item>
-        <item name="android:tint">@color/coral</item>
+        <item name="android:tint">@color/dim</item>
         <item name="android:importantForAccessibility">no</item>
     </style>
 </resources>

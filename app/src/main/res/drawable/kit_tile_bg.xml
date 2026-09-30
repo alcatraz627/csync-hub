@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- The square behind a row's icon. It is neutral: the accent is kept for the one primary action and the chosen option. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <solid android:color="@color/kit_accent_soft"/>
-    <corners android:radius="9dp"/>
+    <solid android:color="@color/surface2"/>
+    <corners android:radius="11dp"/>
 </shape>

@@ -8,7 +8,7 @@
     android:background="?attr/selectableItemBackground">
     <ImageView android:id="@+id/kit_icon"
         android:layout_width="14dp" android:layout_height="14dp" android:layout_marginEnd="8dp"
-        app:tint="?attr/colorPrimary" android:importantForAccessibility="no"/>
+        app:tint="@color/dim" android:importantForAccessibility="no"/>
     <TextView android:id="@+id/kit_title" style="@style/Kit.Text.Section"
         android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"/>
     <ImageView android:id="@+id/kit_chevron"
