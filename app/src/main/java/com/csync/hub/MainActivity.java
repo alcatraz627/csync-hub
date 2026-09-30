@@ -115,6 +115,12 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(getWindow().getDecorView(), (v, insets) -> {
             boolean typing = insets.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime());
             nav.setVisibility(typing ? View.GONE : View.VISIBLE);
+            // In a conversation the large title steps aside too, unless it is the title being typed.
+            if (pageChat != null && chatTitleEdit != null) {
+                boolean renaming = chatTitleEdit.getVisibility() == View.VISIBLE;
+                pageChat.findViewById(R.id.chat_heading).setVisibility(
+                    typing && chatConvoMode && !renaming ? View.GONE : View.VISIBLE);
+            }
             return androidx.core.view.ViewCompat.onApplyWindowInsets(v, insets);
         });
         nav.setItemActiveIndicatorColor(android.content.res.ColorStateList.valueOf(
@@ -627,7 +633,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     }
 
     @Override public void onBackPressed() {
-        if (current == 2 && chatConvoMode && chatFind.isOpen()) chatFind.close();
+        if (current == 2 && chatConvoMode && chatSuggest.isOpen()) chatSuggest.close();
+        else if (current == 2 && chatConvoMode && chatFind.isOpen()) chatFind.close();
         else if (current == 2 && chatConvoMode) openPlace("chat");
         else if (current == 1 && shareInboxMode) setShareMode(false);
         else if (current == 6 && moreDetail != 0) showMoreDetail(0);
@@ -1947,6 +1954,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         chatToggleArchived = pageChat.findViewById(R.id.chat_toggle_archived);
         markwon = buildMarkwon();
         chatFind = new ChatFind(pageChat, chatList, chatScroll);
+        chatSuggest = new ChatSuggest(pageChat, chatInput);
 
         final View expand = pageChat.findViewById(R.id.chat_expand);
         expand.setContentDescription("Drag to resize the message editor");
@@ -2839,6 +2847,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private boolean chatFollowing = true;
     private TextView chatJump;
     private ChatFind chatFind;
+    private ChatSuggest chatSuggest;
 
     private void setupChatFollowing() {
         chatJump = new TextView(this);
@@ -2854,7 +2863,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         chatJump.setOnClickListener(v -> { chatFollowing = true; chatJump.setVisibility(View.GONE); scrollDown(); });
         LinearLayout.LayoutParams at = new LinearLayout.LayoutParams(-2, -2);
         at.gravity = android.view.Gravity.CENTER_HORIZONTAL;
-        chatConvo.addView(chatJump, chatConvo.indexOfChild(pageChat.findViewById(R.id.chat_composer)), at);
+        chatConvo.addView(chatJump, chatConvo.indexOfChild(pageChat.findViewById(R.id.chat_suggest)), at);
         chatScroll.setOnScrollChangeListener((v, x, y, oldX, oldY) -> {
             boolean atEnd = chatList.getBottom() - (y + chatScroll.getHeight()) < dp(96);
             if (atEnd) { chatFollowing = true; chatJump.setVisibility(View.GONE); }

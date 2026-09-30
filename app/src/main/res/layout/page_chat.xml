@@ -10,6 +10,7 @@
 
     <!-- conversation heading -->
     <LinearLayout
+        android:id="@+id/chat_heading"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
@@ -190,6 +191,17 @@
                 android:orientation="vertical"
                 android:paddingTop="0dp"
                 android:paddingBottom="8dp"/>
+        </ScrollView>
+
+        <!-- Choices offered while typing "/" or "@", directly above the message box. -->
+        <ScrollView
+            android:id="@+id/chat_suggest"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginStart="10dp" android:layout_marginEnd="10dp"
+            android:visibility="gone">
+            <LinearLayout android:id="@+id/chat_suggest_rows"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical"/>
         </ScrollView>
 
         <!-- The message box: one outlined card holding what is attached, the text, and a row with Add, the model and Send. -->
