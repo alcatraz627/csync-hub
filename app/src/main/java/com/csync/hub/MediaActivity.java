@@ -871,8 +871,8 @@ public final class MediaActivity extends AppCompatActivity {
             host.addView(cover, frame);
         }
         java.util.List<Kit.Section> sections = new java.util.ArrayList<>();
+        // Films and shows are chosen from Media itself, one step up the path, so no row points there.
         sections.add(new Kit.Section("From the Pi", java.util.Arrays.asList(
-            new Kit.Action(Kit.Icon.MEDIA, "Browse Media", "Films, shows, photos", this::closeFullPlayer, true),
             new Kit.Action(Kit.Icon.PHOTO, "Photos as a slideshow", "Every image in a folder, in turn",
                 this::chooseSlideshow, true),
             new Kit.Action(Kit.Icon.CAMERA, "The Pi camera", "Live picture", this::showCamera))));
