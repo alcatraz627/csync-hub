@@ -225,7 +225,7 @@ public final class MediaActivity extends AppCompatActivity {
             this, com.google.android.material.R.attr.colorPrimary, getColor(R.color.coral));
         for (int id : new int[]{R.id.media_files, R.id.media_videos, R.id.media_history, R.id.media_connections}) {
             TextView tab = findViewById(id);
-            tab.setTextColor(id == selectedId ? accent : getColor(R.color.dim));
+            tab.setTextColor(id == selectedId ? Kit.accentText(this) : getColor(R.color.dim));
             tab.setCompoundDrawableTintList(android.content.res.ColorStateList.valueOf(
                 id == selectedId ? accent : getColor(R.color.dim)));
             tab.setTypeface(null, id == selectedId ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);

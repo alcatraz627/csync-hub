@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Home: one line on how the Pi is, then what to pick up, what the app can do, and your devices. -->
+<!-- Home: what to pick up, the four things done most, where to send, then one quiet line on how the Pi is. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent" android:layout_height="match_parent"
     android:orientation="vertical" android:background="@color/bg">
 
@@ -13,51 +14,47 @@
             android:paddingStart="@dimen/kit_gutter" android:paddingEnd="@dimen/kit_gutter"
             android:paddingBottom="28dp">
 
-            <!-- The Pi and this app, each as a row with its own state, filled in code. -->
-            <LinearLayout android:id="@+id/home_status"
-                android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="4dp" android:orientation="vertical"/>
-
             <include android:id="@+id/home_pickup_head" layout="@layout/kit_section_head"/>
+            <!-- The last conversation, and what was last played when there is one. Rows are added in code. -->
             <LinearLayout android:id="@+id/home_pickup_content"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:orientation="vertical" android:background="@drawable/card_bg"
-                android:clipToOutline="true">
-                <include android:id="@+id/home_recent" layout="@layout/kit_row"/>
-            </LinearLayout>
+                android:orientation="vertical"/>
 
-            <include android:id="@+id/home_cap_head" layout="@layout/kit_section_head"/>
-            <LinearLayout android:id="@+id/home_cap_grid"
+            <!-- The four things done most, as large targets. Each tile is icon over one word. -->
+            <LinearLayout android:id="@+id/home_actions"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginStart="-4dp" android:layout_marginEnd="-4dp"
-                android:orientation="vertical">
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="horizontal">
-                    <include android:id="@+id/home_cap_media" layout="@layout/kit_area_card"/>
-                    <include android:id="@+id/home_chat" layout="@layout/kit_area_card"/>
-                </LinearLayout>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="horizontal">
-                    <include android:id="@+id/home_share" layout="@layout/kit_area_card"/>
-                    <include android:id="@+id/home_display" layout="@layout/kit_area_card"/>
-                </LinearLayout>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="horizontal">
-                    <include android:id="@+id/home_camera" layout="@layout/kit_area_card"/>
-                    <include android:id="@+id/home_notes" layout="@layout/kit_area_card"/>
-                </LinearLayout>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="horizontal">
-                    <include android:id="@+id/home_tools" layout="@layout/kit_area_card"/>
-                    <View android:layout_width="0dp" android:layout_weight="1"
-                        android:layout_height="1dp" android:layout_margin="4dp"/>
-                </LinearLayout>
+                android:layout_marginTop="16dp" android:layout_marginStart="-4dp" android:layout_marginEnd="-4dp"
+                android:orientation="horizontal">
+                <include android:id="@+id/home_do_play" layout="@layout/kit_action_tile"/>
+                <include android:id="@+id/home_do_ask" layout="@layout/kit_action_tile"/>
+                <include android:id="@+id/home_do_send" layout="@layout/kit_action_tile"/>
+                <include android:id="@+id/home_do_camera" layout="@layout/kit_action_tile"/>
             </LinearLayout>
 
-            <include android:id="@+id/home_devices_head" layout="@layout/kit_section_head"/>
+            <!-- Your devices as one row with a count; the list itself lives in Share. -->
             <LinearLayout android:id="@+id/home_devices"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:orientation="vertical"/>
+                android:layout_marginTop="16dp" android:orientation="vertical"/>
+
+            <!-- How the Pi is, said once and quietly. It opens Tools, where the detail lives. -->
+            <LinearLayout android:id="@+id/home_status"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:minHeight="48dp" android:layout_marginTop="12dp"
+                android:paddingStart="4dp" android:paddingEnd="4dp"
+                android:gravity="center_vertical" android:orientation="horizontal"
+                android:background="?attr/selectableItemBackground">
+                <View android:id="@+id/home_status_dot"
+                    android:layout_width="@dimen/kit_dot" android:layout_height="@dimen/kit_dot"
+                    android:layout_marginEnd="8dp" android:background="@drawable/kit_dot"/>
+                <TextView android:id="@+id/home_status_words" style="@style/Kit.Text.RowSub"
+                    android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"/>
+                <TextView android:id="@+id/home_status_version" style="@style/Kit.Text.Meta"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:layout_marginEnd="4dp"/>
+                <ImageView android:layout_width="16dp" android:layout_height="16dp"
+                    android:src="@drawable/csi_forward" app:tint="@color/dim"
+                    android:importantForAccessibility="no"/>
+            </LinearLayout>
         </LinearLayout>
     </ScrollView>
 </LinearLayout>

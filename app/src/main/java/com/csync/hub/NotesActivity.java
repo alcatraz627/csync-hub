@@ -252,7 +252,7 @@ public final class NotesActivity extends AppCompatActivity {
         tab.setText(content);
         tab.setContentDescription(label + (selected ? ", selected" : ""));
         tab.setTypeface(null, selected ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
-        tab.setTextColor(selected ? accentColor() : getColor(R.color.dim));
+        tab.setTextColor(selected ? Kit.accentText(this) : getColor(R.color.dim));
         GradientDrawable background = new GradientDrawable();
         background.setColor(selected ? getColor(R.color.surface) : getColor(R.color.surface2));
         background.setCornerRadius(dp(10));

@@ -376,46 +376,18 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         View top = pageHome.findViewById(R.id.home_top);
         Kit.pageTop(top, "home", this::openPlace);
         Kit.topAction(top, Kit.Icon.SEARCH, "Search", v -> openHomeSearch());
-        Kit.bindSection(pageHome.findViewById(R.id.home_pickup_head), 0, "Pick up",
-            pageHome.findViewById(R.id.home_pickup_content));
-        Kit.bindSection(pageHome.findViewById(R.id.home_cap_head), 0, "Capabilities",
-            pageHome.findViewById(R.id.home_cap_grid));
-        Kit.bindSection(pageHome.findViewById(R.id.home_devices_head), 0, "Send to a device",
-            pageHome.findViewById(R.id.home_devices));
-        // Home is about what to do next, so the device list starts folded.
-        pageHome.findViewById(R.id.home_devices_head).performClick();
-        pageHome.findViewById(R.id.home_share).setOnClickListener(v -> nav.setSelectedItemId(R.id.nav_share));
-        pageHome.findViewById(R.id.home_chat).setOnClickListener(v -> nav.setSelectedItemId(R.id.nav_chat));
-        pageHome.findViewById(R.id.home_cap_media).setOnClickListener(v -> startActivity(new Intent(this, MediaActivity.class)));
-        pageHome.findViewById(R.id.home_camera).setOnClickListener(v -> { nav.setSelectedItemId(R.id.nav_more); show(5); });
-        pageHome.findViewById(R.id.home_notes).setOnClickListener(v ->
-            startActivity(new Intent(this, NotesActivity.class)));
-        pageHome.findViewById(R.id.home_display).setOnClickListener(v ->
-            startActivity(new Intent(this, MediaActivity.class).putExtra("player_target", "pi")));
-        pageHome.findViewById(R.id.home_tools).setOnClickListener(v -> { nav.setSelectedItemId(R.id.nav_more); show(3); });
-        pageHome.findViewById(R.id.home_recent).setOnClickListener(v -> {
-            JSONArray history = ChatStore.index(this);
-            JSONObject recent = history.optJSONObject(0);
-            if (recent != null) { nav.setSelectedItemId(R.id.nav_chat); openConversation(recent.optString("id"), recent.optString("title")); }
-            else { nav.setSelectedItemId(R.id.nav_chat); newConversation(); }
-        });
+        Kit.bindSection(pageHome.findViewById(R.id.home_pickup_head), 0, "Pick up", null);
+        // Home leads with doing: the four things done most, each one tap from here.
+        Kit.bindAction(pageHome.findViewById(R.id.home_do_play), Kit.Icon.MEDIA, "Play", "Play something from Media",
+            v -> startActivity(new Intent(this, MediaActivity.class)));
+        Kit.bindAction(pageHome.findViewById(R.id.home_do_ask), Kit.Icon.CHAT, "Ask", "Ask the Pi assistant in a new conversation",
+            v -> { nav.setSelectedItemId(R.id.nav_chat); newConversation(); });
+        Kit.bindAction(pageHome.findViewById(R.id.home_do_send), Kit.Icon.SHARE, "Send", "Send something to a device",
+            v -> nav.setSelectedItemId(R.id.nav_share));
+        Kit.bindAction(pageHome.findViewById(R.id.home_do_camera), Kit.Icon.CAMERA, "Camera", "Open the Pi camera",
+            v -> { nav.setSelectedItemId(R.id.nav_more); show(5); });
+        pageHome.findViewById(R.id.home_status).setOnClickListener(v -> { nav.setSelectedItemId(R.id.nav_more); show(3); });
         bindHomeStatus(null, false, null);
-        if (getResources().getConfiguration().screenWidthDp < 320 ||
-                getResources().getConfiguration().fontScale > 1.2f) {
-            LinearLayout grid = pageHome.findViewById(R.id.home_cap_grid);
-            for (int rowIndex = 0; rowIndex < grid.getChildCount(); rowIndex++) {
-                LinearLayout row = (LinearLayout) grid.getChildAt(rowIndex);
-                row.setOrientation(LinearLayout.VERTICAL);
-                for (int column = 0; column < row.getChildCount(); column++) {
-                    View card = row.getChildAt(column);
-                    if (!(card instanceof LinearLayout)) { card.setVisibility(View.GONE); continue; }
-                    LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                    params.setMargins(dp(4), dp(4), dp(4), dp(4));
-                    card.setLayoutParams(params);
-                }
-            }
-        }
         pageMore.findViewById(R.id.more_camera).setOnClickListener(v -> show(5));
         pageMore.findViewById(R.id.more_tools).setOnClickListener(v -> show(3));
         pageMore.findViewById(R.id.more_notes).setOnClickListener(v ->
@@ -669,22 +641,24 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     // A slow "no" reads the same as a fast one, so the dots use the short probe.
     private void refreshHome() {
         final String home = Prefs.homeIp(this), assist = Prefs.assistIp(this), token = Prefs.token(this);
-        JSONArray history = ChatStore.index(this);
-        JSONObject recent = history.optJSONObject(0);
-        if (recent == null) Kit.bindRow(pageHome.findViewById(R.id.home_recent), Kit.Icon.CHAT,
-            "Start a conversation", "Ask the Pi assistant", null, true);
-        else Kit.bindRow(pageHome.findViewById(R.id.home_recent), Kit.Icon.CHAT,
-            recent.optString("title", "Chat"), "Conversation · " + relTime(recent.optLong("updated")), null, true);
+        renderPickUp(null);
         new Thread(() -> {
             final boolean mac = !home.isEmpty() && MeshClient.reachable(home, MeshClient.PORT);
             final boolean pi = !assist.isEmpty() && MeshClient.reachable(assist, MeshClient.ASSIST_PORT);
             boolean mediaReady = false;
+            JSONObject played = null;
             if (!assist.isEmpty() && !token.isEmpty()) {
-                try { mediaReady = new MediaClient(assist, token).get("/v1/health").optBoolean("ok"); }
+                MediaClient media = new MediaClient(assist, token);
+                try { mediaReady = media.get("/v1/health").optBoolean("ok"); }
                 catch (Exception ignored) { }
+                try {
+                    JSONArray entries = media.get("/v1/history").optJSONArray("entries");
+                    if (entries != null) played = entries.optJSONObject(0);
+                } catch (Exception ignored) { }
             }
             final boolean media = mediaReady;
-            ui.post(() -> bindHomeStatus(pi, media, mac));
+            final JSONObject lastPlayed = played;
+            ui.post(() -> { bindHomeStatus(pi, media, mac); renderPickUp(lastPlayed); });
         }).start();
         refreshCapabilities();
     }
@@ -697,58 +671,56 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         boolean checking = pi == null;
         boolean piUp = !checking && (pi || media);
         com.google.android.material.bottomnavigation.BottomNavigationView nav = findViewById(R.id.nav);
-        // Two rows that each name a thing and say how it is: the Pi, and this app with its version and any update.
-        LinearLayout statusBox = pageHome.findViewById(R.id.home_status);
-        statusBox.removeAllViews();
-        LinearLayout statusGroup = Kit.group(statusBox);
-        View hub = Kit.addRow(statusGroup);
-        Kit.bindRow(hub, R.drawable.csi_tools, "Raspberry Pi", Prefs.assistIp(this), null, true);
-        Kit.rowStatus(hub, checking ? Kit.Status.WARN : piUp ? Kit.Status.GOOD : Kit.Status.IDLE,
-            checking ? "Checking" : piUp ? "Online" : "Offline");
-        hub.setOnClickListener(v -> { nav.setSelectedItemId(R.id.nav_more); show(3); });
-        View app = Kit.addRow(statusGroup);
-        Kit.bindRow(app, R.drawable.csi_download, "csync " + appVersion(), "Checking for an update", null, true);
-        app.setOnClickListener(v -> { nav.setSelectedItemId(R.id.nav_more); show(3); });
-        AppUpdater.refreshStatus(this, app.findViewById(R.id.kit_sub));
+        // One quiet line on how the Pi is. The detail, and the app's own version and updates, live in Tools.
+        Kit.setStatus(pageHome.findViewById(R.id.home_status_dot),
+            checking ? Kit.Status.WARN : piUp ? Kit.Status.GOOD : Kit.Status.BAD);
+        ((TextView) pageHome.findViewById(R.id.home_status_words)).setText(
+            checking ? "Checking the Pi" : piUp ? "The Pi is online" : "The Pi cannot be reached");
+        ((TextView) pageHome.findViewById(R.id.home_status_version)).setText("csync " + appVersion());
+        pageHome.findViewById(R.id.home_status).setContentDescription(
+            (checking ? "Checking the Pi" : piUp ? "The Pi is online" : "The Pi cannot be reached") + ". Open Tools");
 
-        Kit.Status onPi = checking ? Kit.Status.WARN : media ? Kit.Status.GOOD : Kit.Status.IDLE;
-        String piWords = checking ? "Checking" : media ? "Ready" : "Offline";
-        Kit.bindArea(pageHome.findViewById(R.id.home_cap_media), Kit.Icon.MEDIA, "Media", onPi, piWords);
-        Kit.bindArea(pageHome.findViewById(R.id.home_chat), Kit.Icon.CHAT, "Chat",
-            checking ? Kit.Status.WARN : pi ? Kit.Status.GOOD : Kit.Status.IDLE,
-            checking ? "Checking" : pi ? "Ready" : "Offline");
-        Kit.bindArea(pageHome.findViewById(R.id.home_display), Kit.Icon.DISPLAY, "Pi screen", onPi, piWords);
-        Kit.bindArea(pageHome.findViewById(R.id.home_camera), Kit.Icon.CAMERA, "Pi camera", onPi, piWords);
-        Kit.bindArea(pageHome.findViewById(R.id.home_notes), Kit.Icon.NOTES, "Notes", onPi, piWords);
-        Kit.bindArea(pageHome.findViewById(R.id.home_tools), Kit.Icon.TOOLS, "Tools", onPi, piWords);
-
-        // Devices: every named peer this phone knows, online ones before offline. Tapping one picks it as the recipient.
-        LinearLayout box = pageHome.findViewById(R.id.home_devices);
-        box.removeAllViews();
-        LinearLayout group = Kit.group(box);
+        // Your devices as one row with a count. Choosing which one happens in Share.
         JSONArray roster = PeerStore.load(this);
         String self = Prefs.deviceName(this);
-        int online = 0;
-        for (int pass = 0; pass < 2; pass++) {
-            for (int i = 0; roster != null && i < roster.length(); i++) {
-                JSONObject peer = roster.optJSONObject(i);
-                if (peer == null || self.equals(peer.optString("name"))) continue;
-                boolean up = peer.optBoolean("online");
-                if (up != (pass == 0)) continue;
-                if (up) online++;
-                String name = peer.optString("name");
-                View row = Kit.addRow(group);
-                Kit.bindRow(row, Kit.Icon.DEVICE, name, null, null, true);
-                Kit.rowStatus(row, up ? Kit.Status.GOOD : Kit.Status.IDLE, up ? "Online" : "Offline");
-                row.setOnClickListener(v -> {
-                    PeerStore.select(this, name);
-                    nav.setSelectedItemId(R.id.nav_share);
-                });
-            }
+        int known = 0, online = 0;
+        for (int i = 0; roster != null && i < roster.length(); i++) {
+            JSONObject peer = roster.optJSONObject(i);
+            if (peer == null || self.equals(peer.optString("name"))) continue;
+            known++;
+            if (peer.optBoolean("online")) online++;
         }
-        Kit.bindArea(pageHome.findViewById(R.id.home_share), Kit.Icon.SHARE, "Share",
-            online > 0 ? Kit.Status.GOOD : Kit.Status.IDLE,
-            online == 0 ? "No device online" : online == 1 ? "1 device online" : online + " devices online");
+        LinearLayout box = pageHome.findViewById(R.id.home_devices);
+        box.removeAllViews();
+        View devices = Kit.addRow(Kit.group(box));
+        Kit.bindRow(devices, Kit.Icon.DEVICE, "Your devices",
+            known == 0 ? "None found yet" : online + " of " + known + " online", null, true);
+        devices.setOnClickListener(v -> nav.setSelectedItemId(R.id.nav_share));
+    }
+
+    /** Pick up: the last conversation, and what was last played when the Pi remembers one. */
+    private void renderPickUp(JSONObject played) {
+        com.google.android.material.bottomnavigation.BottomNavigationView nav = findViewById(R.id.nav);
+        LinearLayout box = pageHome.findViewById(R.id.home_pickup_content);
+        box.removeAllViews();
+        LinearLayout group = Kit.group(box);
+        JSONObject recent = ChatStore.index(this).optJSONObject(0);
+        View talk = Kit.addRow(group);
+        if (recent == null) Kit.bindRow(talk, Kit.Icon.CHAT, "Start a conversation", "Ask the Pi assistant", null, true);
+        else Kit.bindRow(talk, Kit.Icon.CHAT, recent.optString("title", "Chat"),
+            "Conversation · " + relTime(recent.optLong("updated")), null, true);
+        talk.setOnClickListener(v -> {
+            nav.setSelectedItemId(R.id.nav_chat);
+            if (recent != null) openConversation(recent.optString("id"), recent.optString("title"));
+            else newConversation();
+        });
+        if (played == null || played.optString("name").isEmpty()) return;
+        View watch = Kit.addRow(group);
+        boolean onPhone = "phone".equals(played.optString("target"));
+        Kit.bindRow(watch, Kit.Icon.VIDEO, MediaActivity.displayMediaName(played.optString("name")),
+            (played.optBoolean("completed") ? "Finished" : "Last played") + (onPhone ? " · on this phone" : " · on the Pi screen"),
+            null, true);
+        watch.setOnClickListener(v -> startActivity(new Intent(this, MediaActivity.class)));
     }
 
     private String appVersion() {
@@ -952,7 +924,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             TextView label = new TextView(this);
             label.setText(name);
             label.setTextSize(12);
-            label.setTextColor(picked ? accent() : col(R.color.dim));
+            label.setTextColor(picked ? Kit.accentText(this) : col(R.color.dim));
             label.setGravity(android.view.Gravity.CENTER);
             label.setPadding(0, dp(4), 0, 0);
             cell.addView(label);
@@ -975,7 +947,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         android.content.res.ColorStateList fill = new android.content.res.ColorStateList(
             states, new int[]{col(R.color.surface), android.graphics.Color.TRANSPARENT});
         android.content.res.ColorStateList ink = new android.content.res.ColorStateList(
-            states, new int[]{accent(), col(R.color.dim)});
+            states, new int[]{Kit.accentText(this), col(R.color.dim)});
         for (int i = 0; i < group.getChildCount(); i++) {
             com.google.android.material.button.MaterialButton button =
                 (com.google.android.material.button.MaterialButton) group.getChildAt(i);
@@ -1829,7 +1801,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                     chip.setChipStrokeWidth(0);
                     chip.setChipBackgroundColor(android.content.res.ColorStateList.valueOf(on
                         ? androidx.core.graphics.ColorUtils.blendARGB(col(R.color.surface2), accent(), 0.22f) : col(R.color.surface2)));
-                    chip.setTextColor(on ? accent() : col(R.color.text));
+                    chip.setTextColor(on ? Kit.accentText(this) : col(R.color.text));
                     chip.setOnClickListener(v -> { choice[1] = value; render[0].run(); });
                     chips.addView(chip);
                 }
@@ -2065,7 +2037,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         for (int i = 0; i < ids.length; i++) {
             TextView tab = pageChat.findViewById(ids[i]);
             boolean selected = names[i].equals(filter);
-            tab.setTextColor(selected ? accent() : col(R.color.dim));
+            tab.setTextColor(selected ? Kit.accentText(this) : col(R.color.dim));
             tab.setCompoundDrawableTintList(android.content.res.ColorStateList.valueOf(
                 selected ? accent() : col(R.color.dim)));
             tab.setBackground(selected ? Kit.underline(this, accent()) : null);
@@ -3121,7 +3093,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private void setupChatFollowing() {
         chatJump = new TextView(this);
         chatJump.setText("Jump to the latest");
-        chatJump.setTextColor(accent());
+        chatJump.setTextColor(Kit.accentText(this));
         chatJump.setTextSize(13);
         chatJump.setGravity(android.view.Gravity.CENTER);
         chatJump.setMinHeight(dp(48));
@@ -3150,7 +3122,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         tv.setTextColor(col(R.color.onAccent)); tv.setTextIsSelectable(true);
         tv.setLinkTextColor(col(R.color.onAccent));
         tv.setMovementMethod(android.text.method.LinkMovementMethod.getInstance());
-        tv.setTextSize(14); tv.setPadding(dp(13), dp(10), dp(13), dp(10)); tv.setBackground(bg(accent(), 16));
+        tv.setTextSize(14); tv.setPadding(dp(13), dp(10), dp(13), dp(10)); tv.setBackground(bg(Kit.accentFill(this), 16));
         tv.setMaxWidth(Math.min(dp(260), getResources().getDisplayMetrics().widthPixels - dp(80)));
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
@@ -3178,6 +3150,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             TextView tv = new TextView(this); markwon.setMarkdown(tv, piece.trim());
             ChatFind.mark(tv);
             tv.setTextColor(col(R.color.text)); tv.setTextSize(14); tv.setLineSpacing(0, 1.2f);
+            tv.setLinkTextColor(Kit.accentText(this));
             tv.setTextIsSelectable(true);
             tv.setMovementMethod(android.text.method.LinkMovementMethod.getInstance());
             box.addView(tv);
@@ -3381,7 +3354,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             bubble.setMovementMethod(android.text.method.LinkMovementMethod.getInstance());
             bubble.setTextSize(14);
             bubble.setPadding(dp(13), dp(10), dp(13), dp(10));
-            bubble.setBackground(bg(mine ? accent() : col(R.color.surface2), 16));
+            bubble.setBackground(bg(mine ? Kit.accentFill(this) : col(R.color.surface2), 16));
             bubble.setMaxWidth(dp(260));
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);

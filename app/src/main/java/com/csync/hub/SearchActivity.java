@@ -333,7 +333,7 @@ public final class SearchActivity extends AppCompatActivity {
             boolean selected = SCOPES[i].equals(scope);
             LinearLayout tab = (LinearLayout) tabs.getChildAt(i);
             TextView label = scopeViews.get(i);
-            label.setTextColor(selected ? accent : color(R.color.dim));
+            label.setTextColor(selected ? Kit.accentText(this) : color(R.color.dim));
             ((ImageView) tab.getChildAt(0)).setColorFilter(selected ? accent : color(R.color.dim));
             tab.setBackground(selected ? shape(color(R.color.surface), 9) : null);
             tab.setSelected(selected);

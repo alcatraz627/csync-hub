@@ -223,6 +223,15 @@ final class Kit {
         return card;
     }
 
+    /** Fill a large action tile: its icon, its one word, and what it says to a screen reader. */
+    static View bindAction(View tile, int icon, CharSequence word, CharSequence spoken, View.OnClickListener click) {
+        ((ImageView) tile.findViewById(R.id.kit_icon)).setImageResource(icon);
+        ((TextView) tile.findViewById(R.id.kit_title)).setText(word);
+        tile.setContentDescription(spoken);
+        tile.setOnClickListener(click);
+        return tile;
+    }
+
     // ---- section headings ----
 
     /**
@@ -348,6 +357,33 @@ final class Kit {
     }
 
     // ---- helpers ----
+
+    /**
+     * The accent in a shade that small text can be read in. Coral, teal and violet are too pale
+     * for words on the light background, so the shade is deepened (or, on the dark background,
+     * lifted) until it stands out at the ratio the accessibility guidelines ask for. Icons and
+     * filled buttons keep the accent itself.
+     */
+    static int accentText(Context c) {
+        int shade = com.google.android.material.color.MaterialColors.getColor(c,
+            com.google.android.material.R.attr.colorPrimary, ContextCompat.getColor(c, R.color.coral));
+        int ground = ContextCompat.getColor(c, R.color.bg);
+        int toward = androidx.core.graphics.ColorUtils.calculateLuminance(ground) > 0.5
+            ? android.graphics.Color.BLACK : android.graphics.Color.WHITE;
+        for (int step = 0; step < 12 && androidx.core.graphics.ColorUtils.calculateContrast(shade, ground) < 4.5; step++)
+            shade = androidx.core.graphics.ColorUtils.blendARGB(shade, toward, 0.08f);
+        return shade;
+    }
+
+    /** The accent deepened just enough for white words on top of it to be read, for a filled area that holds text. */
+    static int accentFill(Context c) {
+        int shade = com.google.android.material.color.MaterialColors.getColor(c,
+            com.google.android.material.R.attr.colorPrimary, ContextCompat.getColor(c, R.color.coral));
+        int words = ContextCompat.getColor(c, R.color.onAccent);
+        for (int step = 0; step < 12 && androidx.core.graphics.ColorUtils.calculateContrast(words, shade) < 4.5; step++)
+            shade = androidx.core.graphics.ColorUtils.blendARGB(shade, android.graphics.Color.BLACK, 0.06f);
+        return shade;
+    }
 
     private static void setOptional(TextView view, CharSequence text) {
         view.setVisibility(text == null || text.length() == 0 ? View.GONE : View.VISIBLE);
