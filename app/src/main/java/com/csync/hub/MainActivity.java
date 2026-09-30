@@ -52,7 +52,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     // system page (Shizuku top)
     private static final int SHIZUKU_REQ = 1001;
-    private TextView sysStatus, sysOutput;
+    private TextView sysStatus;
     private boolean sysLooping;
 
     private final Shizuku.OnRequestPermissionResultListener permListener =
@@ -1139,14 +1139,20 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     private void setupSystemPage() {
         sysStatus = pageTools.findViewById(R.id.sys_status);
-        sysOutput = pageTools.findViewById(R.id.sys_output);
-        sysOutput.setTypeface(android.graphics.Typeface.MONOSPACE);
-        ((Button) pageTools.findViewById(R.id.sys_refresh)).setOnClickListener(v -> sysTickOnce());
     }
 
+    /** With Shizuku absent the page says so once and offers to open it; there is nothing else to show. */
     private void ensureShizuku() {
+        LinearLayout body = pageTools.findViewById(R.id.sys_body);
         if (!Shizuku.pingBinder()) {
-            sysStatus.setText("Live readings need Shizuku to be running on this phone.");
+            sysStatus.setText("");
+            body.removeAllViews();
+            Kit.empty(body, Kit.Icon.DEVICE, "Live readings need Shizuku to be running on this phone", null,
+                Kit.button(this, R.drawable.csi_upload, "Open Shizuku", R.color.text, () -> {
+                    Intent shizuku = getPackageManager().getLaunchIntentForPackage("moe.shizuku.privileged.api");
+                    if (shizuku == null) toast("Shizuku is not installed on this phone");
+                    else startActivity(shizuku);
+                }));
             return;
         }
         if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) startSysLoop();
@@ -1166,15 +1172,51 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     private void sysTickOnce() {
         new Thread(() -> {
-            final String text = runTop();
-            ui.post(() -> sysOutput.setText(text));
+            final String raw = rawTop();
+            ui.post(() -> showReadings(raw));
         }).start();
     }
 
-    private String runTop() {
-        String raw = rawTop();
-        try { return formatStats(raw); }
-        catch (Throwable e) { return raw; }
+    /** Draw what top reported: memory, processor and task counts as rows, then the busiest apps. */
+    private void showReadings(String raw) {
+        LinearLayout body = pageTools.findViewById(R.id.sys_body);
+        body.removeAllViews();
+        String[] lines = raw.split("\n");
+        String memLine = "", cpuLine = "", tasksLine = "";
+        int headerIdx = -1;
+        for (int i = 0; i < lines.length; i++) {
+            String l = lines[i].trim();
+            if (l.startsWith("Tasks:")) tasksLine = l;
+            else if (l.startsWith("Mem:")) memLine = l;
+            else if (l.contains("%cpu")) cpuLine = l;
+            else if (l.startsWith("PID") && l.contains("%CPU")) { headerIdx = i; break; }
+        }
+        if (headerIdx < 0) {
+            Kit.empty(body, Kit.Icon.DEVICE, "The readings could not be taken", raw.trim().isEmpty() ? null : raw.trim(), null);
+            return;
+        }
+        LinearLayout readings = Kit.group(body);
+        long total = matchMB(memLine, "total"), used = matchMB(memLine, "used");
+        if (total > 0) Kit.bindRow(Kit.addRow(readings), Kit.Icon.DEVICE, "Memory in use", gb(used) + " of " + gb(total),
+            Math.round(used * 100.0 / total) + "%", false).setClickable(false);
+        String cpu = cpuSummary(cpuLine);
+        if (!cpu.endsWith("?")) Kit.bindRow(Kit.addRow(readings), Kit.Icon.SPEED, "Processor", "Busy right now",
+            cpu.replace("CPU ", ""), false).setClickable(false);
+        String tasks = matchOne(tasksLine, "Tasks:\\s+(\\d+)");
+        if (!tasks.isEmpty()) Kit.bindRow(Kit.addRow(readings), Kit.Icon.TOOLS, "Running", "Processes on this phone",
+            tasks, false).setClickable(false);
+        Kit.label(body, "Busiest apps");
+        LinearLayout busiest = Kit.group(body);
+        int shown = 0;
+        for (int i = headerIdx + 1; i < lines.length && shown < 10; i++) {
+            String[] f = lines[i].trim().split("\\s+");
+            if (f.length < 12) continue;
+            String name = f[11];
+            if (name.length() > 40) name = name.substring(name.length() - 40);
+            Kit.bindRow(Kit.addRow(busiest), Kit.Icon.DEVICE, name, f[8] + "% processor · " + f[9] + "% memory",
+                null, false).setClickable(false);
+            shown++;
+        }
     }
 
     private String rawTop() {
@@ -1198,45 +1240,6 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         }
     }
 
-    // Turn toybox top output into a compact summary (RAM, CPU, tasks) and an
-    // aligned process table. Falls back to raw output if the format shifts.
-    private String formatStats(String raw) {
-        String[] lines = raw.split("\n");
-        String memLine = "", cpuLine = "", tasksLine = "";
-        int headerIdx = -1;
-        for (int i = 0; i < lines.length; i++) {
-            String l = lines[i].trim();
-            if (l.startsWith("Tasks:")) tasksLine = l;
-            else if (l.startsWith("Mem:")) memLine = l;
-            else if (l.contains("%cpu")) cpuLine = l;
-            else if (l.startsWith("PID") && l.contains("%CPU")) { headerIdx = i; break; }
-        }
-        StringBuilder sb = new StringBuilder();
-        sb.append(memSummary(memLine)).append("\n");
-        sb.append(cpuSummary(cpuLine));
-        String tasks = matchOne(tasksLine, "Tasks:\\s+(\\d+)");
-        if (!tasks.isEmpty()) sb.append("   ").append(tasks).append(" tasks");
-        sb.append("\n\n");
-        sb.append(String.format("%-22s %5s %5s %6s\n", "process", "cpu%", "mem%", "res"));
-        if (headerIdx >= 0) {
-            for (int i = headerIdx + 1; i < lines.length; i++) {
-                String[] f = lines[i].trim().split("\\s+");
-                if (f.length < 12) continue;
-                String name = f[11];
-                if (name.length() > 22) name = name.substring(name.length() - 22);
-                sb.append(String.format("%-22s %5s %5s %6s\n", name, f[8], f[9], f[5]));
-            }
-        }
-        return sb.toString().trim();
-    }
-
-    private String memSummary(String l) {
-        try {
-            long total = matchMB(l, "total"), used = matchMB(l, "used");
-            int pct = total > 0 ? (int) Math.round(used * 100.0 / total) : 0;
-            return String.format("RAM %s / %s (%d%%)", gb(used), gb(total), pct);
-        } catch (Throwable e) { return "RAM ?"; }
-    }
     private String cpuSummary(String l) {
         try {
             double t = Double.parseDouble(matchOne(l, "(\\d+)%cpu"));
