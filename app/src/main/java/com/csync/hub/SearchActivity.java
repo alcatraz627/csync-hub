@@ -170,7 +170,7 @@ public final class SearchActivity extends AppCompatActivity {
         mediaLoading = !query.isEmpty() && query.length() <= 128 && !Prefs.token(this).isEmpty();
         peersLoading = !Prefs.token(this).isEmpty();
         mediaState = query.length() > 128 ? "Pi media search accepts up to 128 characters." :
-            query.isEmpty() ? "Enter a name to search Pi media." :
+            query.isEmpty() ? "" :
             Prefs.token(this).isEmpty() ? "Set a mesh token in Settings to search Pi media." : "";
         peersState = Prefs.token(this).isEmpty() ? "Device availability has not been checked." : "";
         render();
@@ -206,7 +206,7 @@ public final class SearchActivity extends AppCompatActivity {
             }
             if (titleMatch || messageMatch) local.add(new Result("Chats",
                 title.isEmpty() ? "Untitled conversation" : title,
-                messageMatch && !titleMatch ? "Saved chat · matching message" : "Saved chat",
+                messageMatch && !titleMatch ? "Conversation · said inside" : "Conversation",
                 R.drawable.csi_chat, id, "", ""));
         }
         File inbox = getExternalFilesDir("inbox");
@@ -342,19 +342,21 @@ public final class SearchActivity extends AppCompatActivity {
         List<Result> visible = new ArrayList<>();
         if ("All".equals(scope) || "Media".equals(scope)) visible.addAll(media);
         for (Result result : local) if ("All".equals(scope) || scope.equals(result.domain)) visible.add(result);
-        countView.setText(visible.size() + (visible.size() == 1 ? " RESULT" : " RESULTS"));
+        // With nothing typed there is nothing to count or list: the page says what it can search instead.
+        boolean blank = queryView.length() == 0;
+        if (blank) visible.clear();
+        countView.setText(blank ? "" : visible.size() + (visible.size() == 1 ? " result" : " results"));
+        countView.setVisibility(blank || visible.isEmpty() ? View.GONE : View.VISIBLE);
         resultsView.removeAllViews();
-        if (visible.isEmpty()) {
-            String empty = mediaLoading || peersLoading ? "Searching your sources" :
-                queryView.length() == 0 ? "Enter a name to search your hub." :
-                "No matches in " + scope.toLowerCase(Locale.ROOT) + ".";
-            TextView message = new TextView(this);
-            message.setText(empty);
-            message.setTextColor(color(R.color.dim));
-            message.setTextSize(13);
-            message.setGravity(Gravity.CENTER);
-            message.setPadding(dp(14), dp(22), dp(14), dp(22));
-            resultsView.addView(message);
+        if (blank) {
+            Kit.empty(resultsView, Kit.Icon.SEARCH, "Search everything you can reach",
+                "Media, conversations, files and devices.", null);
+        } else if (visible.isEmpty()) {
+            if (mediaLoading || peersLoading) Kit.empty(resultsView, Kit.Icon.SEARCH, "Searching", null, null);
+            else Kit.empty(resultsView, Kit.Icon.SEARCH, "Nothing matches \"" + queryView.getText().toString().trim() + "\"",
+                "All".equals(scope) ? null : "Searched in " + scope + ".",
+                "All".equals(scope) ? null : Kit.button(this, R.drawable.csi_menu, "Search everything", R.color.text,
+                    () -> { scope = "All"; render(); }));
         } else {
             for (Result result : visible) addRow(result);
         }
