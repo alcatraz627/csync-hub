@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Settings is one page: Connection opens its own page, and Playback, Assistant and Appearance fold in place. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
@@ -18,270 +19,135 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:paddingStart="@dimen/kit_gutter" android:paddingEnd="@dimen/kit_gutter"
-            android:paddingTop="6dp" android:paddingBottom="16dp">
+            android:paddingTop="6dp" android:paddingBottom="24dp">
 
             <LinearLayout android:id="@+id/settings_overview"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical">
 
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="4dp" android:text="Settings"
-                style="@style/Kit.Text.PageTitle" android:textColor="@color/text"/>
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="4dp" android:layout_marginBottom="14dp"
-                android:text="Choices here carry across Home, Media, Share, Chat, and system chrome."
-                android:textSize="13sp" android:textColor="@color/dim"/>
+                <LinearLayout android:id="@+id/set_connection_group"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp" android:orientation="vertical"/>
 
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginBottom="8dp" android:text="Devices &amp; connections"
-                style="@style/Kit.Text.Section"/>
-            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:orientation="vertical" android:background="@drawable/card_bg">
-                <LinearLayout android:id="@+id/settings_pi" style="@style/CsyncMoreNavRow">
-                    <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_screen"/>
-                    <LinearLayout style="@style/CsyncMoreText">
-                        <TextView style="@style/CsyncMoreTitle" android:text="Raspberry Pi"/>
-                        <TextView style="@style/CsyncMoreSub" android:text="Assistant, media, camera, screen"/>
+                <include android:id="@+id/set_sec_playback" layout="@layout/kit_section_head"/>
+                <LinearLayout android:id="@+id/set_playback_body"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical"/>
+
+                <include android:id="@+id/set_sec_assistant" layout="@layout/kit_section_head"/>
+                <LinearLayout android:id="@+id/set_assistant_body"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical"/>
+
+                <include android:id="@+id/set_sec_appearance" layout="@layout/kit_section_head"/>
+                <LinearLayout android:id="@+id/set_appearance_body"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical">
+                    <TextView style="@style/CsyncAppearanceHeading" android:text="Theme"/>
+                    <LinearLayout
+                        android:id="@+id/set_theme_group" style="@style/CsyncAppearanceTabs"
+                        android:orientation="horizontal">
+                        <com.google.android.material.button.MaterialButton android:id="@+id/set_theme_system"
+                            style="@style/CsyncAppearanceTab" android:text="System" app:icon="@drawable/csi_system"/>
+                        <com.google.android.material.button.MaterialButton android:id="@+id/set_theme_light"
+                            style="@style/CsyncAppearanceTab" android:text="Light" app:icon="@drawable/csi_sun"/>
+                        <com.google.android.material.button.MaterialButton android:id="@+id/set_theme_dark"
+                            style="@style/CsyncAppearanceTab" android:text="Dark" app:icon="@drawable/csi_moon"/>
                     </LinearLayout>
-                    <ImageView style="@style/CsyncMoreChevron"/>
-                </LinearLayout>
-                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/border"/>
-                <LinearLayout android:id="@+id/settings_mac" style="@style/CsyncMoreNavRow">
-                    <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_share"/>
-                    <LinearLayout style="@style/CsyncMoreText">
-                        <TextView style="@style/CsyncMoreTitle" android:text="Mac"/>
-                        <TextView style="@style/CsyncMoreSub" android:text="Sharing target and receiver"/>
+                    <TextView style="@style/CsyncAppearanceHeading" android:layout_marginTop="20dp"
+                        android:text="Text size"/>
+                    <LinearLayout
+                        android:id="@+id/set_text_size_group" style="@style/CsyncAppearanceTabs"
+                        android:orientation="horizontal">
+                        <com.google.android.material.button.MaterialButton android:id="@+id/set_text_sm"
+                            style="@style/CsyncAppearanceTab" android:text="Small"/>
+                        <com.google.android.material.button.MaterialButton android:id="@+id/set_text_md"
+                            style="@style/CsyncAppearanceTab" android:text="Medium"/>
+                        <com.google.android.material.button.MaterialButton android:id="@+id/set_text_lg"
+                            style="@style/CsyncAppearanceTab" android:text="Large"/>
                     </LinearLayout>
-                    <ImageView style="@style/CsyncMoreChevron"/>
+                    <TextView style="@style/CsyncAppearanceHeading" android:layout_marginTop="20dp"
+                        android:text="Primary colour"/>
+                    <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp" android:scrollbars="none">
+                        <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+                            <View android:id="@+id/set_accent_coral" style="@style/CsyncAccentSwatch" android:contentDescription="Coral"/>
+                            <View android:id="@+id/set_accent_teal" style="@style/CsyncAccentSwatch" android:contentDescription="Teal"/>
+                            <View android:id="@+id/set_accent_violet" style="@style/CsyncAccentSwatch" android:contentDescription="Violet"/>
+                            <View android:id="@+id/set_accent_rust" style="@style/CsyncAccentSwatch" android:contentDescription="Rust"/>
+                            <View android:id="@+id/set_accent_blue" style="@style/CsyncAccentSwatch" android:contentDescription="Blue"/>
+                            <View android:id="@+id/set_accent_leaf" style="@style/CsyncAccentSwatch" android:contentDescription="Leaf"/>
+                            <View android:id="@+id/set_accent_rose" style="@style/CsyncAccentSwatch" android:contentDescription="Rose"/>
+                            <ImageView android:id="@+id/set_accent_custom" style="@style/CsyncAccentSwatch"
+                                android:src="@drawable/csi_palette" android:padding="11dp"
+                                android:contentDescription="Your own colour"/>
+                        </LinearLayout>
+                    </HorizontalScrollView>
+                    <TextView style="@style/CsyncAppearanceHeading" android:layout_marginTop="20dp"
+                        android:text="App icon"/>
+                    <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp" android:scrollbars="none">
+                        <LinearLayout android:id="@+id/set_icon_row" android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" android:orientation="horizontal"/>
+                    </HorizontalScrollView>
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp" android:textSize="12sp" android:textColor="@color/dim"
+                        android:text="Theme, size and colour apply to every screen and the system bars. The home screen redraws when the icon changes."/>
                 </LinearLayout>
-                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/border"/>
-                <LinearLayout android:id="@+id/settings_tailscale" style="@style/CsyncMoreNavRow">
-                    <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_wifi"/>
-                    <LinearLayout style="@style/CsyncMoreText">
-                        <TextView style="@style/CsyncMoreTitle" android:text="Tailscale &amp; pairing"/>
-                        <TextView style="@style/CsyncMoreSub" android:text="Names, reachability, credentials"/>
-                    </LinearLayout>
-                    <ImageView style="@style/CsyncMoreChevron"/>
-                </LinearLayout>
-            </LinearLayout>
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="18dp" android:layout_marginBottom="8dp"
-                android:text="Media &amp; display" style="@style/Kit.Text.Section"/>
-            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:orientation="vertical" android:background="@drawable/card_bg">
-                <LinearLayout android:id="@+id/settings_playback" style="@style/CsyncMoreNavRow">
-                    <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_volume"/>
-                    <LinearLayout style="@style/CsyncMoreText">
-                        <TextView style="@style/CsyncMoreTitle" android:text="Pi playback volume"/>
-                        <TextView style="@style/CsyncMoreSub" android:text="Current output"/>
-                    </LinearLayout>
-                    <ImageView style="@style/CsyncMoreChevron"/>
-                </LinearLayout>
-            </LinearLayout>
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="18dp" android:layout_marginBottom="8dp"
-                android:text="Assistant" style="@style/Kit.Text.Section"/>
-            <LinearLayout android:id="@+id/settings_assistant_row" style="@style/CsyncMoreNavRow"
-                android:background="@drawable/card_bg">
-                <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_chat"/>
-                <LinearLayout style="@style/CsyncMoreText">
-                    <TextView style="@style/CsyncMoreTitle" android:text="Provider &amp; model"/>
-                    <TextView style="@style/CsyncMoreSub" android:text="Supported model and thinking settings"/>
-                </LinearLayout>
-                <ImageView style="@style/CsyncMoreChevron"/>
-            </LinearLayout>
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="18dp" android:layout_marginBottom="8dp"
-                android:text="App" style="@style/Kit.Text.Section"/>
-            <LinearLayout android:id="@+id/settings_appearance_row" style="@style/CsyncMoreNavRow"
-                android:background="@drawable/card_bg">
-                <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_palette"/>
-                <LinearLayout style="@style/CsyncMoreText">
-                    <TextView style="@style/CsyncMoreTitle" android:text="Appearance"/>
-                    <TextView style="@style/CsyncMoreSub" android:text="Theme and accent"/>
-                </LinearLayout>
-                <ImageView style="@style/CsyncMoreChevron"/>
-            </LinearLayout>
             </LinearLayout>
 
-            <LinearLayout
-                android:id="@+id/settings_appearance_detail" android:visibility="gone"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical">
-                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:text="Appearance" style="@style/Kit.Text.PageTitle"
-                    android:textColor="@color/text"/>
-                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp" android:text="Set the whole phone interface."
-                    android:textSize="13sp" android:textColor="@color/dim"/>
-                <TextView style="@style/CsyncAppearanceHeading" android:layout_marginTop="24dp"
-                    android:text="Theme"/>
-                <LinearLayout
-                    android:id="@+id/set_theme_group" style="@style/CsyncAppearanceTabs"
-                    android:orientation="horizontal">
-                    <com.google.android.material.button.MaterialButton android:id="@+id/set_theme_system"
-                        style="@style/CsyncAppearanceTab" android:text="System" app:icon="@drawable/csi_system"/>
-                    <com.google.android.material.button.MaterialButton android:id="@+id/set_theme_light"
-                        style="@style/CsyncAppearanceTab" android:text="Light" app:icon="@drawable/csi_sun"/>
-                    <com.google.android.material.button.MaterialButton android:id="@+id/set_theme_dark"
-                        style="@style/CsyncAppearanceTab" android:text="Dark" app:icon="@drawable/csi_moon"/>
-                </LinearLayout>
-                <TextView style="@style/CsyncAppearanceHeading" android:layout_marginTop="22dp"
-                    android:text="Text size"/>
-                <LinearLayout
-                    android:id="@+id/set_text_size_group" style="@style/CsyncAppearanceTabs"
-                    android:orientation="horizontal">
-                    <com.google.android.material.button.MaterialButton android:id="@+id/set_text_sm"
-                        style="@style/CsyncAppearanceTab" android:text="sm" app:icon="@drawable/csi_text"/>
-                    <com.google.android.material.button.MaterialButton android:id="@+id/set_text_md"
-                        style="@style/CsyncAppearanceTab" android:text="md" app:icon="@drawable/csi_text"/>
-                    <com.google.android.material.button.MaterialButton android:id="@+id/set_text_lg"
-                        style="@style/CsyncAppearanceTab" android:text="lg" app:icon="@drawable/csi_text"/>
-                </LinearLayout>
-                <TextView style="@style/CsyncAppearanceHeading" android:layout_marginTop="22dp"
-                    android:text="Primary colour"/>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="horizontal" android:layout_marginTop="8dp">
-                    <View android:id="@+id/set_accent_coral" style="@style/CsyncAccentSwatch" android:contentDescription="Coral accent"/>
-                    <View android:id="@+id/set_accent_teal" style="@style/CsyncAccentSwatch" android:contentDescription="Teal accent"/>
-                    <View android:id="@+id/set_accent_violet" style="@style/CsyncAccentSwatch" android:contentDescription="Violet accent"/>
-                    <View android:id="@+id/set_accent_rust" style="@style/CsyncAccentSwatch" android:contentDescription="Rust accent"/>
-                    <View android:id="@+id/set_accent_blue" style="@style/CsyncAccentSwatch" android:contentDescription="Blue accent"/>
-                    <View android:id="@+id/set_accent_leaf" style="@style/CsyncAccentSwatch" android:contentDescription="Leaf accent"/>
-                    <View android:id="@+id/set_accent_rose" style="@style/CsyncAccentSwatch" android:contentDescription="Rose accent"/>
-                </LinearLayout>
-                <ImageView android:id="@+id/set_accent_custom" style="@style/CsyncAccentSwatch"
-                    android:layout_marginTop="8dp" android:src="@drawable/csi_palette"
-                    android:padding="11dp" android:contentDescription="Edit custom color"/>
-                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp" android:textSize="12sp" android:textColor="@color/dim"
-                    android:text="Applies across screens and system bars; status colors keep their meaning."/>
-                <TextView style="@style/CsyncAppearanceHeading" android:layout_marginTop="22dp"
-                    android:text="App icon"/>
-                <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp" android:scrollbars="none">
-                    <LinearLayout android:id="@+id/set_icon_row" android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" android:orientation="horizontal"/>
-                </HorizontalScrollView>
-                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp" android:textSize="12sp" android:textColor="@color/dim"
-                    android:text="The home screen redraws when the icon changes. An icon inside a folder may move out of it."/>
-            </LinearLayout>
-
-            <!-- connection card -->
+            <!-- The Connection page: the one long form, with Save. -->
             <LinearLayout
                 android:id="@+id/settings_connection_detail" android:visibility="gone"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:background="@drawable/card_bg"
-                android:padding="14dp"
-                android:layout_marginTop="14dp">
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="Connection" style="@style/Kit.Text.Section" android:letterSpacing="0.06" android:layout_marginBottom="10dp"/>
+                android:layout_marginTop="8dp">
 
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="Home peer" android:textSize="13sp" android:textColor="@color/text"/>
-                <EditText android:id="@+id/set_home"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:hint="name or tailnet IP of the Mac" android:inputType="text"
-                    android:textColor="@color/text" android:textColorHint="@color/dim"/>
-
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="Assistant peer" android:textSize="13sp" android:textColor="@color/text"
-                    android:layout_marginTop="8dp"/>
-                <EditText android:id="@+id/set_assist"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:hint="name of the Pi, e.g. raspberrypi" android:inputType="text"
-                    android:textColor="@color/text" android:textColorHint="@color/dim"/>
-
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="Mesh token" android:textSize="13sp" android:textColor="@color/text"
-                    android:layout_marginTop="8dp"/>
-                <EditText android:id="@+id/set_token"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:hint="shared mesh token" android:inputType="textPassword"
-                    android:textColor="@color/text" android:textColorHint="@color/dim"/>
-
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="horizontal" android:layout_marginTop="10dp">
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/set_save"
-                        android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:layout_marginEnd="8dp" android:text="Save"/>
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/set_receiver"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
-                        android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="Start receiving"/>
-                </LinearLayout>
                 <TextView android:id="@+id/set_conn_status"
                     android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:paddingTop="10dp" android:textSize="12sp" android:textColor="@color/dim" android:text=""/>
-            </LinearLayout>
+                    android:textSize="17sp" android:textStyle="bold" android:textColor="@color/text"/>
 
-            <!-- assistant card -->
-            <LinearLayout
-                android:id="@+id/settings_assistant_detail" android:visibility="gone"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:background="@drawable/card_bg"
-                android:padding="14dp"
-                android:layout_marginTop="14dp">
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="Assistant" style="@style/Kit.Text.Section" android:letterSpacing="0.06" android:layout_marginBottom="10dp"/>
-
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="Provider" android:textSize="13sp" android:textColor="@color/text"/>
-                <com.google.android.material.button.MaterialButtonToggleGroup
-                    android:id="@+id/set_provider"
-                    android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp" app:singleSelection="true"/>
-                <TextView android:id="@+id/set_provider_status"
+                <TextView style="@style/CsyncAppearanceHeading" android:layout_marginTop="20dp"
+                    android:text="Raspberry Pi address"/>
+                <EditText android:id="@+id/set_assist"
                     android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp" android:textSize="12sp"
-                    android:textColor="@color/dim" android:visibility="gone"/>
+                    android:minHeight="48dp" android:hint="raspberrypi" android:inputType="textNoSuggestions"
+                    android:textColor="@color/text" android:textColorHint="@color/dim"/>
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:textSize="12sp" android:textColor="@color/dim"
+                    android:text="Where Media, Chat, the camera and Notes live."/>
 
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="Model" android:textSize="13sp" android:textColor="@color/text"
-                    android:layout_marginTop="12dp"/>
-                <Spinner android:id="@+id/set_model"
+                <TextView style="@style/CsyncAppearanceHeading" android:layout_marginTop="18dp"
+                    android:text="Second address (optional)"/>
+                <EditText android:id="@+id/set_home"
                     android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"/>
+                    android:minHeight="48dp" android:hint="studio-mac" android:inputType="textNoSuggestions"
+                    android:textColor="@color/text" android:textColorHint="@color/dim"/>
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:textSize="12sp" android:textColor="@color/dim"
+                    android:text="A device that is usually on. It finds your devices when the Pi is off."/>
 
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="Thinking" android:textSize="13sp" android:textColor="@color/text"
-                    android:layout_marginTop="12dp"/>
-                <com.google.android.material.button.MaterialButtonToggleGroup
-                    android:id="@+id/set_effort"
-                    android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp" app:singleSelection="true"/>
-
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="horizontal" android:gravity="center_vertical"
-                    android:layout_marginTop="12dp">
-                    <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
-                        android:orientation="vertical">
-                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                            android:text="Run commands" android:textSize="13sp" android:textColor="@color/text"/>
-                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                            android:text="set on the Pi" android:textSize="11sp" android:textColor="@color/dim"/>
-                    </LinearLayout>
-                    <TextView android:id="@+id/set_runcmd"
-                        android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:maxWidth="150dp" android:gravity="end"
-                        android:text="—" android:textSize="12sp" android:textColor="@color/dim"/>
-                </LinearLayout>
+                <TextView style="@style/CsyncAppearanceHeading" android:layout_marginTop="18dp"
+                    android:text="Access token"/>
+                <EditText android:id="@+id/set_token"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:minHeight="48dp" android:hint="Token" android:inputType="textPassword"
+                    android:textColor="@color/text" android:textColorHint="@color/dim"/>
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:textSize="12sp" android:textColor="@color/dim"
+                    android:text="The same token on every device you own."/>
 
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/set_apply"
+                    android:id="@+id/set_save"
                     android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp" android:text="Apply"/>
-                <TextView android:id="@+id/set_assist_status"
+                    android:minHeight="48dp" android:layout_marginTop="14dp" android:text="Save"
+                    app:icon="@drawable/csi_check"/>
+
+                <LinearLayout android:id="@+id/set_receive_group"
                     android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:paddingTop="8dp" android:textSize="12sp" android:textColor="@color/dim" android:text=""/>
+                    android:layout_marginTop="20dp" android:orientation="vertical"/>
             </LinearLayout>
 
         </LinearLayout>

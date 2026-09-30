@@ -400,21 +400,6 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         showMoreDetail(0);
         showToolsDetail(0);
         closeSettingsDetail();
-        pageSettings.findViewById(R.id.settings_pi).setOnClickListener(v -> Kit.sheet(this, "Raspberry Pi", null,
-            new Kit.Action(Kit.Icon.MEDIA, "Media and screen", null, () -> startActivity(new Intent(this, MediaActivity.class))),
-            new Kit.Action(Kit.Icon.CAMERA, "Camera", null, () -> show(5)),
-            new Kit.Action(Kit.Icon.CHAT, "Assistant settings", null, () -> revealSettingsDetail(R.id.settings_assistant_detail)),
-            new Kit.Action(Kit.Icon.DEVICE, "Connection details", null, () -> revealSettingsDetail(R.id.settings_connection_detail))));
-        pageSettings.findViewById(R.id.settings_mac).setOnClickListener(v ->
-            revealSettingsDetail(R.id.settings_connection_detail));
-        pageSettings.findViewById(R.id.settings_tailscale).setOnClickListener(v ->
-            revealSettingsDetail(R.id.settings_connection_detail));
-        pageSettings.findViewById(R.id.settings_playback).setOnClickListener(v ->
-            startActivity(new Intent(this, MediaActivity.class).putExtra("player_target", "pi")));
-        pageSettings.findViewById(R.id.settings_appearance_row).setOnClickListener(v ->
-            revealSettingsDetail(R.id.settings_appearance_detail));
-        pageSettings.findViewById(R.id.settings_assistant_row).setOnClickListener(v ->
-            revealSettingsDetail(R.id.settings_assistant_detail));
         pageMore.findViewById(R.id.more_assistant_tools).setOnClickListener(v -> showMoreDetail(1));
         pageTools.findViewById(R.id.tools_media).setOnClickListener(v -> startActivity(new Intent(this, MediaActivity.class)));
         pageTools.findViewById(R.id.tools_process_route).setOnClickListener(v -> showToolsDetail(1));
@@ -542,16 +527,14 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         if (detail == 2) renderWidgetsPage();
     }
 
+    /** Open the Connection page, the one child of Settings. Everything else in Settings folds in place. */
     private void revealSettingsDetail(int id) {
-        closeSettingsDetail();
+        if (id != R.id.settings_connection_detail) { closeSettingsDetail(); return; }
         settingsDetail = id;
         pageSettings.findViewById(R.id.settings_overview).setVisibility(View.GONE);
-        View detail = pageSettings.findViewById(id);
-        detail.setVisibility(View.VISIBLE);
-        View top = pageSettings.findViewById(R.id.settings_back);
-        if (id == R.id.settings_connection_detail) Kit.pageTop(top, "connection", this::openPlace);
-        else Kit.pageTop(top, "settings", this::openPlace, id == R.id.settings_appearance_detail
-            ? new Kit.Crumb(R.drawable.csi_palette, "Appearance", null) : new Kit.Crumb(Kit.Icon.CHAT, "Assistant", null));
+        pageSettings.findViewById(id).setVisibility(View.VISIBLE);
+        Kit.pageTop(pageSettings.findViewById(R.id.settings_back), "connection", this::openPlace);
+        refreshConnection();
         pageSettings.findViewById(R.id.settings_scroll).post(() ->
             ((android.widget.ScrollView) pageSettings.findViewById(R.id.settings_scroll))
                 .scrollTo(0, 0));
@@ -559,9 +542,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     private void closeSettingsDetail() {
         settingsDetail = 0;
-        for (int id : new int[]{R.id.settings_appearance_detail,
-                R.id.settings_connection_detail, R.id.settings_assistant_detail})
-            pageSettings.findViewById(id).setVisibility(View.GONE);
+        pageSettings.findViewById(R.id.settings_connection_detail).setVisibility(View.GONE);
         pageSettings.findViewById(R.id.settings_overview).setVisibility(View.VISIBLE);
         Kit.pageTop(pageSettings.findViewById(R.id.settings_back), "settings", this::openPlace);
     }
@@ -1547,14 +1528,12 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     // ---------------- settings: connection card ----------------
 
     private EditText connHome, connToken, connAssist;
-    private com.google.android.material.button.MaterialButton connReceiver;
     private TextView connStatus;
 
     private void setupConnectionCard() {
         connHome = pageSettings.findViewById(R.id.set_home);
         connAssist = pageSettings.findViewById(R.id.set_assist);
         connToken = pageSettings.findViewById(R.id.set_token);
-        connReceiver = pageSettings.findViewById(R.id.set_receiver);
         connStatus = pageSettings.findViewById(R.id.set_conn_status);
         connHome.setText(Prefs.homeIp(this));
         connAssist.setText(Prefs.assistIp(this));
@@ -1562,24 +1541,58 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageSettings.findViewById(R.id.set_save).setOnClickListener(v -> {
             Prefs.save(this, connHome.getText().toString(), connToken.getText().toString());
             Prefs.saveAssistIp(this, connAssist.getText().toString());
-            if (chatSubtitle != null) chatSubtitle.setText("assistant on " + Prefs.assistIp(this));
-            toast("Saved");
+            toast("Connection saved");
+            refreshConnection();
         });
-        connReceiver.setOnClickListener(v -> toggleReceiver());
+        Kit.bindSection(pageSettings.findViewById(R.id.set_sec_playback), 0, "Playback",
+            pageSettings.findViewById(R.id.set_playback_body));
+        Kit.bindSection(pageSettings.findViewById(R.id.set_sec_assistant), 0, "Assistant",
+            pageSettings.findViewById(R.id.set_assistant_body));
+        Kit.bindSection(pageSettings.findViewById(R.id.set_sec_appearance), 0, "Appearance",
+            pageSettings.findViewById(R.id.set_appearance_body));
+        LinearLayout playback = Kit.group(pageSettings.findViewById(R.id.set_playback_body));
+        View player = Kit.addRow(playback);
+        Kit.bindRow(player, Kit.Icon.DISPLAY, "Pi screen player", "Volume, speed and what is playing", null, true);
+        player.setOnClickListener(v -> startActivity(new Intent(this, MediaActivity.class).putExtra("player_target", "pi")));
         refreshConnection();
     }
 
+    /** Whether the Pi answers, shown on the Settings row and as the Connection page's heading. */
     private void refreshConnection() {
-        if (connReceiver == null) return;
-        String self = Prefs.deviceName(this);
+        if (connStatus == null) return;
+        LinearLayout holder = pageSettings.findViewById(R.id.set_connection_group);
+        holder.removeAllViews();
+        final View row = Kit.addRow(Kit.group(holder));
+        final String pi = Prefs.assistIp(this);
+        Kit.bindRow(row, R.drawable.csi_wifi, "Connection", pi.isEmpty() ? "Add your Raspberry Pi" : pi, null, true);
+        Kit.rowStatus(row, Kit.Status.WARN, "Checking");
+        row.setOnClickListener(v -> revealSettingsDetail(R.id.settings_connection_detail));
+        connStatus.setText("Checking the Raspberry Pi");
+
+        LinearLayout receive = pageSettings.findViewById(R.id.set_receive_group);
+        receive.removeAllViews();
+        LinearLayout group = Kit.group(receive);
+        View receiving = Kit.addRow(group);
+        Kit.bindRow(receiving, R.drawable.csi_download, "Receive on this phone",
+            MeshService.running ? "Other devices can send to it" : "Tap to let other devices send to it", null, false);
+        Kit.rowStatus(receiving, MeshService.running ? Kit.Status.GOOD : Kit.Status.IDLE, MeshService.running ? "Ready" : "Stopped");
+        receiving.setOnClickListener(v -> toggleReceiver());
+        View name = Kit.addRow(group);
         String tail = MeshClient.tailnetIP();
-        if (MeshService.running) {
-            connReceiver.setText("Stop receiving");
-            connStatus.setText(self + " · receiving on " + MeshService.boundInfo);
-        } else {
-            connReceiver.setText("Start receiving");
-            connStatus.setText(self + " · tailnet " + (tail == null ? "not up" : tail));
+        Kit.bindRow(name, Kit.Icon.DEVICE, Prefs.deviceName(this), "This phone's name on your network", tail, false);
+
+        if (pi.isEmpty()) {
+            Kit.rowStatus(row, Kit.Status.IDLE, "Not set up");
+            connStatus.setText("Add your Raspberry Pi below");
+            return;
         }
+        new Thread(() -> {
+            boolean up = MeshClient.reachable(pi, MeshClient.ASSIST_PORT);
+            ui.post(() -> {
+                Kit.rowStatus(row, up ? Kit.Status.GOOD : Kit.Status.IDLE, up ? "Connected" : "Offline");
+                connStatus.setText(up ? "Connected over Tailscale" : "The Raspberry Pi cannot be reached");
+            });
+        }, "settings-connection").start();
     }
 
     private void toggleReceiver() {
@@ -1587,173 +1600,277 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         if (MeshService.running) {
             stopService(svc);
         } else {
-            if (Prefs.token(this).isEmpty()) { toast("Save the token first"); return; }
+            if (Prefs.token(this).isEmpty()) { toast("Save the access token first"); return; }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(svc);
             else startService(svc);
         }
         ui.postDelayed(this::refreshConnection, 400);
     }
 
-    // ---------------- settings: assistant provider/model/effort ----------------
+    // ---------------- settings: the assistant's providers, model and thinking ----------------
 
     private JSONObject providerData;
-    private boolean populatingProviders;
+    private JSONArray assistantTools;
 
-    private void setupAssistantCard() {
-        pageSettings.findViewById(R.id.set_apply).setOnClickListener(v -> applyAssistantConfig());
-        com.google.android.material.button.MaterialButtonToggleGroup pg = pageSettings.findViewById(R.id.set_provider);
-        pg.addOnButtonCheckedListener((g, id, checked) -> {
-            if (!checked || populatingProviders) return;
-            String pid = tagOf(g, id);
-            if (pid != null) populateModelsAndEfforts(pid, null, null);
-        });
-    }
+    private void setupAssistantCard() { renderAssistantRows(null); }
 
     private void refreshAssistant() {
         final String assist = Prefs.assistIp(this), token = Prefs.token(this);
-        if (assist.isEmpty() || token.isEmpty()) return;
+        if (assist.isEmpty() || token.isEmpty()) { renderAssistantRows("Add the Pi and its token in Connection"); return; }
         new Thread(() -> {
-            JSONObject data = null; JSONArray caps = null; String err = null;
-            try { data = MeshClient.providers(assist, token); } catch (Throwable e) { err = e.getMessage(); }
-            try { caps = MeshClient.capabilities(assist, token); } catch (Throwable ignore) {}
-            final JSONObject d = data; final JSONArray c = caps; final String e = err;
+            JSONObject data = null; JSONArray caps = null;
+            try { data = MeshClient.providers(assist, token); } catch (Throwable ignore) { }
+            try { caps = MeshClient.capabilities(assist, token); } catch (Throwable ignore) { }
+            final JSONObject d = data; final JSONArray c = caps;
             ui.post(() -> {
-                if (d != null) renderProviders(d);
-                else ((TextView) pageSettings.findViewById(R.id.set_assist_status)).setText("assistant: " + e);
-                renderRunCmd(c);
+                if (d != null) providerData = d;
+                assistantTools = c;
+                renderAssistantRows(d == null ? "The Pi assistant cannot be reached" : null);
             });
-        }).start();
+        }, "settings-assistant").start();
     }
 
-    private void renderProviders(JSONObject data) {
-        providerData = data;
-        JSONArray providers = data.optJSONArray("providers");
-        JSONObject active = data.optJSONObject("active");
-        String ap = active == null ? "" : active.optString("provider");
-        String am = active == null ? "" : active.optString("model");
-        String ae = active == null ? "" : active.optString("effort");
-        com.google.android.material.button.MaterialButtonToggleGroup pg = pageSettings.findViewById(R.id.set_provider);
-        populatingProviders = true;
-        pg.removeAllViews();
-        int checkId = -1;
-        java.util.List<String> unavailable = new java.util.ArrayList<>();
-        for (int i = 0; providers != null && i < providers.length(); i++) {
-            JSONObject p = providers.optJSONObject(i);
-            if (p == null) continue;
-            com.google.android.material.button.MaterialButton b = toggleButton(p.optString("label"), p.optString("id"));
-            pg.addView(b);
-            if (!chatSupported(p)) {
-                b.setEnabled(false);
-                unavailable.add(p.optString("label") + " chat is unavailable on this Pi");
-            }
-            if (p.optString("id").equals(ap)) checkId = b.getId();
-        }
-        if (checkId != -1) pg.check(checkId);
-        populatingProviders = false;
-        populateModelsAndEfforts(ap, am, ae);
-        TextView providerStatus = pageSettings.findViewById(R.id.set_provider_status);
-        providerStatus.setVisibility(unavailable.isEmpty() ? View.GONE : View.VISIBLE);
-        providerStatus.setText(android.text.TextUtils.join(". ", unavailable));
-        if (!ap.isEmpty() && !chatSupported(findProvider(ap)))
-            ((TextView) pageSettings.findViewById(R.id.set_assist_status))
-                .setText("Active provider cannot chat. Select an available provider and Apply.");
-    }
+    /**
+     * The Assistant group: the model new conversations use, each provider with whether this Pi can
+     * chat through it, and whether the assistant may run commands on the Pi.
+     */
+    private void renderAssistantRows(String problem) {
+        LinearLayout body = pageSettings.findViewById(R.id.set_assistant_body);
+        body.removeAllViews();
+        LinearLayout group = Kit.group(body);
+        JSONObject active = providerData == null ? null : providerData.optJSONObject("active");
+        String model = active == null ? "" : active.optString("model");
+        String effort = active == null ? "" : active.optString("effort");
+        View pick = Kit.addRow(group);
+        Kit.bindRow(pick, R.drawable.csi_speed, "Model", problem != null ? problem : "For new conversations",
+            model.isEmpty() ? null : model + (effort.isEmpty() ? "" : " " + effort), providerData != null);
+        if (providerData != null) pick.setOnClickListener(v -> openModelSheet("default"));
+        else pick.setAlpha(0.6f);
 
-    private boolean chatSupported(JSONObject provider) {
-        if (provider == null) return false;
-        return provider.has("chatSupported") ? provider.optBoolean("chatSupported") :
-            "gemini".equals(provider.optString("id"));
-    }
-
-    private void populateModelsAndEfforts(String providerId, String selModel, String selEffort) {
-        JSONObject prov = findProvider(providerId);
-        if (prov == null) return;
-        JSONArray models = prov.optJSONArray("models");
-        JSONArray efforts = prov.optJSONArray("efforts");
-
-        java.util.List<String> ms = new java.util.ArrayList<>();
-        for (int i = 0; models != null && i < models.length(); i++) ms.add(models.optString(i));
-        android.widget.Spinner sp = pageSettings.findViewById(R.id.set_model);
-        android.widget.ArrayAdapter<String> ad = new android.widget.ArrayAdapter<>(
-                this, android.R.layout.simple_spinner_dropdown_item, ms);
-        sp.setAdapter(ad);
-        if (selModel != null) { int idx = ms.indexOf(selModel); if (idx >= 0) sp.setSelection(idx); }
-
-        com.google.android.material.button.MaterialButtonToggleGroup eg = pageSettings.findViewById(R.id.set_effort);
-        eg.removeAllViews();
-        int checkId = -1;
-        for (int i = 0; efforts != null && i < efforts.length(); i++) {
-            String e = efforts.optString(i);
-            com.google.android.material.button.MaterialButton b = toggleButton(prettyName(e), e);
-            eg.addView(b);
-            if (e.equals(selEffort)) checkId = b.getId();
-        }
-        if (checkId != -1) eg.check(checkId);
-    }
-
-    private void applyAssistantConfig() {
-        com.google.android.material.button.MaterialButtonToggleGroup pg = pageSettings.findViewById(R.id.set_provider);
-        com.google.android.material.button.MaterialButtonToggleGroup eg = pageSettings.findViewById(R.id.set_effort);
-        android.widget.Spinner sp = pageSettings.findViewById(R.id.set_model);
-        final String provider = tagOf(pg, pg.getCheckedButtonId());
-        final String effort = tagOf(eg, eg.getCheckedButtonId());
-        final String model = sp.getSelectedItem() == null ? "" : sp.getSelectedItem().toString();
-        final TextView status = pageSettings.findViewById(R.id.set_assist_status);
-        if (provider == null) { toast("Pick a provider"); return; }
-        if (!chatSupported(findProvider(provider))) {
-            status.setText("This provider cannot chat on the Pi. Choose an available provider.");
-            return;
-        }
-        final String assist = Prefs.assistIp(this), token = Prefs.token(this);
-        status.setText("Applying assistant settings");
-        new Thread(() -> {
-            String r;
-            try { MeshClient.setConfig(assist, token, provider, model, effort); r = "active: " + provider + " · " + model + " · " + effort; }
-            catch (Throwable e) { r = "failed: " + e.getMessage(); }
-            final String rr = r;
-            ui.post(() -> status.setText(rr));
-        }).start();
-    }
-
-    private void renderRunCmd(JSONArray caps) {
-        TextView t = pageSettings.findViewById(R.id.set_runcmd);
-        if (caps == null) { t.setText("unknown"); t.setTextColor(col(R.color.dim)); return; }
-        boolean on = false;
-        for (int i = 0; i < caps.length(); i++) {
-            JSONObject c = caps.optJSONObject(i);
-            String n = c == null ? "" : c.optString("name").toLowerCase();
-            if (n.contains("run") || n.contains("command") || n.contains("exec") || n.contains("shell")) on = true;
-        }
-        t.setText(on ? "Available with Pi approval" : "Not advertised");
-        t.setTextColor(col(R.color.dim));
-    }
-
-    private JSONObject findProvider(String id) {
         JSONArray providers = providerData == null ? null : providerData.optJSONArray("providers");
         for (int i = 0; providers != null && i < providers.length(); i++) {
             JSONObject p = providers.optJSONObject(i);
-            if (p != null && id.equals(p.optString("id"))) return p;
+            if (p == null) continue;
+            boolean ready = chatSupported(p);
+            View row = Kit.addRow(group);
+            JSONArray models = p.optJSONArray("models");
+            int count = models == null ? 0 : models.length();
+            Kit.bindRow(row, Kit.Icon.CHAT, p.optString("label"),
+                ready ? count + (count == 1 ? " model" : " models") : p.optString("reason", "Not set up on this Pi"), null, false);
+            Kit.rowStatus(row, ready ? Kit.Status.GOOD : Kit.Status.IDLE, ready ? "Ready" : "Not set up");
+        }
+
+        if (assistantTools != null) {
+            boolean allowed = false;
+            for (int i = 0; i < assistantTools.length(); i++) {
+                JSONObject tool = assistantTools.optJSONObject(i);
+                if (tool != null && "run_command".equals(tool.optString("name"))) allowed = true;
+            }
+            View commands = Kit.addRow(group);
+            Kit.bindRow(commands, Kit.Icon.TOOLS, "Pi commands", "Set on the Pi", null, false);
+            Kit.rowStatus(commands, allowed ? Kit.Status.GOOD : Kit.Status.IDLE, allowed ? "Allowed" : "Not set up");
+        }
+    }
+
+    private boolean chatSupported(JSONObject provider) {
+        return provider != null && provider.optBoolean("chatSupported");
+    }
+
+    /** The provider whose list holds this model, or null when no provider lists it. */
+    private JSONObject providerOf(String model) {
+        JSONArray providers = providerData == null ? null : providerData.optJSONArray("providers");
+        for (int i = 0; providers != null && i < providers.length(); i++) {
+            JSONObject p = providers.optJSONObject(i);
+            JSONArray models = p == null ? null : p.optJSONArray("models");
+            for (int j = 0; models != null && j < models.length(); j++)
+                if (model.equals(models.optString(j))) return p;
         }
         return null;
     }
 
-    // A MaterialButton styled as an outlined toggle, carrying its value as the tag.
-    // The outlined style comes from the defStyleAttr, not a theme wrapper, so the
-    // unchecked buttons read as outlines rather than solid fills.
-    private com.google.android.material.button.MaterialButton toggleButton(String label, String value) {
-        com.google.android.material.button.MaterialButton b =
-                new com.google.android.material.button.MaterialButton(
-                        this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle);
-        b.setId(View.generateViewId());
-        b.setText(label);
-        b.setTag(value);
-        return b;
+    /**
+     * One sheet for choosing a model and how hard it thinks. Scope "default" sets what new
+     * conversations use, saved on the Pi. Scope "chat" sets it for the open conversation only.
+     * Rows only select; nothing changes until Save, which stays in view under the list.
+     */
+    private void openModelSheet(String scope) {
+        final boolean forChat = "chat".equals(scope);
+        if (forChat && chatSession == null) return;
+        if (providerData == null) {
+            toast("Checking the Pi assistant");
+            final String assist = Prefs.assistIp(this), token = Prefs.token(this);
+            new Thread(() -> {
+                JSONObject data = null;
+                try { data = MeshClient.providers(assist, token); } catch (Throwable ignore) { }
+                final JSONObject d = data;
+                ui.post(() -> {
+                    if (d == null) { toast("The Pi assistant cannot be reached"); return; }
+                    providerData = d;
+                    openModelSheet(scope);
+                });
+            }, "model-sheet").start();
+            return;
+        }
+        JSONObject active = providerData.optJSONObject("active");
+        final String piModel = active == null ? "" : active.optString("model");
+        final String piEffort = active == null ? "" : active.optString("effort");
+        JSONObject entry = forChat ? convEntry(chatSession) : null;
+        // An empty choice in a conversation means "follow the Pi's default".
+        final String[] choice = {forChat ? (entry == null ? "" : entry.optString("model")) : piModel,
+            forChat ? (entry == null ? "" : entry.optString("effort")) : piEffort};
+        // Only the provider that holds the current choice starts open, so the chosen model is on screen at once.
+        final java.util.Set<String> open = new java.util.HashSet<>();
+        JSONObject holder = providerOf(choice[0].isEmpty() ? piModel : choice[0]);
+        if (holder != null) open.add(holder.optString("id"));
+
+        com.google.android.material.bottomsheet.BottomSheetDialog dialog =
+            new com.google.android.material.bottomsheet.BottomSheetDialog(this);
+        View sheet = getLayoutInflater().inflate(R.layout.kit_sheet, null, false);
+        ((TextView) sheet.findViewById(R.id.kit_title)).setText(forChat ? "Model for this conversation" : "Model for new conversations");
+        sheet.findViewById(R.id.kit_sub).setVisibility(View.GONE);
+        LinearLayout rows = sheet.findViewById(R.id.kit_rows);
+        LinearLayout footer = new LinearLayout(this);
+        footer.setOrientation(LinearLayout.VERTICAL);
+        footer.setPadding(dp(20), 0, dp(20), dp(12));
+
+        Runnable[] render = new Runnable[1];
+        render[0] = () -> {
+            rows.removeAllViews();
+            footer.removeAllViews();
+            if (forChat) {
+                LinearLayout follow = Kit.group(rows);
+                View row = Kit.addRow(follow);
+                Kit.bindRow(row, choice[0].isEmpty() ? R.drawable.csi_check : R.drawable.csi_speed,
+                    "The Pi's default", piModel.isEmpty() ? null : piModel, null, false);
+                row.setOnClickListener(v -> { choice[0] = ""; choice[1] = ""; render[0].run(); });
+            }
+            JSONArray providers = providerData.optJSONArray("providers");
+            for (int i = 0; providers != null && i < providers.length(); i++) {
+                JSONObject p = providers.optJSONObject(i);
+                if (p == null) continue;
+                final String id = p.optString("id");
+                boolean ready = chatSupported(p), shown = ready && open.contains(id);
+                JSONArray models = p.optJSONArray("models");
+                int count = models == null ? 0 : models.length();
+                LinearLayout group = Kit.group(rows);
+                ((LinearLayout.LayoutParams) group.getLayoutParams()).topMargin = dp(10);
+                View head = Kit.addRow(group);
+                Kit.bindRow(head, Kit.Icon.CHAT, p.optString("label"),
+                    ready ? count + (count == 1 ? " model" : " models") : p.optString("reason", "Not set up on this Pi"), null, false);
+                if (!ready) { Kit.rowStatus(head, Kit.Status.IDLE, "Not set up"); continue; }
+                Kit.rowAction(head, R.drawable.ic_chevron_down,
+                    (shown ? "Hide " : "Show ") + p.optString("label") + " models", v -> head.performClick());
+                head.findViewById(R.id.kit_action).setRotation(shown ? 180f : 0f);
+                head.setOnClickListener(v -> { if (!open.remove(id)) open.add(id); render[0].run(); });
+                for (int j = 0; shown && j < count; j++) {
+                    final String name = models.optString(j);
+                    boolean picked = name.equals(choice[0]) || (choice[0].isEmpty() && !forChat && name.equals(piModel));
+                    View row = Kit.addRow(group);
+                    Kit.bindRow(row, picked ? R.drawable.csi_check : R.drawable.csi_speed, name, null, null, false);
+                    row.setOnClickListener(v -> {
+                        choice[0] = name;
+                        // Thinking levels differ by provider, so a level the new model lacks is dropped.
+                        JSONArray levels = p.optJSONArray("efforts");
+                        boolean kept = false;
+                        for (int k = 0; levels != null && k < levels.length(); k++) if (levels.optString(k).equals(choice[1])) kept = true;
+                        if (!kept) choice[1] = "";
+                        render[0].run();
+                    });
+                }
+            }
+
+            String now = choice[0].isEmpty() ? piModel : choice[0];
+            JSONObject owner = providerOf(now);
+            JSONArray levels = owner == null ? null : owner.optJSONArray("efforts");
+            if (levels != null && levels.length() > 0) {
+                Kit.label(footer, "Thinking, for " + now);
+                com.google.android.material.chip.ChipGroup chips = new com.google.android.material.chip.ChipGroup(this);
+                chips.setSingleSelection(true);
+                for (int k = forChat ? -1 : 0; k < levels.length(); k++) {
+                    final String value = k < 0 ? "" : levels.optString(k);
+                    com.google.android.material.chip.Chip chip = new com.google.android.material.chip.Chip(this);
+                    chip.setText(k < 0 ? "Default" : prettyName(value));
+                    chip.setCheckable(true);
+                    chip.setChecked(value.equals(choice[1]));
+                    chip.setChipMinHeight(dp(40));
+                    // The chosen level reads in the accent, like the selected item of every other control.
+                    boolean on = value.equals(choice[1]);
+                    chip.setCheckedIconVisible(false);
+                    chip.setChipStrokeWidth(0);
+                    chip.setChipBackgroundColor(android.content.res.ColorStateList.valueOf(on
+                        ? androidx.core.graphics.ColorUtils.blendARGB(col(R.color.surface2), accent(), 0.22f) : col(R.color.surface2)));
+                    chip.setTextColor(on ? accent() : col(R.color.text));
+                    chip.setOnClickListener(v -> { choice[1] = value; render[0].run(); });
+                    chips.addView(chip);
+                }
+                footer.addView(chips);
+            }
+            LinearLayout buttons = new LinearLayout(this);
+            buttons.setPadding(0, dp(10), 0, 0);
+            boolean draft = forChat && chatInput.getText().toString().trim().length() > 0;
+            com.google.android.material.button.MaterialButton save = draft
+                ? new com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle)
+                : new com.google.android.material.button.MaterialButton(this);
+            save.setText("Save");
+            save.setIconResource(R.drawable.csi_check);
+            save.setMinHeight(dp(48));
+            buttons.addView(save);
+            Runnable store = () -> {
+                dialog.dismiss();
+                if (forChat) {
+                    ChatStore.patch(this, chatSession, "model", choice[0]);
+                    ChatStore.patch(this, chatSession, "effort", choice[1]);
+                    updateConfigSubtitle();
+                } else {
+                    saveDefaultModel(choice[0], choice[1]);
+                }
+            };
+            save.setOnClickListener(v -> store.run());
+            if (draft) {
+                com.google.android.material.button.MaterialButton send = new com.google.android.material.button.MaterialButton(this);
+                send.setText("Save and send");
+                send.setIconResource(R.drawable.csi_send);
+                send.setMinHeight(dp(48));
+                LinearLayout.LayoutParams gap = new LinearLayout.LayoutParams(-2, -2);
+                gap.leftMargin = dp(8);
+                buttons.addView(send, gap);
+                send.setOnClickListener(v -> { store.run(); sendChat(); });
+            }
+            footer.addView(buttons);
+        };
+        render[0].run();
+
+        // The list scrolls; Thinking and Save stay put under it, so a long model list never hides the way out.
+        LinearLayout frame = new LinearLayout(this);
+        frame.setOrientation(LinearLayout.VERTICAL);
+        androidx.core.widget.NestedScrollView scroll = new androidx.core.widget.NestedScrollView(this);
+        scroll.addView(sheet);
+        frame.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1f));
+        frame.addView(footer, new LinearLayout.LayoutParams(-1, -2));
+        int tall = Math.round(getResources().getDisplayMetrics().heightPixels * 0.8f);
+        dialog.setContentView(frame, new android.view.ViewGroup.LayoutParams(-1, tall));
+        dialog.getBehavior().setSkipCollapsed(true);
+        dialog.getBehavior().setState(com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED);
+        dialog.show();
     }
 
-    private String tagOf(android.view.ViewGroup group, int viewId) {
-        if (viewId == View.NO_ID) return null;
-        View v = group.findViewById(viewId);
-        return v == null || v.getTag() == null ? null : v.getTag().toString();
+    /** Save the model new conversations use. It lives on the Pi, so every device sees the same default. */
+    private void saveDefaultModel(String model, String effort) {
+        JSONObject owner = providerOf(model);
+        if (owner == null) { toast("Pick a model first"); return; }
+        final String provider = owner.optString("id");
+        final String assist = Prefs.assistIp(this), token = Prefs.token(this);
+        new Thread(() -> {
+            String failed = null;
+            try { MeshClient.setConfig(assist, token, provider, model, effort); }
+            catch (Throwable e) { failed = e.getMessage(); }
+            final String problem = failed;
+            ui.post(() -> {
+                if (problem != null) Kit.sheet(this, "The model was not saved", problem);
+                else { toast("Saved"); chatDefaultModel = model; chatDefaultEffort = effort; }
+                refreshAssistant();
+            });
+        }, "settings-model").start();
     }
 
     // ---------------- chat page (assistant on the Pi) ----------------
@@ -1770,9 +1887,6 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private float composerDragY;
     private int composerDragLines;
     private io.noties.markwon.Markwon markwon;
-
-    private static final String[] MODELS = {"(default)", "gemini-3.8-flash", "gemini-3.5-flash", "gemini-flash-latest", "gemini-2.5-flash"};
-    private static final String[] EFFORTS = {"(default)", "off", "low", "medium", "high"};
 
     private void acceptChatDraft(Intent intent) {
         if (intent == null) return;
@@ -2052,10 +2166,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         View top = pageChat.findViewById(R.id.chat_top);
         if (chatConvoMode) { Kit.pageTop(top, "conversation", this::openPlace); return; }
         Kit.pageTop(top, "chat", this::openPlace);
-        Kit.topAction(top, R.drawable.csi_sliders, "Model for new conversations", v -> {
-            show(4);
-            revealSettingsDetail(R.id.settings_assistant_detail);
-        });
+        Kit.topAction(top, R.drawable.csi_sliders, "Model for new conversations", v -> openModelSheet("default"));
         Kit.topAction(top, R.drawable.csi_plus, "New chat", v -> newConversation());
     }
 
@@ -2171,79 +2282,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         return null;
     }
 
-    /**
-     * One drawer for this conversation's model and effort. Picking marks a choice without
-     * closing; Save stores both, and Save and send also sends the message being typed.
-     */
-    private void openConfigDialog() {
-        if (chatSession == null) return;
-        JSONObject entry = convEntry(chatSession);
-        final String[] choice = {entry == null ? "" : entry.optString("model"), entry == null ? "" : entry.optString("effort")};
-        com.google.android.material.bottomsheet.BottomSheetDialog dialog =
-            new com.google.android.material.bottomsheet.BottomSheetDialog(this);
-        View body = getLayoutInflater().inflate(R.layout.kit_sheet, null, false);
-        ((TextView) body.findViewById(R.id.kit_title)).setText("Model and effort");
-        ((TextView) body.findViewById(R.id.kit_sub)).setText("For this conversation");
-        LinearLayout rows = body.findViewById(R.id.kit_rows);
-        Runnable[] render = new Runnable[1];
-        render[0] = () -> {
-            rows.removeAllViews();
-            java.util.Map<String, LinearLayout> groups = new java.util.LinkedHashMap<>();
-            for (int i = 0; i < MODELS.length; i++) {
-                String value = i == 0 ? "" : MODELS[i];
-                String family = i == 0 ? "Default" : Character.toUpperCase(MODELS[i].charAt(0))
-                    + MODELS[i].substring(1, MODELS[i].contains("-") ? MODELS[i].indexOf('-') : MODELS[i].length());
-                LinearLayout group = groups.get(family);
-                if (group == null) { Kit.label(rows, family); group = Kit.group(rows); groups.put(family, group); }
-                View row = Kit.addRow(group);
-                boolean picked = value.equals(choice[0]);
-                Kit.bindRow(row, picked ? R.drawable.csi_check : R.drawable.csi_speed,
-                    i == 0 ? "Pi default" : MODELS[i], i == 0 && !chatDefaultModel.isEmpty() ? chatDefaultModel : null, null, false);
-                row.setOnClickListener(v -> { choice[0] = value; render[0].run(); });
-            }
-            Kit.label(rows, "Effort");
-            com.google.android.material.chip.ChipGroup efforts = new com.google.android.material.chip.ChipGroup(this);
-            efforts.setSingleSelection(true);
-            for (int i = 0; i < EFFORTS.length; i++) {
-                String value = i == 0 ? "" : EFFORTS[i];
-                com.google.android.material.chip.Chip chip = new com.google.android.material.chip.Chip(this);
-                chip.setText(i == 0 ? "Default" : EFFORTS[i]);
-                chip.setCheckable(true);
-                chip.setChecked(value.equals(choice[1]));
-                chip.setOnClickListener(v -> { choice[1] = value; render[0].run(); });
-                efforts.addView(chip);
-            }
-            rows.addView(efforts);
-            LinearLayout buttons = new LinearLayout(this);
-            buttons.setPadding(0, dp(14), 0, 0);
-            com.google.android.material.button.MaterialButton save = new com.google.android.material.button.MaterialButton(this);
-            save.setText("Save");
-            save.setIconResource(R.drawable.csi_check);
-            com.google.android.material.button.MaterialButton send = new com.google.android.material.button.MaterialButton(this,
-                null, com.google.android.material.R.attr.materialButtonOutlinedStyle);
-            send.setText("Save and send");
-            send.setIconResource(R.drawable.csi_send);
-            send.setEnabled(chatInput.getText().toString().trim().length() > 0);
-            buttons.addView(save);
-            LinearLayout.LayoutParams gap = new LinearLayout.LayoutParams(-2, -2);
-            gap.leftMargin = dp(8);
-            buttons.addView(send, gap);
-            rows.addView(buttons);
-            Runnable store = () -> {
-                ChatStore.patch(this, chatSession, "model", choice[0]);
-                ChatStore.patch(this, chatSession, "effort", choice[1]);
-                updateConfigSubtitle();
-                dialog.dismiss();
-            };
-            save.setOnClickListener(v -> store.run());
-            send.setOnClickListener(v -> { store.run(); sendChat(); });
-        };
-        render[0].run();
-        androidx.core.widget.NestedScrollView scroll = new androidx.core.widget.NestedScrollView(this);
-        scroll.addView(body);
-        dialog.setContentView(scroll);
-        dialog.show();
-    }
+    /** The conversation's model and thinking are chosen in the same sheet Settings uses. */
+    private void openConfigDialog() { openModelSheet("chat"); }
 
     private void updateConfigSubtitle() {
         chatSubtitle.setTextAppearance(R.style.Kit_Text_PageSub);
