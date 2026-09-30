@@ -108,8 +108,9 @@ final class CameraController {
         root.findViewById(R.id.camera_captures).setOnClickListener(v -> openCaptures());
         Kit.bindRow(root.findViewById(R.id.camera_captures_row), Kit.Icon.PHOTO, "Captures",
             "Photos and recordings", null, true);
-        Kit.bindRow(root.findViewById(R.id.camera_show_display), Kit.Icon.DISPLAY, "Pi screen",
-            "What it is showing, and its controls", null, true);
+        Kit.bindRow(root.findViewById(R.id.camera_show_display), Kit.Icon.DISPLAY, "Show on Pi screen",
+            "The live picture", null, false);
+        root.findViewById(R.id.camera_show_display).setOnClickListener(v -> showOnPiScreen());
         root.findViewById(R.id.camera_captures_row).setOnClickListener(v -> openCaptures());
         capturesBack = new OnBackPressedCallback(false) {
             @Override public void handleOnBackPressed() { closeCaptures(); }
@@ -278,6 +279,25 @@ final class CameraController {
             (recording || previewReady));
         record.setContentDescription(recording ? "Stop recording" : "Start recording");
         record.setImageResource(recording ? R.drawable.csi_stop : R.drawable.camera_record_dot);
+    }
+
+    /** Put the live picture on the Pi screen and open that page, where Stop showing takes it down. */
+    private void showOnPiScreen() {
+        MediaClient active = client == null ? new MediaClient(Prefs.assistIp(activity), Prefs.token(activity)) : client;
+        new Thread(() -> {
+            String problem = null;
+            boolean lit = false;
+            try { lit = active.post("/v1/display/camera", null).optBoolean("sentToDisplay"); }
+            catch (Exception error) { problem = error.getMessage() == null ? "The Pi did not answer." : error.getMessage(); }
+            String failure = problem;
+            boolean shown = lit;
+            ui.post(() -> {
+                if (failure != null) { Kit.sheet(activity, "It was not shown", failure); return; }
+                android.widget.Toast.makeText(activity, shown ? "Showing the camera on the Pi screen" : "Sent. The Pi screen is off",
+                    android.widget.Toast.LENGTH_SHORT).show();
+                activity.startActivity(new android.content.Intent(activity, MediaActivity.class).putExtra("player_target", "pi"));
+            });
+        }, "camera-to-screen").start();
     }
 
     private void action(String path) {

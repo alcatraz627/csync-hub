@@ -386,8 +386,6 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageHome.findViewById(R.id.home_status).setOnClickListener(v -> { nav.setSelectedItemId(R.id.nav_more); show(3); });
         bindHomeStatus(null, false, null);
         renderMore(null);
-        pageCamera.findViewById(R.id.camera_show_display).setOnClickListener(v ->
-            startActivity(new Intent(this, MediaActivity.class).putExtra("player_target", "pi")));
         showMoreDetail(0);
         buildTools();
         showToolsDetail(0);

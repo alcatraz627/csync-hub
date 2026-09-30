@@ -740,7 +740,8 @@ public final class MediaActivity extends AppCompatActivity {
         sections.add(new Kit.Section("From the Pi", java.util.Arrays.asList(
             new Kit.Action(Kit.Icon.MEDIA, "Browse Media", "Films, shows, photos", this::closeFullPlayer, true),
             new Kit.Action(Kit.Icon.PHOTO, "Photos as a slideshow", "Every image in a folder, in turn",
-                this::chooseSlideshow, true))));
+                this::chooseSlideshow, true),
+            new Kit.Action(Kit.Icon.CAMERA, "The Pi camera", "Live picture", this::showCamera))));
         sections.add(new Kit.Section("From this phone", java.util.Arrays.asList(
             new Kit.Action(Kit.Icon.FILE, "A file", "A video, a song or a photo kept on this phone",
                 () -> mediaPicker.launch("*/*"), true),
@@ -837,6 +838,23 @@ public final class MediaActivity extends AppCompatActivity {
                 else Kit.sheet(this, "Show a note", "On the Pi screen", notes.toArray(new Kit.Action[0]));
             });
         }, "media-note-list").start();
+    }
+
+    /** Put the live camera picture on the Pi screen; the page turns into its Stop showing view as the Pi reports it. */
+    private void showCamera() {
+        new Thread(() -> {
+            String problem = null;
+            boolean lit = false;
+            try { lit = client.post("/v1/display/camera", null).optBoolean("sentToDisplay"); }
+            catch (Exception error) { problem = friendlyError(error); }
+            String failure = problem;
+            boolean shown = lit;
+            ui.post(() -> {
+                if (!screenActive) return;
+                if (failure != null) Kit.sheet(this, "It was not shown", failure);
+                else toast(shown ? "Showing the camera on the Pi screen" : "Sent. The Pi screen is off");
+            });
+        }, "media-camera-show").start();
     }
 
     private void showNote(String id) {
