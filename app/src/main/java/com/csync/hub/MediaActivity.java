@@ -83,7 +83,7 @@ public final class MediaActivity extends AppCompatActivity {
         if (playback == null) return;
         if (playback.item() != null) {
             phoneTitle = playback.item().optString("name");
-            nowPlaying.setText("Phone: " + phoneTitle);
+            nowPlaying.setText(displayMediaName(phoneTitle));
         }
         String state = playback.playbackState();
         phoneProblem = playback.problem();
@@ -501,7 +501,7 @@ public final class MediaActivity extends AppCompatActivity {
     }
 
     /** The readable name: no upload prefix, spaces for underscores and dots, and no file ending. The raw name is in File details. */
-    private static String displayMediaName(String name) {
+    static String displayMediaName(String name) {
         String readable = name.replaceFirst("^cast-[0-9a-f]{8,32}-", "");
         int ending = readable.lastIndexOf('.');
         if (ending > 0 && readable.length() - ending <= 5) readable = readable.substring(0, ending);
@@ -930,7 +930,7 @@ public final class MediaActivity extends AppCompatActivity {
             }
             if (intent != outputIntent) stopStalePiStart(result);
             return result;
-        }, result -> { nowPlaying.setText("Pi: " + item.optString("name"));
+        }, result -> { nowPlaying.setText(displayMediaName(item.optString("name")));
             showFullPlayer();
             setStatus("Playing on Pi projector; starts muted. Choose Volume for sound."); });
     }
@@ -961,7 +961,7 @@ public final class MediaActivity extends AppCompatActivity {
         exitVideoMode();
         showFullPlayer();
         updateFullPlayer("This phone", "loading", phoneTitle, 0, 0, 0, 1);
-        nowPlaying.setText("Phone: " + item.optString("name"));
+        nowPlaying.setText(displayMediaName(item.optString("name")));
         output.setText(externalDisplayText());
         setStatus("Opening stream");
         PhonePlaybackService.ensure(this);

@@ -109,7 +109,7 @@ public final class PhonePlaybackService extends Service {
         String words = player == null ? "Stopped" : !prepared ? "Loading" : playing ? "Playing on this phone" : "Paused on this phone";
         return new Notification.Builder(this, "csync_media")
             .setSmallIcon(R.drawable.csi_media)
-            .setContentTitle(item == null ? "csync" : item.optString("name", "Media"))
+            .setContentTitle(item == null ? "csync" : MediaActivity.displayMediaName(item.optString("name", "Media")))
             .setContentText(words).setContentIntent(open).setOngoing(playing)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .addAction(notificationAction(playing ? R.drawable.csi_pause : R.drawable.csi_play,
@@ -138,7 +138,7 @@ public final class PhonePlaybackService extends Service {
                 | PlaybackState.ACTION_STOP | PlaybackState.ACTION_SEEK_TO)
             .setState(state, position(), speed).build());
         mediaSession.setMetadata(new MediaMetadata.Builder()
-            .putString(MediaMetadata.METADATA_KEY_TITLE, item == null ? "csync" : item.optString("name", "Media"))
+            .putString(MediaMetadata.METADATA_KEY_TITLE, item == null ? "csync" : MediaActivity.displayMediaName(item.optString("name", "Media")))
             .putString(MediaMetadata.METADATA_KEY_ARTIST, "On this phone")
             .putLong(MediaMetadata.METADATA_KEY_DURATION, duration()).build());
         ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).notify(61, buildNotification());
