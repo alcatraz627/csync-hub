@@ -326,6 +326,12 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                 renderHistoryList();
             }
         }
+        // A reply that ended while the app was away could not hand over to the messages waiting behind it.
+        for (String waiting : new java.util.ArrayList<>(chatQueue.keySet())) nextQueued(waiting);
+        if (chatConvoMode && chatSession != null) {
+            if (!ChatService.running.contains(chatSession)) clearWriting();
+            updateSendButton();
+        }
         ((android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancel(7002);
         if (current == 3 && toolsDetail == 1) ensureShizuku();
         if (current == 3) AppUpdater.refreshStatus(this,
@@ -1962,7 +1968,10 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         chatInput.addTextChangedListener(new android.text.TextWatcher() {
             public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
             public void onTextChanged(CharSequence s, int a, int b, int c) {}
-            public void afterTextChanged(android.text.Editable s) { chatInput.post(() -> updateComposerHandle()); }
+            public void afterTextChanged(android.text.Editable s) {
+                updateSendButton();
+                chatInput.post(() -> updateComposerHandle());
+            }
         });
         expand.setOnClickListener(v -> setComposerLines(chatExpanded ? 1 : 6));
         expand.setOnTouchListener((v, event) -> {
@@ -2527,12 +2536,15 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         updateConfigSubtitle();
         refreshChatConfigSubtitle();
         chatList.removeAllViews(); chatPending = null;
+        writingBox = null; writingText = null; queuedViews.clear(); workBody = null;
         selectedMessageActions = null; selectedMessageBubble = null;
+        updateSendButton();
         chatInput.requestFocus();
     }
 
     private void renderTranscript(org.json.JSONArray tr) {
         chatList.removeAllViews(); chatPending = null;
+        writingBox = null; writingText = null; queuedViews.clear(); workBody = null;
         selectedMessageActions = null; selectedMessageBubble = null;
         for (int i = 0; i < tr.length(); i++) {
             org.json.JSONObject o = tr.optJSONObject(i);
@@ -2540,6 +2552,13 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             if ("user".equals(o.optString("role"))) addUserBubble(o.optString("text"), i);
             else renderSingleTurn(o, i);
         }
+        // Opened while its reply is still coming: show how far the answer has got, and offer Stop.
+        if (chatSession != null && ChatService.running.contains(chatSession)) {
+            if (ChatService.writing.containsKey(chatSession)) showWriting();
+            else chatPending = addPending();
+        }
+        renderQueued();
+        updateSendButton();
         chatFind.refresh();
     }
 
@@ -2578,35 +2597,175 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     // service's stash on the next resume.
     private void sendChat() {
         final String typed = chatInput.getText().toString().trim();
-        if (typed.isEmpty() && chatAttachments.isEmpty()) return;
+        if (typed.isEmpty() && chatAttachments.isEmpty()) {
+            // With nothing typed while a reply is being written, the button is Stop.
+            if (chatSession != null && ChatService.running.contains(chatSession)) stopReply();
+            return;
+        }
         StringBuilder names = new StringBuilder();
         for (JSONObject item : chatAttachments) names.append(names.length() == 0 ? "" : ", ").append(item.optString("name"));
         final String msg = names.length() == 0 ? typed : (typed.isEmpty() ? "" : typed + "\n\n") + "Attached: " + names;
-        final String ip = Prefs.assistIp(this), token = Prefs.token(this);
-        if (ip.isEmpty() || token.isEmpty()) { toast("Set the assistant and token in Settings"); return; }
+        if (Prefs.assistIp(this).isEmpty() || Prefs.token(this).isEmpty()) { toast("Set the assistant and token in Settings"); return; }
         if (chatSession == null || !chatConvoMode) newConversation();
-        addUserBubble(msg, ChatStore.transcript(this, chatSession).length());
-        try { org.json.JSONObject u = new org.json.JSONObject(); u.put("role", "user"); u.put("text", msg);
-              ChatStore.append(this, chatSession, titleFrom(typed.isEmpty() ? names.toString() : typed), u); } catch (Throwable ignore) {}
-        updateConversationActions();
-        if ("New chat".contentEquals(chatTitle.getText()))
-            chatTitle.setText(titleFrom(typed.isEmpty() ? names.toString() : typed));
-        chatEdit.setVisibility(View.VISIBLE);
+        JSONObject ask = new JSONObject();
+        try {
+            ask.put("typed", typed).put("shown", msg).put("title", titleFrom(typed.isEmpty() ? names.toString() : typed));
+            if (!chatAttachments.isEmpty()) ask.put("attachments", new org.json.JSONArray(chatAttachments).toString());
+        } catch (org.json.JSONException impossible) { return; }
+        chatAttachments.clear();
+        renderChatAttachments();
         chatInput.setText("");
-        if (chatPending != null) chatList.removeView(chatPending);
-        chatPending = addPending();
-        org.json.JSONObject ce = convEntry(chatSession);
-        Intent svc = new Intent(this, ChatService.class);
-        svc.putExtra("assist", ip); svc.putExtra("token", token);
-        svc.putExtra("session", chatSession); svc.putExtra("message", typed);
-        if (!chatAttachments.isEmpty()) {
-            svc.putExtra("attachments", new org.json.JSONArray(chatAttachments).toString());
-            chatAttachments.clear();
-            renderChatAttachments();
+        // A message sent while a reply is still being written waits its turn.
+        if (ChatService.running.contains(chatSession)) {
+            queued(chatSession).add(ask);
+            renderQueued();
+            scrollDown();
+            return;
         }
+        startReply(chatSession, ask);
+    }
+
+    /** Show your message and ask the Pi for the reply. Works for a conversation that is not the one on screen. */
+    private void startReply(String session, JSONObject ask) {
+        boolean open = chatConvoMode && session.equals(chatSession);
+        String shown = ask.optString("shown"), title = ask.optString("title");
+        if (open) addUserBubble(shown, ChatStore.transcript(this, session).length());
+        try { ChatStore.append(this, session, title, new JSONObject().put("role", "user").put("text", shown)); }
+        catch (Throwable ignore) {}
+        org.json.JSONObject ce = convEntry(session);
+        Intent svc = new Intent(this, ChatService.class);
+        svc.putExtra("assist", Prefs.assistIp(this)); svc.putExtra("token", Prefs.token(this));
+        svc.putExtra("session", session); svc.putExtra("message", ask.optString("typed"));
+        if (ask.has("attachments")) svc.putExtra("attachments", ask.optString("attachments"));
         if (ce != null) { svc.putExtra("model", ce.optString("model")); svc.putExtra("effort", ce.optString("effort")); }
+        ChatService.running.add(session);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(svc);
         else startService(svc);
+        if (!open) return;
+        updateConversationActions();
+        if ("New chat".contentEquals(chatTitle.getText())) chatTitle.setText(title);
+        chatEdit.setVisibility(View.VISIBLE);
+        if (chatPending != null) chatList.removeView(chatPending);
+        chatPending = addPending();
+        renderQueued();
+        updateSendButton();
+    }
+
+    // ---- stop, and messages waiting for the reply to end ----
+
+    private final java.util.Map<String, java.util.List<JSONObject>> chatQueue = new java.util.HashMap<>();
+    private final java.util.List<View> queuedViews = new java.util.ArrayList<>();
+
+    private java.util.List<JSONObject> queued(String session) {
+        java.util.List<JSONObject> waiting = chatQueue.get(session);
+        if (waiting == null) { waiting = new java.util.ArrayList<>(); chatQueue.put(session, waiting); }
+        return waiting;
+    }
+
+    /** Ask the Pi to stop writing. What has arrived is kept, and messages waiting to be sent are dropped. */
+    private void stopReply() {
+        final String session = chatSession, ip = Prefs.assistIp(this), token = Prefs.token(this);
+        queued(session).clear();
+        renderQueued();
+        new Thread(() -> {
+            try { MeshClient.conversations(ip, token, "POST", "/chat/stop", new JSONObject().put("session", session)); }
+            catch (Throwable failed) { ui.post(() -> toast("The Pi did not stop the reply")); }
+        }, "chat-stop").start();
+    }
+
+    /** Draw the waiting messages under everything else, so they always sit where they will be sent from. */
+    private void renderQueued() {
+        for (View view : queuedViews) chatList.removeView(view);
+        queuedViews.clear();
+        if (chatSession == null || !chatConvoMode) return;
+        for (JSONObject ask : queued(chatSession)) {
+            LinearLayout waiting = new LinearLayout(this);
+            waiting.setOrientation(LinearLayout.VERTICAL);
+            waiting.setGravity(android.view.Gravity.END);
+            TextView text = new TextView(this);
+            text.setText(ask.optString("shown"));
+            text.setTextColor(col(R.color.dim));
+            text.setTextSize(14);
+            text.setPadding(dp(13), dp(10), dp(13), dp(10));
+            text.setBackgroundResource(R.drawable.card_bg);
+            text.setMaxWidth(Math.min(dp(260), getResources().getDisplayMetrics().widthPixels - dp(80)));
+            waiting.addView(text, new LinearLayout.LayoutParams(-2, -2));
+            TextView label = new TextView(this);
+            label.setText("Waiting for this reply to end");
+            label.setTextColor(col(R.color.dim));
+            label.setTextSize(11);
+            label.setPadding(0, dp(3), dp(4), 0);
+            waiting.addView(label, new LinearLayout.LayoutParams(-2, -2));
+            addTo(waiting, android.view.Gravity.END, 12);
+            queuedViews.add(waiting);
+        }
+    }
+
+    /** The reply ended: send the message that has waited longest. */
+    private void nextQueued(String session) {
+        if (ChatService.running.contains(session) || queued(session).isEmpty()) return;
+        startReply(session, queued(session).remove(0));
+    }
+
+    /** The reply failed, so sending more would fail too: the waiting messages go back into the box. */
+    private void returnQueued(String session) {
+        java.util.List<JSONObject> waiting = queued(session);
+        if (waiting.isEmpty()) return;
+        StringBuilder text = new StringBuilder();
+        for (JSONObject ask : waiting) text.append(text.length() == 0 ? "" : "\n\n").append(ask.optString("typed"));
+        waiting.clear();
+        if (!chatConvoMode || !session.equals(chatSession)) return;
+        renderQueued();
+        chatInput.setText(text);
+        chatInput.setSelection(chatInput.length());
+    }
+
+    /** Send turns into Stop while a reply is being written and the box is empty. */
+    private void updateSendButton() {
+        android.widget.ImageView send = pageChat.findViewById(R.id.chat_send);
+        boolean stop = chatConvoMode && chatSession != null && ChatService.running.contains(chatSession)
+            && chatInput.getText().toString().trim().isEmpty() && chatAttachments.isEmpty();
+        send.setImageResource(stop ? R.drawable.csi_stop : R.drawable.csi_send);
+        send.setContentDescription(stop ? "Stop this reply" : "Send");
+        send.setImageTintList(android.content.res.ColorStateList.valueOf(col(stop ? R.color.text : R.color.onAccent)));
+        if (stop) send.setBackground(bg(col(R.color.surface2), 22));
+        else send.setBackgroundResource(R.drawable.chat_send_bg);
+    }
+
+    // ---- the answer while it is still being written ----
+
+    private View writingBox;
+    private TextView writingText;
+
+    private void showWriting() {
+        StringBuilder soFar = ChatService.writing.get(chatSession);
+        if (soFar == null) return;
+        String text;
+        synchronized (soFar) { text = soFar.toString(); }
+        if (chatPending != null) { chatList.removeView(chatPending); chatPending = null; }
+        if (writingText == null) {
+            closeWork();
+            LinearLayout box = new LinearLayout(this);
+            box.setBackground(bg(col(R.color.surface2), 16));
+            box.setPadding(dp(13), dp(11), dp(13), dp(11));
+            writingText = new TextView(this);
+            writingText.setTextColor(col(R.color.text));
+            writingText.setTextSize(14);
+            writingText.setLineSpacing(0, 1.2f);
+            box.addView(writingText);
+            LinearLayout.LayoutParams at = new LinearLayout.LayoutParams(-1, -2);
+            at.topMargin = dp(12);
+            chatList.addView(box, at);
+            writingBox = box;
+        }
+        writingText.setText(text);
+        scrollDown();
+    }
+
+    private void clearWriting() {
+        if (writingBox != null) chatList.removeView(writingBox);
+        writingBox = null;
+        writingText = null;
     }
 
     // Render a reply from ChatService, live or stashed, clearing the placeholder.
@@ -2624,19 +2783,28 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private final android.content.BroadcastReceiver chatReceiver = new android.content.BroadcastReceiver() {
         public void onReceive(android.content.Context c, Intent i) {
             String s = i.getStringExtra("session");
-            // Every chat persists to its own store; only the open one renders live.
-            if (!chatConvoMode || s == null || !s.equals(chatSession)) return;
+            if (s == null) return;
             String turn = i.getStringExtra("turn");
             String err = i.getStringExtra("error");
-            if (turn != null) {
-                try { renderSingleTurn(new org.json.JSONObject(turn),
-                    ChatStore.transcript(MainActivity.this, chatSession).length() - 1); } catch (Throwable e) {}
-            } else if (err != null) {
-                if (chatPending != null) { chatList.removeView(chatPending); chatPending = null; }
-                addError(err); scrollDown();
-            } else if (i.getBooleanExtra("done", false)) {
-                if (chatPending != null) { chatList.removeView(chatPending); chatPending = null; }
+            boolean done = i.getBooleanExtra("done", false);
+            // Every chat persists to its own store; only the open one renders live.
+            if (chatConvoMode && s.equals(chatSession)) {
+                if (turn != null) {
+                    clearWriting();
+                    try { renderSingleTurn(new org.json.JSONObject(turn),
+                        ChatStore.transcript(MainActivity.this, chatSession).length() - 1); } catch (Throwable e) {}
+                } else if (i.getBooleanExtra("writing", false)) {
+                    showWriting();
+                } else if (err != null || done) {
+                    if (chatPending != null) { chatList.removeView(chatPending); chatPending = null; }
+                    clearWriting();
+                    if (err != null) { addError(err); scrollDown(); }
+                }
+                renderQueued();
+                updateSendButton();
             }
+            if (err != null) returnQueued(s);
+            else if (done) nextQueued(s);
         }
     };
 
@@ -2667,6 +2835,14 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         } else if ("text".equals(type)) {
             closeWork();
             addMarkdown(t.optString("text"), transcriptIndex);
+            if (t.optBoolean("stopped")) {
+                TextView note = new TextView(this);
+                note.setText("Stopped before it finished");
+                note.setTextColor(col(R.color.dim));
+                note.setTextSize(12);
+                note.setPadding(dp(4), dp(4), 0, 0);
+                chatList.addView(note);
+            }
         }
         scrollDown();
     }
@@ -3020,6 +3196,19 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         again.setBackgroundResource(android.R.drawable.list_selector_background);
         actions.addView(again, new LinearLayout.LayoutParams(dp(48), dp(48)));
         again.setOnClickListener(v -> rewindTo(transcriptIndex, !mine));
+        // What an answer cost sits quietly beside its actions, for the times you want to know.
+        JSONObject entry = mine || chatSession == null ? null
+            : ChatStore.transcript(this, chatSession).optJSONObject(transcriptIndex);
+        String cost = entry == null ? "" : usageLine(entry.optJSONObject("usage"));
+        if (!cost.isEmpty()) {
+            TextView usage = new TextView(this);
+            usage.setText(cost);
+            usage.setTextColor(col(R.color.dim));
+            usage.setTextSize(12);
+            usage.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            usage.setPadding(dp(6), 0, dp(6), 0);
+            actions.addView(usage, new LinearLayout.LayoutParams(-2, dp(48)));
+        }
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         params.gravity = mine ? android.view.Gravity.END : android.view.Gravity.START;
@@ -3027,6 +3216,19 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         chatList.addView(actions, chatList.indexOfChild(bubble) + 1);
         selectedMessageActions = actions;
         selectedMessageBubble = bubble;
+    }
+
+    /** "1,204 in, 388 out · 6.2 s · gpt-6.1-sol", leaving out whatever the provider did not report. */
+    private static String usageLine(JSONObject usage) {
+        if (usage == null) return "";
+        java.util.List<String> parts = new java.util.ArrayList<>();
+        if (usage.has("input_tokens") || usage.has("output_tokens"))
+            parts.add(String.format(java.util.Locale.US, "%,d in, %,d out",
+                usage.optLong("input_tokens"), usage.optLong("output_tokens")));
+        if (usage.optLong("ms") > 0)
+            parts.add(String.format(java.util.Locale.US, "%.1f s", usage.optLong("ms") / 1000.0));
+        if (!usage.optString("model").isEmpty()) parts.add(usage.optString("model"));
+        return android.text.TextUtils.join(" · ", parts);
     }
 
     /**

@@ -86,6 +86,10 @@ public final class MeshClient {
         void onTurn(JSONObject turn);
         void onDone(String reply);
         void onError(String message);
+        /** The next few characters of the answer being written. The whole answer still arrives as a turn. */
+        default void onDelta(String text) {}
+        /** What the reply cost: tokens in and out where the provider reports them, and the time taken. */
+        default void onUsage(JSONObject usage) {}
     }
 
     /**
@@ -131,6 +135,10 @@ public final class MeshClient {
                 try { o = new JSONObject(line); } catch (Throwable e) { continue; }
                 if (o.has("turn")) {
                     sink.onTurn(o.optJSONObject("turn"));
+                } else if (o.has("delta")) {
+                    sink.onDelta(o.optJSONObject("delta") == null ? "" : o.optJSONObject("delta").optString("text"));
+                } else if (o.has("usage")) {
+                    sink.onUsage(o.optJSONObject("usage"));
                 } else if (o.has("error")) {
                     sink.onError(o.optString("error"));
                 } else if (o.optBoolean("done")) {

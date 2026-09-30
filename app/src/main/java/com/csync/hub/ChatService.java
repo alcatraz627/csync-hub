@@ -35,6 +35,11 @@ public class ChatService extends Service {
     // Number of in-flight chats, so several can stream at once and the foreground
     // service only stops when the last finishes.
     static final java.util.concurrent.atomic.AtomicInteger active = new java.util.concurrent.atomic.AtomicInteger(0);
+    // Conversations with a reply in flight, and the answer text each has received so far.
+    // The screen reads these when it opens a conversation mid-reply, so it shows the whole
+    // answer up to now and offers Stop.
+    static final java.util.Set<String> running = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    static final java.util.Map<String, StringBuilder> writing = new java.util.concurrent.ConcurrentHashMap<>();
 
     @Override public IBinder onBind(Intent i) { return null; }
 
@@ -50,6 +55,7 @@ public class ChatService extends Service {
         final String attached = intent.getStringExtra("attachments");
 
         active.incrementAndGet();
+        running.add(session);
         startForeground(FG_ID, sendingNote());
         PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
         final PowerManager.WakeLock wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "csync:chat");
@@ -59,16 +65,37 @@ public class ChatService extends Service {
         new Thread(() -> {
             final JSONArray acc = new JSONArray();
             final String[] err = {null};
+            final long[] nudged = {0};
             MeshClient.chatStream(assist, token, session, message, model, effort, encodeAttachments(attached),
                     new MeshClient.TurnSink() {
                 public void onTurn(JSONObject turn) {
+                    // The whole turn replaces whatever was being written a few characters at a time.
+                    writing.remove(session);
                     if (turn != null) { acc.put(turn); ChatStore.append(ctx, session, null, turn); }
                     Intent b = new Intent(ACTION_REPLY).setPackage(getPackageName());
                     b.putExtra("session", session);
                     if (turn != null) b.putExtra("turn", turn.toString());
                     sendBroadcast(b);
                 }
+                public void onDelta(String text) {
+                    StringBuilder soFar = writing.get(session);
+                    if (soFar == null) { soFar = new StringBuilder(); writing.put(session, soFar); }
+                    synchronized (soFar) { soFar.append(text); }
+                    // The screen reads the text from `writing`, so a burst of small pieces needs only one nudge.
+                    long now = android.os.SystemClock.elapsedRealtime();
+                    if (now - nudged[0] < 60) return;
+                    nudged[0] = now;
+                    Intent b = new Intent(ACTION_REPLY).setPackage(getPackageName());
+                    b.putExtra("session", session);
+                    b.putExtra("writing", true);
+                    sendBroadcast(b);
+                }
+                public void onUsage(JSONObject usage) {
+                    ChatStore.usageOnLast(ctx, session, usage);
+                }
                 public void onError(String message) {
+                    running.remove(session);
+                    writing.remove(session);
                     err[0] = message;
                     Intent b = new Intent(ACTION_REPLY).setPackage(getPackageName());
                     b.putExtra("session", session);
@@ -76,6 +103,8 @@ public class ChatService extends Service {
                     sendBroadcast(b);
                 }
                 public void onDone(String reply) {
+                    running.remove(session);
+                    writing.remove(session);
                     Intent b = new Intent(ACTION_REPLY).setPackage(getPackageName());
                     b.putExtra("session", session);
                     b.putExtra("done", true);
@@ -83,6 +112,8 @@ public class ChatService extends Service {
                 }
             });
 
+            running.remove(session);
+            writing.remove(session);
             if (!uiForeground) {
                 if (acc.length() > 0) { stashedTurns = acc.toString(); stashedSession = session; notifyReply(session, lastText(acc.toString())); }
                 if (err[0] != null) stashedError = err[0];

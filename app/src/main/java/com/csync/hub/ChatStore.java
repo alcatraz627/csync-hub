@@ -44,6 +44,19 @@ public final class ChatStore {
                 .apply();
     }
 
+    /** Record what the newest answer cost, so it can be shown under that answer later. */
+    static synchronized void usageOnLast(Context c, String id, JSONObject usage) {
+        if (id == null || usage == null) return;
+        JSONArray t = transcript(c, id);
+        for (int i = t.length() - 1; i >= 0; i--) {
+            JSONObject entry = t.optJSONObject(i);
+            if (entry == null || !"text".equals(entry.optString("type"))) continue;
+            try { entry.put("usage", usage); } catch (Throwable ignore) { return; }
+            p(c).edit().putString("t_" + id, t.toString()).apply();
+            return;
+        }
+    }
+
     // Set a field on a conversation's index entry (title, favorite, archived).
     static synchronized void patch(Context c, String id, String key, Object val) {
         JSONArray idx = index(c);
