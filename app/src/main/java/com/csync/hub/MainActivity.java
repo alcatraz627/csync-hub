@@ -2173,10 +2173,56 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     /** Chats list: Home / Chats. A conversation: Home / Chat, where back returns to the list. */
     private void renderChatTop() {
         View top = pageChat.findViewById(R.id.chat_top);
-        if (chatConvoMode) { Kit.pageTop(top, "conversation", this::openPlace); return; }
+        if (chatConvoMode) {
+            Kit.pageTop(top, "conversation", this::openPlace);
+            Kit.topAction(top, R.drawable.csi_download, "Save this conversation", v -> exportConversation());
+            return;
+        }
         Kit.pageTop(top, "chat", this::openPlace);
         Kit.topAction(top, R.drawable.csi_sliders, "Model for new conversations", v -> openModelSheet("default"));
         Kit.topAction(top, R.drawable.csi_plus, "New chat", v -> newConversation());
+    }
+
+    /**
+     * Save the open conversation as a Markdown file and hand it to Android's share menu, so it can
+     * go to Files, a note app or another person. Your messages and the answers are written in full;
+     * each tool the assistant used is named under the answer it led to.
+     */
+    private void exportConversation() {
+        if (chatSession == null) return;
+        JSONArray transcript = ChatStore.transcript(this, chatSession);
+        if (transcript.length() == 0) { toast("There is nothing to save yet"); return; }
+        String title = chatTitle.getText().toString();
+        StringBuilder out = new StringBuilder("# ").append(title).append("\n");
+        java.util.List<String> used = new java.util.ArrayList<>();
+        for (int i = 0; i < transcript.length(); i++) {
+            JSONObject entry = transcript.optJSONObject(i);
+            if (entry == null) continue;
+            if ("user".equals(entry.optString("role"))) {
+                out.append("\n## You\n\n").append(entry.optString("text")).append("\n");
+            } else if ("tool_call".equals(entry.optString("type"))) {
+                used.add(chatToolTitle(entry.optString("name")));
+            } else if ("text".equals(entry.optString("type"))) {
+                out.append("\n## Pi assistant\n\n").append(entry.optString("text")).append("\n");
+                if (!used.isEmpty()) out.append("\n_Used: ").append(android.text.TextUtils.join(", ", used)).append("_\n");
+                used.clear();
+            }
+        }
+        try {
+            java.io.File dir = new java.io.File(getCacheDir(), "share");
+            dir.mkdirs();
+            String name = title.replaceAll("[^A-Za-z0-9 ._-]", "").trim();
+            java.io.File file = new java.io.File(dir, (name.isEmpty() ? "conversation" : name) + ".md");
+            try (java.io.FileOutputStream stream = new java.io.FileOutputStream(file)) {
+                stream.write(out.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            android.net.Uri uri = androidx.core.content.FileProvider.getUriForFile(this, getPackageName() + ".share", file);
+            Intent send = new Intent(Intent.ACTION_SEND).setType("text/markdown")
+                .putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(Intent.createChooser(send, "Save this conversation"));
+        } catch (Exception error) {
+            Kit.sheet(this, "The conversation could not be saved", "The file could not be written on this phone.");
+        }
     }
 
     /** A short conversation title from the first message: one line, cut at a word, no ellipsis. */
