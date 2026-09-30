@@ -1557,6 +1557,15 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         View player = Kit.addRow(playback);
         Kit.bindRow(player, Kit.Icon.DISPLAY, "Pi screen player", "Volume, speed and what is playing", null, true);
         player.setOnClickListener(v -> startActivity(new Intent(this, MediaActivity.class).putExtra("player_target", "pi")));
+        // The screen the Pi is plugged into, named once the Pi has answered.
+        final View display = Kit.addRow(playback);
+        Kit.bindRow(display, Kit.Icon.DISPLAY, "Display", "What the Pi is plugged into", null, true);
+        display.setOnClickListener(v -> DisplaySheet.open(this));
+        final MediaClient pi = new MediaClient(Prefs.assistIp(this), Prefs.token(this));
+        new Thread(() -> {
+            final String inUse = DisplaySheet.current(pi);
+            if (inUse != null) ui.post(() -> Kit.bindRow(display, Kit.Icon.DISPLAY, "Display", "What the Pi is plugged into", inUse, true));
+        }, "display-name").start();
         refreshConnection();
     }
 
