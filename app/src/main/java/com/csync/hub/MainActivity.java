@@ -2985,6 +2985,29 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         card.addView(top);
         int rows = 0;
         java.util.Iterator<String> keys = result.keys();
+        if ("pi_vitals".equals(tool)) {
+            // The Pi reports these as raw readings; the card says them the way a person would.
+            keys = java.util.Collections.emptyIterator();
+            String heat = result.optString("cpu_temp_c").replaceAll("[^0-9.]", "");
+            if (!heat.isEmpty()) {
+                card.addView(resultLine("Temperature", Math.round(Float.parseFloat(heat)) + " °C", null));
+                rows++;
+            }
+            String power = result.optString("throttled");
+            if (power.contains("=")) {
+                boolean steady = power.substring(power.indexOf('=') + 1).trim().matches("0x0+");
+                card.addView(resultLine("Power", steady ? "Steady" : "Low voltage was seen",
+                    steady ? Kit.Status.GOOD : Kit.Status.WARN));
+                rows++;
+            }
+            String speed = result.optString("arm_clock").replaceAll("[^0-9.]", "");
+            if (!speed.isEmpty()) {
+                float megahertz = Float.parseFloat(speed);
+                card.addView(resultLine("Processor speed", megahertz >= 1000
+                    ? String.format(java.util.Locale.US, "%.1f GHz", megahertz / 1000) : Math.round(megahertz) + " MHz", null));
+                rows++;
+            }
+        }
         while (keys.hasNext() && rows < 8) {
             String key = keys.next();
             Object value = result.opt(key);
