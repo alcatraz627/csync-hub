@@ -416,8 +416,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             showToolsStatus("Pi media service", R.id.tools_media_status));
         pageTools.findViewById(R.id.tools_power_health_row).setOnClickListener(v ->
             showToolsStatus("Pi power", R.id.tools_power_status));
-        pageTools.findViewById(R.id.tools_performance_row).setOnClickListener(v ->
-            Kit.sheet(this, "App performance", "Trace capture during lag is planned."));
+        // The app shows what exists. This row described a feature that is not built, so it stays out of sight.
+        pageTools.findViewById(R.id.tools_performance_row).setVisibility(View.GONE);
     }
 
     /**
@@ -522,7 +522,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         ((TextView) pageTools.findViewById(R.id.tools_title)).setText(detail == 1 ?
             "Observe before acting" : detail == 2 ? "Useful shortcuts" : "Tools");
         ((TextView) pageTools.findViewById(R.id.tools_subtitle)).setText(detail == 1 ?
-            "Live phone samples need Shizuku. Pi process actions are planned." : detail == 2 ?
+            "Live phone samples need Shizuku." : detail == 2 ?
             "Widgets, tiles, shortcuts and the share menu." :
             "Pi service health and phone utilities.");
         View top = pageTools.findViewById(R.id.tools_back);
