@@ -12,11 +12,8 @@
                 android:layout_marginTop="4dp" android:text="More"
                 style="@style/Kit.Text.PageTitle" android:textColor="@color/text"/>
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="4dp" android:text="Camera, utilities, and preferences."
-                android:textSize="13sp" android:textColor="@color/dim"/>
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="14dp" android:layout_marginBottom="8dp"
-                android:text="Areas" style="@style/Kit.Text.Section"/>
+                android:layout_marginTop="4dp" android:layout_marginBottom="8dp"
+                android:text="On the Pi and this phone" style="@style/Kit.Text.Section"/>
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:background="@drawable/card_bg">
                 <LinearLayout android:id="@+id/more_camera" style="@style/CsyncMoreNavRow">
@@ -31,8 +28,8 @@
                 <LinearLayout android:id="@+id/more_tools" style="@style/CsyncMoreNavRow">
                     <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_tools"/>
                     <LinearLayout style="@style/CsyncMoreText">
-                        <TextView style="@style/CsyncMoreTitle" android:text="Tools &amp; diagnostics"/>
-                        <TextView style="@style/CsyncMoreSub" android:text="Health, processes, widgets"/>
+                        <TextView style="@style/CsyncMoreTitle" android:text="Tools"/>
+                        <TextView style="@style/CsyncMoreSub" android:text="Pi health, this phone, app updates"/>
                     </LinearLayout>
                     <ImageView style="@style/CsyncMoreChevron"/>
                 </LinearLayout>
@@ -54,8 +51,8 @@
                 <LinearLayout android:id="@+id/more_assistant_tools" style="@style/CsyncMoreNavRow">
                     <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_chat"/>
                     <LinearLayout style="@style/CsyncMoreText">
-                        <TextView style="@style/CsyncMoreTitle" android:text="Assistant capabilities"/>
-                        <TextView style="@style/CsyncMoreSub" android:text="Examples and live Pi tools"/>
+                        <TextView style="@style/CsyncMoreTitle" android:text="Assistant guide"/>
+                        <TextView style="@style/CsyncMoreSub" android:text="What you can ask the Pi assistant"/>
                     </LinearLayout>
                     <ImageView style="@style/CsyncMoreChevron"/>
                 </LinearLayout>
@@ -63,8 +60,8 @@
                 <LinearLayout android:id="@+id/more_notes" style="@style/CsyncMoreNavRow">
                     <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_note"/>
                     <LinearLayout style="@style/CsyncMoreText">
-                        <TextView style="@style/CsyncMoreTitle" android:text="Pi Notes"/>
-                        <TextView style="@style/CsyncMoreSub" android:text="Saved Markdown and screenshots"/>
+                        <TextView style="@style/CsyncMoreTitle" android:text="Notes"/>
+                        <TextView style="@style/CsyncMoreSub" android:text="Notes and pins kept on the Pi"/>
                     </LinearLayout>
                     <ImageView style="@style/CsyncMoreChevron"/>
                 </LinearLayout>

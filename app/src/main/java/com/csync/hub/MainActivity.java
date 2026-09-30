@@ -270,8 +270,10 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             pageHome.findViewById(R.id.home_pickup_content));
         Kit.bindSection(pageHome.findViewById(R.id.home_cap_head), 0, "Capabilities",
             pageHome.findViewById(R.id.home_cap_grid));
-        Kit.bindSection(pageHome.findViewById(R.id.home_devices_head), 0, "Devices",
+        Kit.bindSection(pageHome.findViewById(R.id.home_devices_head), 0, "Send to a device",
             pageHome.findViewById(R.id.home_devices));
+        // Home is about what to do next, so the device list starts folded.
+        pageHome.findViewById(R.id.home_devices_head).performClick();
         pageHome.findViewById(R.id.home_share).setOnClickListener(v -> nav.setSelectedItemId(R.id.nav_share));
         pageHome.findViewById(R.id.home_chat).setOnClickListener(v -> nav.setSelectedItemId(R.id.nav_chat));
         pageHome.findViewById(R.id.home_cap_media).setOnClickListener(v -> startActivity(new Intent(this, MediaActivity.class)));
@@ -384,8 +386,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             pageTools.findViewById(id).setVisibility(overview ? View.VISIBLE : View.GONE);
         pageTools.findViewById(R.id.tools_process_section).setVisibility(detail == 1 ? View.VISIBLE : View.GONE);
         pageTools.findViewById(R.id.tools_widget_section).setVisibility(detail == 2 ? View.VISIBLE : View.GONE);
-        pageTools.findViewById(R.id.tools_title).setVisibility(overview ? View.GONE : View.VISIBLE);
-        pageTools.findViewById(R.id.tools_subtitle).setVisibility(overview ? View.GONE : View.VISIBLE);
+        pageTools.findViewById(R.id.tools_title).setVisibility(View.GONE);
+        pageTools.findViewById(R.id.tools_subtitle).setVisibility(View.GONE);
         ((TextView) pageTools.findViewById(R.id.tools_title)).setText(detail == 1 ?
             "Observe before acting" : detail == 2 ? "Useful shortcuts" : "Tools");
         ((TextView) pageTools.findViewById(R.id.tools_subtitle)).setText(detail == 1 ?
@@ -541,9 +543,20 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private void bindHomeStatus(Boolean pi, boolean media, Boolean mac) {
         boolean checking = pi == null;
         boolean piUp = !checking && (pi || media);
-        ((TextView) pageHome.findViewById(R.id.home_hero_status)).setText(
-            checking ? "Checking the Raspberry Pi" : piUp ? "Raspberry Pi is online" : "Raspberry Pi is offline");
-        Kit.setStatus(pageHome.findViewById(R.id.home_hero_dot), piUp ? Kit.Status.GOOD : Kit.Status.IDLE);
+        com.google.android.material.bottomnavigation.BottomNavigationView nav = findViewById(R.id.nav);
+        // Two rows that each name a thing and say how it is: the Pi, and this app with its version and any update.
+        LinearLayout statusBox = pageHome.findViewById(R.id.home_status);
+        statusBox.removeAllViews();
+        LinearLayout statusGroup = Kit.group(statusBox);
+        View hub = Kit.addRow(statusGroup);
+        Kit.bindRow(hub, R.drawable.csi_tools, "Raspberry Pi", Prefs.assistIp(this), null, true);
+        Kit.rowStatus(hub, checking ? Kit.Status.WARN : piUp ? Kit.Status.GOOD : Kit.Status.IDLE,
+            checking ? "Checking" : piUp ? "Online" : "Offline");
+        hub.setOnClickListener(v -> { nav.setSelectedItemId(R.id.nav_more); show(3); });
+        View app = Kit.addRow(statusGroup);
+        Kit.bindRow(app, R.drawable.csi_download, "csync " + appVersion(), "Checking for an update", null, true);
+        app.setOnClickListener(v -> { nav.setSelectedItemId(R.id.nav_more); show(3); });
+        AppUpdater.refreshStatus(this, app.findViewById(R.id.kit_sub));
 
         Kit.Status onPi = checking ? Kit.Status.WARN : media ? Kit.Status.GOOD : Kit.Status.IDLE;
         String piWords = checking ? "Checking" : media ? "Ready" : "Offline";
@@ -556,16 +569,10 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         Kit.bindArea(pageHome.findViewById(R.id.home_notes), Kit.Icon.NOTES, "Notes", onPi, piWords);
         Kit.bindArea(pageHome.findViewById(R.id.home_tools), Kit.Icon.TOOLS, "Tools", onPi, piWords);
 
-        // Devices: the Pi first, then every named peer this phone knows, online ones before offline.
-        com.google.android.material.bottomnavigation.BottomNavigationView nav = findViewById(R.id.nav);
+        // Devices: every named peer this phone knows, online ones before offline. Tapping one picks it as the recipient.
         LinearLayout box = pageHome.findViewById(R.id.home_devices);
         box.removeAllViews();
         LinearLayout group = Kit.group(box);
-        View hub = Kit.addRow(group);
-        Kit.bindRow(hub, Kit.Icon.DEVICE, "Raspberry Pi", null, null, true);
-        Kit.rowStatus(hub, checking ? Kit.Status.WARN : piUp ? Kit.Status.GOOD : Kit.Status.IDLE,
-            checking ? "Checking" : piUp ? "Online" : "Offline");
-        hub.setOnClickListener(v -> { nav.setSelectedItemId(R.id.nav_more); show(3); });
         JSONArray roster = PeerStore.load(this);
         String self = Prefs.deviceName(this);
         int online = 0;
@@ -589,6 +596,11 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         Kit.bindArea(pageHome.findViewById(R.id.home_share), Kit.Icon.SHARE, "Share",
             online > 0 ? Kit.Status.GOOD : Kit.Status.IDLE,
             online == 0 ? "No device online" : online == 1 ? "1 device online" : online + " devices online");
+    }
+
+    private String appVersion() {
+        try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionName; }
+        catch (Exception error) { return ""; }
     }
 
     private void refreshCapabilities() {
@@ -1064,8 +1076,10 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     private void refreshShareHeading() {
         String selected = PeerStore.selected(this);
+        TextView heading = pageShare.findViewById(R.id.share_heading);
+        heading.setVisibility(shareInboxMode ? View.GONE : View.VISIBLE);
         if (shareInboxMode) return;
-        ((TextView) pageShare.findViewById(R.id.share_heading)).setText(
+        heading.setText(
             selected.isEmpty() ? "Choose a recipient" : "Send to " + selected);
     }
 
@@ -1598,6 +1612,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         chatList = pageChat.findViewById(R.id.chat_list);
         chatScroll = pageChat.findViewById(R.id.chat_scroll);
         chatSubtitle = pageChat.findViewById(R.id.chat_subtitle);
+        chatSubtitle.setVisibility(View.VISIBLE);
         chatTitle = pageChat.findViewById(R.id.chat_title);
         chatTitleEdit = pageChat.findViewById(R.id.chat_title_edit);
         chatEdit = pageChat.findViewById(R.id.chat_edit);
@@ -1831,7 +1846,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private void setComposerLines(int lines) {
         chatExpanded = lines > 1;
         chatInput.setMinLines(lines);
-        chatInput.setMaxLines(chatExpanded ? Math.max(lines, 6) : 1);
+        // The box grows with the message up to six lines on its own; the handle opens it taller.
+        chatInput.setMaxLines(Math.max(lines, 6));
         updateComposerHandle();
     }
 

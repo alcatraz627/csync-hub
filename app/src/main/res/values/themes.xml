@@ -9,6 +9,8 @@
         <item name="colorOnBackground">@color/text</item>
         <item name="android:statusBarColor">@color/bg</item>
         <item name="android:navigationBarColor">@color/surface</item>
+        <!-- Media, Notes and Search are separate screens under the hood. With no window animation they open the way the other bar places do, at once. -->
+        <item name="android:windowAnimationStyle">@null</item>
         <item name="android:windowLightStatusBar" tools:targetApi="m">true</item>
         <item name="android:windowSplashScreenBackground" tools:targetApi="s">@color/splash_bg</item>
         <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="s">@drawable/splash_icon</item>

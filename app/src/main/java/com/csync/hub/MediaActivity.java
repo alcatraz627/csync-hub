@@ -215,10 +215,7 @@ public final class MediaActivity extends AppCompatActivity {
                 id == selectedId ? accent : getColor(R.color.dim)));
             tab.setTypeface(null, id == selectedId ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
             if (id == selectedId) {
-                android.graphics.drawable.GradientDrawable pill = new android.graphics.drawable.GradientDrawable();
-                pill.setColor(getColor(R.color.surface));
-                pill.setCornerRadius(dp(9));
-                tab.setBackground(pill);
+                tab.setBackground(Kit.underline(this, accent));
             } else {
                 android.util.TypedValue ripple = new android.util.TypedValue();
                 getTheme().resolveAttribute(android.R.attr.selectableItemBackground, ripple, true);

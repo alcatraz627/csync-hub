@@ -30,8 +30,7 @@
         </LinearLayout>
         <HorizontalScrollView android:id="@+id/media_sections" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="16dp" android:layout_marginStart="20dp"
-            android:layout_marginEnd="20dp" android:fillViewport="true" android:scrollbars="none"
-            android:background="@drawable/media_tab_track">
+            android:layout_marginEnd="20dp" android:fillViewport="true" android:scrollbars="none">
             <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:orientation="horizontal" android:paddingStart="3dp" android:paddingEnd="3dp">
                 <TextView android:id="@+id/media_files" style="@style/CsyncMediaTab"
