@@ -93,6 +93,28 @@ final class Kit {
         row.setContentDescription(((TextView) row.findViewById(R.id.kit_title)).getText() + ", " + words);
     }
 
+    interface Flip { void to(boolean on); }
+
+    /** Put a switch at the row's end for a setting that is on or off. A tap anywhere on the row flips it. */
+    static void rowToggle(View row, boolean on, Flip flip) {
+        Context c = row.getContext();
+        row.findViewById(R.id.kit_chevron).setVisibility(View.GONE);
+        com.google.android.material.materialswitch.MaterialSwitch toggle =
+            new com.google.android.material.materialswitch.MaterialSwitch(c);
+        toggle.setChecked(on);
+        // The row takes the tap, so the switch and the words beside it act as one control.
+        toggle.setClickable(false);
+        toggle.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        ((LinearLayout) row).addView(toggle);
+        CharSequence title = ((TextView) row.findViewById(R.id.kit_title)).getText();
+        row.setContentDescription(title + (on ? ", on" : ", off"));
+        row.setOnClickListener(v -> {
+            toggle.setChecked(!toggle.isChecked());
+            row.setContentDescription(title + (toggle.isChecked() ? ", on" : ", off"));
+            flip.to(toggle.isChecked());
+        });
+    }
+
     /** The line under a tab that marks it as the chosen one. */
     static android.graphics.drawable.Drawable underline(Context c, int color) {
         android.graphics.drawable.LayerDrawable line = new android.graphics.drawable.LayerDrawable(

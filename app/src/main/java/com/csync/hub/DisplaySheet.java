@@ -45,17 +45,53 @@ final class DisplaySheet {
         }, "displays").start();
     }
 
-    /** The name of the screen in use, for the Settings row, or null when the Pi has none or cannot be reached. */
+    /** The name of the screen in use, or null when the Pi has none or cannot be reached. */
     static String current(MediaClient pi) {
+        JSONObject screen = screenInUse(pi);
+        return screen == null ? null : screen.optString("name");
+    }
+
+    /** The screen in use with its settings, or null when the Pi has none or cannot be reached. Call it off the main thread. */
+    static JSONObject screenInUse(MediaClient pi) {
         try {
             JSONObject all = pi.get("/v1/displays");
             JSONArray screens = all.optJSONArray("displays");
             for (int i = 0; screens != null && i < screens.length(); i++) {
                 JSONObject screen = screens.optJSONObject(i);
-                if (screen != null && screen.optString("id").equals(all.optString("current"))) return screen.optString("name");
+                if (screen != null && screen.optString("id").equals(all.optString("current"))) return screen;
             }
         } catch (Exception unreachable) { }
         return null;
+    }
+
+    /** Set how loud playback starts on the screen in use. {@code after} runs once the Pi has saved it. */
+    static void startVolume(Activity a, Runnable after) {
+        final MediaClient pi = new MediaClient(Prefs.assistIp(a), Prefs.token(a));
+        new Thread(() -> {
+            final JSONObject screen = screenInUse(pi);
+            UI.post(() -> {
+                if (a.isFinishing()) return;
+                if (screen == null) { Kit.sheet(a, "Starting volume", "The Pi cannot be reached, or no screen is plugged into it."); return; }
+                JSONObject kept = screen.optJSONObject("settings");
+                Kit.sliderSheet(a, "Starting volume on " + screen.optString("name", "the Pi screen"), 0, 100, 5,
+                    kept == null ? 0 : kept.optInt("startVolume"),
+                    value -> value == 0 ? "Muted" : Math.round(value) + "%",
+                    value -> new Thread(() -> {
+                        boolean saved = false;
+                        try {
+                            pi.put("/v1/displays/" + MediaClient.enc(screen.optString("id")),
+                                new JSONObject().put("settings", new JSONObject().put("startVolume", Math.round(value))));
+                            saved = true;
+                        } catch (Exception refused) { }
+                        final boolean done = saved;
+                        UI.post(() -> {
+                            if (a.isFinishing()) return;
+                            if (done) after.run();
+                            else Kit.sheet(a, "It was not saved", "The Pi did not take the change. Nothing was altered.");
+                        });
+                    }, "start-volume-save").start());
+            });
+        }, "start-volume").start();
     }
 
     private static String where(JSONObject screen) {

@@ -184,6 +184,10 @@ public final class MediaActivity extends AppCompatActivity {
             public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {}
             public void surfaceDestroyed(SurfaceHolder holder) { if (PhonePlaybackService.current != null) PhonePlaybackService.current.setSurface(null); }
         });
+        // Read where things were left before anything is played, so resuming does not depend on a visit to History.
+        new Thread(() -> {
+            try { keepPlaces(client.get("/v1/history").getJSONArray("entries")); } catch (Exception unreachable) { }
+        }, "media-places").start();
         String searchItemId = getIntent().getStringExtra("search_item_id");
         if (searchItemId == null) drives();
         else openSearchItem(searchItemId,
@@ -489,6 +493,7 @@ public final class MediaActivity extends AppCompatActivity {
     private void showFullPlayer() {
         if (videoMode) return;
         fullPlayer = true;
+        hideKeyboard();
         findViewById(R.id.media_list).setVisibility(View.GONE);
         findViewById(R.id.media_full_player).setVisibility(View.VISIBLE);
         // The page carries the controls itself, so the row that leads to it steps aside.
@@ -862,6 +867,11 @@ public final class MediaActivity extends AppCompatActivity {
             coverPicture, R.drawable.csi_plus, "Choose an image", () -> wallpaperPicker.launch("image/*"));
     }
 
+    private void hideKeyboard() {
+        ((android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE))
+            .hideSoftInputFromWindow(search.getWindowToken(), 0);
+    }
+
     private void toast(String words) {
         android.widget.Toast.makeText(this, words, android.widget.Toast.LENGTH_SHORT).show();
     }
@@ -1050,7 +1060,8 @@ public final class MediaActivity extends AppCompatActivity {
     private void find() {
         long listing = ++listingIntent;
         String term = search.getText().toString().trim();
-        if (term.isEmpty()) { say("Enter a file name"); return; }
+        if (term.isEmpty()) { say("Type part of a file name first"); return; }
+        hideKeyboard();
         clearRows("Searching");
         listingRequest(listing, () -> client.get("/v1/search?q=" + MediaClient.enc(term)),
             result -> showItems(result.getJSONArray("items"), result.optBoolean("truncated") ? "First results; narrow your search" : "Search results"));
@@ -1137,10 +1148,13 @@ public final class MediaActivity extends AppCompatActivity {
             try { got.file(mediaUri(item), mime); }
             catch (org.json.JSONException incomplete) { say("This file cannot be read from the Pi"); }
         };
-        file.own.put(ItemActions.Act.PLAY_PI, () -> playPi(item));
-        file.own.put(ItemActions.Act.PLAY_PHONE, () -> playPhone(item, 0));
+        // With "Resume where I stopped" on, a file played before carries on from where it was left on that output.
+        int onPi = savedPlace(item, "pi"), onPhone = savedPlace(item, "phone");
+        file.own.put(ItemActions.Act.PLAY_PI, () -> playPi(item, onPi));
+        file.own.put(ItemActions.Act.PLAY_PHONE, () -> playPhone(item, onPhone));
         file.own.put(ItemActions.Act.VLC, () -> playVlc(item));
-        file.notes.put(ItemActions.Act.PLAY_PI, "Starts muted");
+        file.notes.put(ItemActions.Act.PLAY_PI, onPi > 0 ? "From " + playbackTime(onPi) + ", muted" : "Starts muted");
+        if (onPhone > 0) file.notes.put(ItemActions.Act.PLAY_PHONE, "From " + playbackTime(onPhone));
         file.notes.put(ItemActions.Act.VLC, "Hands the file to VLC on this phone");
         if (kind == ItemActions.Kind.IMAGE) {
             file.own.put(ItemActions.Act.SHOW_PI, () -> playPi(item));
@@ -1148,6 +1162,20 @@ public final class MediaActivity extends AppCompatActivity {
         }
         file.more.add(new Kit.Action(R.drawable.csi_info, "File details", null, () -> fileDetails(item), true));
         ItemActions.sheet(this, file);
+    }
+
+    /** Where this file was left on an output, in milliseconds, or 0 when it starts from the beginning. */
+    private int savedPlace(JSONObject item, String output) {
+        if (!getSharedPreferences("player_controls", MODE_PRIVATE).getBoolean("resume", true)) return 0;
+        String saved = getSharedPreferences("media_history", MODE_PRIVATE)
+            .getString(item.optString("id") + "|" + output, null);
+        if (saved == null) return 0;
+        try {
+            JSONObject entry = new JSONObject(saved);
+            // A place within the first few seconds is as good as the beginning.
+            int place = entry.optBoolean("completed") ? 0 : entry.optInt("positionMs");
+            return place < 5000 ? 0 : place;
+        } catch (org.json.JSONException unreadable) { return 0; }
     }
 
     private Uri mediaUri(JSONObject item) throws org.json.JSONException {
@@ -1185,6 +1213,8 @@ public final class MediaActivity extends AppCompatActivity {
         stopPhoneForNewPlayback();
         target = "pi";
         selected = item;
+        // The Loop setting is a wish for every new playback; the Pi takes it once the file is playing.
+        loopWhenPlaying = getSharedPreferences("player_controls", MODE_PRIVATE).getBoolean("loop", false);
         request(intent, () -> {
             if (intent != outputIntent) throw new java.util.concurrent.CancellationException();
             JSONObject state = client.get("/v1/player/pi");
@@ -1283,6 +1313,7 @@ public final class MediaActivity extends AppCompatActivity {
             ui.removeCallbacks(commitLoop);
             pendingRotation = -1;
             pendingLoop = null;
+            loopWhenPlaying = false;
             ++outputIntent;
             stopPhoneForNewPlayback();
         }
@@ -1377,6 +1408,7 @@ public final class MediaActivity extends AppCompatActivity {
     // so stepping from 0° to 270° sends one command instead of three.
     private int pendingRotation = -1;
     private Boolean pendingLoop;
+    private boolean loopWhenPlaying;
     private int shownRotation;
     private boolean shownLoop;
     private final Runnable commitRotation = () -> {
@@ -1535,23 +1567,26 @@ public final class MediaActivity extends AppCompatActivity {
         try { showHistory(new JSONArray(), true); } catch (Exception ignored) {}
         listingRequest(listing, () -> client.get("/v1/history"), result -> {
             JSONArray remote = result.getJSONArray("entries");
-            SharedPreferences cache = getSharedPreferences("media_history", MODE_PRIVATE);
-            SharedPreferences.Editor editor = cache.edit();
-            for (int i = 0; i < remote.length(); i++) {
-                JSONObject entry = remote.getJSONObject(i);
-                String key = entry.optString("itemId") + "|" + entry.optString("target");
-                if (!key.isEmpty()) {
-                    JSONObject cached = new JSONObject(cache.getString(key, "{}"));
-                    if (entry.optLong("generation") > cached.optLong("generation") ||
-                            (entry.optLong("generation") == cached.optLong("generation") &&
-                             entry.optLong("sequence") >= cached.optLong("sequence")))
-                        editor.putString(key, entry.toString());
-                }
-            }
-            editor.apply();
+            keepPlaces(remote);
             showHistory(remote, false);
             syncPendingProgress();
         });
+    }
+
+    /** Keep the Pi's record of where each thing was left on this phone, where the newer of the two copies wins. */
+    private void keepPlaces(JSONArray remote) throws org.json.JSONException {
+        SharedPreferences cache = getSharedPreferences("media_history", MODE_PRIVATE);
+        SharedPreferences.Editor editor = cache.edit();
+        for (int i = 0; i < remote.length(); i++) {
+            JSONObject entry = remote.getJSONObject(i);
+            String key = entry.optString("itemId") + "|" + entry.optString("target");
+            JSONObject cached = new JSONObject(cache.getString(key, "{}"));
+            if (entry.optLong("generation") > cached.optLong("generation") ||
+                    (entry.optLong("generation") == cached.optLong("generation") &&
+                     entry.optLong("sequence") >= cached.optLong("sequence")))
+                editor.putString(key, entry.toString());
+        }
+        editor.apply();
     }
 
     private void showHistory(JSONArray remote, boolean offline) throws Exception {
@@ -1726,7 +1761,7 @@ public final class MediaActivity extends AppCompatActivity {
         } else if ("phone".equals(target)) {
             PhonePlaybackService playback = PhonePlaybackService.current;
             if (playback != null && playback.hasPlayer() && !seeking) {
-                findViewById(R.id.media_player_controls).setVisibility(View.VISIBLE);
+                findViewById(R.id.media_player_controls).setVisibility(fullPlayer ? View.GONE : View.VISIBLE);
                 String phoneState = playback.playbackState();
                 findViewById(R.id.media_pause).setVisibility(phoneState.equals("playing") ? View.VISIBLE : View.GONE);
                 findViewById(R.id.media_resume).setVisibility(phoneState.equals("paused") ? View.VISIBLE : View.GONE);
@@ -1773,6 +1808,10 @@ public final class MediaActivity extends AppCompatActivity {
                             state.optInt("positionMs"), state.optInt("durationMs"),
                             state.optInt("volume", 0), state.optDouble("speed", 1), problem);
                         showPiDisplayState(state);
+                        if (loopWhenPlaying && playerState.equals("playing")) {
+                            loopWhenPlaying = false;
+                            if (!state.optBoolean("loop")) changePiDisplay("loop", true);
+                        }
                         if (!seeking) {
                             seek.setMax(Math.max(1, state.optInt("durationMs", 1)));
                             seek.setProgress(state.optInt("positionMs"));
@@ -1800,6 +1839,9 @@ public final class MediaActivity extends AppCompatActivity {
 
     @Override protected void onStart() {
         super.onStart();
+        // Settings may have changed the skip length while this page was away.
+        skipSeconds = getSharedPreferences("player_controls", MODE_PRIVATE).getInt("skip_seconds", 10);
+        renderSkip();
         PhonePlaybackService playback = PhonePlaybackService.current;
         if (playback != null && playback.hasPlayer() && !"pi".equals(target)) {
             target = "phone";

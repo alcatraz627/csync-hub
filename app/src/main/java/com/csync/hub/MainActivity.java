@@ -1681,20 +1681,52 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             pageSettings.findViewById(R.id.set_assistant_body));
         Kit.bindSection(pageSettings.findViewById(R.id.set_sec_appearance), 0, "Appearance",
             pageSettings.findViewById(R.id.set_appearance_body));
-        LinearLayout playback = Kit.group(pageSettings.findViewById(R.id.set_playback_body));
-        View player = Kit.addRow(playback);
-        Kit.bindRow(player, Kit.Icon.DISPLAY, "Pi screen player", "Volume, speed and what is playing", null, true);
-        player.setOnClickListener(v -> startActivity(new Intent(this, MediaActivity.class).putExtra("player_target", "pi")));
-        // The screen the Pi is plugged into, named once the Pi has answered.
+        renderPlaybackSettings();
+        refreshConnection();
+    }
+
+    /** How playback begins and behaves: the starting volume and screen are kept on the Pi, the rest on this phone. */
+    private void renderPlaybackSettings() {
+        LinearLayout host = pageSettings.findViewById(R.id.set_playback_body);
+        host.removeAllViews();
+        LinearLayout playback = Kit.group(host);
+        final android.content.SharedPreferences how = getSharedPreferences("player_controls", MODE_PRIVATE);
+        final MediaClient pi = new MediaClient(Prefs.assistIp(this), Prefs.token(this));
+        final View volume = Kit.addRow(playback);
+        Kit.bindRow(volume, Kit.Icon.VOLUME, "Starting volume", "On the Pi screen", null, true);
+        volume.setOnClickListener(v -> DisplaySheet.startVolume(this, this::renderPlaybackSettings));
+        View resume = Kit.addRow(playback);
+        Kit.bindRow(resume, Kit.Icon.HISTORY, "Resume where I stopped", null, null, false);
+        Kit.rowToggle(resume, how.getBoolean("resume", true), on -> how.edit().putBoolean("resume", on).apply());
+        View loop = Kit.addRow(playback);
+        Kit.bindRow(loop, Kit.Icon.LOOP, "Loop", null, null, false);
+        Kit.rowToggle(loop, how.getBoolean("loop", false), on -> how.edit().putBoolean("loop", on).apply());
+        View skip = Kit.addRow(playback);
+        Kit.bindRow(skip, R.drawable.csi_fastforward, "Skip length", null, how.getInt("skip_seconds", 10) + " seconds", true);
+        skip.setOnClickListener(v -> {
+            int now = how.getInt("skip_seconds", 10);
+            java.util.List<Kit.Action> lengths = new java.util.ArrayList<>();
+            for (int seconds : new int[]{5, 10, 15, 30}) lengths.add(new Kit.Action(
+                seconds == now ? R.drawable.csi_check : R.drawable.csi_fastforward, seconds + " seconds", null, () -> {
+                    how.edit().putInt("skip_seconds", seconds).apply();
+                    renderPlaybackSettings();
+                }));
+            Kit.sheet(this, "Skip length", "For both Back and Forward", lengths.toArray(new Kit.Action[0]));
+        });
+        // The screen the Pi is plugged into and how loud it starts, written in once the Pi has answered.
         final View display = Kit.addRow(playback);
         Kit.bindRow(display, Kit.Icon.DISPLAY, "Display", "What the Pi is plugged into", null, true);
         display.setOnClickListener(v -> DisplaySheet.open(this));
-        final MediaClient pi = new MediaClient(Prefs.assistIp(this), Prefs.token(this));
         new Thread(() -> {
-            final String inUse = DisplaySheet.current(pi);
-            if (inUse != null) ui.post(() -> Kit.bindRow(display, Kit.Icon.DISPLAY, "Display", "What the Pi is plugged into", inUse, true));
+            final JSONObject screen = DisplaySheet.screenInUse(pi);
+            if (screen == null) return;
+            final JSONObject kept = screen.optJSONObject("settings");
+            final int starts = kept == null ? 0 : kept.optInt("startVolume");
+            ui.post(() -> {
+                Kit.bindRow(display, Kit.Icon.DISPLAY, "Display", "What the Pi is plugged into", screen.optString("name"), true);
+                Kit.bindRow(volume, Kit.Icon.VOLUME, "Starting volume", "On the Pi screen", starts == 0 ? "Muted" : starts + "%", true);
+            });
         }, "display-name").start();
-        refreshConnection();
     }
 
     /** Whether the Pi answers, shown on the Settings row and as the Connection page's heading. */
