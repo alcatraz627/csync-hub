@@ -152,15 +152,13 @@ final class CameraController {
     private void renderPage() {
         cameraPage.setVisibility(showingCaptures ? View.GONE : View.VISIBLE);
         capturesPage.setVisibility(showingCaptures ? View.VISIBLE : View.GONE);
-        Kit.Crumb home = new Kit.Crumb(Kit.Icon.HOME, "Home", activity::onBackPressed);
-        if (showingCaptures) {
-            Kit.pageTop(top, this::closeCaptures, home,
-                new Kit.Crumb(Kit.Icon.CAMERA, "Camera", this::closeCaptures),
-                new Kit.Crumb(Kit.Icon.PHOTO, "Captures", null));
-        } else {
-            Kit.pageTop(top, activity::onBackPressed, home, new Kit.Crumb(Kit.Icon.CAMERA, "Camera", null));
-            Kit.topAction(top, Kit.Icon.PHOTO, "Open Pi captures", v -> openCaptures());
-        }
+        Kit.Open open = id -> {
+            boolean wasCaptures = showingCaptures;
+            if (wasCaptures) closeCaptures();
+            if (!"camera".equals(id)) activity.onBackPressed();
+        };
+        Kit.pageTop(top, showingCaptures ? "captures" : "camera", open);
+        if (!showingCaptures) Kit.topAction(top, Kit.Icon.PHOTO, "Captures", v -> openCaptures());
         capturesBack.setEnabled(visible && showingCaptures);
     }
 

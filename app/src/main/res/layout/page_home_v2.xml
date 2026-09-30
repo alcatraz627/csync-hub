@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Home: the Pi as a hub hero, then quiet devices, pick-up, and capabilities. -->
+<!-- Home: one line on how the Pi is, then what to pick up, what the app can do, and your devices. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="match_parent"
     android:orientation="vertical" android:background="@color/bg">
@@ -13,69 +13,18 @@
             android:paddingStart="@dimen/kit_gutter" android:paddingEnd="@dimen/kit_gutter"
             android:paddingBottom="28dp">
 
-            <!-- HUB HERO -->
-            <FrameLayout android:id="@+id/home_hero"
-                android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="8dp" android:background="@drawable/home_hero_bg">
-
-                <ImageView android:layout_width="132dp" android:layout_height="132dp"
-                    android:layout_gravity="top|end" android:layout_marginTop="-4dp"
-                    android:src="@drawable/home_mesh" android:importantForAccessibility="no"/>
-
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="vertical" android:padding="20dp">
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="Your hub" android:textColor="@color/coral_soft"
-                        android:textSize="12sp" android:textStyle="bold"/>
-                    <TextView android:id="@+id/home_hero_title"
-                        android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp" android:text="Raspberry Pi"
-                        android:textColor="@color/text" android:textSize="25sp" android:textStyle="bold"
-                        android:letterSpacing="-0.02"/>
-                    <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:layout_marginTop="9dp" android:orientation="horizontal"
-                        android:gravity="center_vertical">
-                        <View android:id="@+id/home_hero_dot"
-                            android:layout_width="8dp" android:layout_height="8dp"
-                            android:layout_marginEnd="7dp" android:background="@drawable/dot_live"/>
-                        <TextView android:id="@+id/home_hero_status"
-                            android:layout_width="wrap_content" android:layout_height="wrap_content"
-                            android:text="Reachable now" android:textColor="@color/text"
-                            android:textSize="13sp"/>
-                    </LinearLayout>
-                    <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:layout_marginTop="15dp" android:orientation="horizontal">
-                        <TextView android:id="@+id/home_pill_media" style="@style/Kit.Pill"
-                            android:text="Media"/>
-                        <TextView android:id="@+id/home_pill_assistant" style="@style/Kit.Pill"
-                            android:layout_marginStart="7dp" android:text="Assistant"/>
-                        <TextView android:id="@+id/home_pill_camera" style="@style/Kit.Pill"
-                            android:layout_marginStart="7dp" android:text="Camera"/>
-                        <TextView android:id="@+id/home_pill_screen" style="@style/Kit.Pill"
-                            android:layout_marginStart="7dp" android:text="Screen"/>
-                    </LinearLayout>
-                </LinearLayout>
-            </FrameLayout>
-
-            <!-- quiet secondary device -->
-            <LinearLayout android:id="@+id/home_mac"
-                android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="14dp" android:orientation="horizontal"
-                android:gravity="center_vertical" android:paddingStart="4dp" android:paddingEnd="4dp"
-                android:paddingTop="4dp" android:paddingBottom="4dp"
-                android:background="?attr/selectableItemBackground">
-                <View android:id="@+id/home_mac_dot"
-                    android:layout_width="7dp" android:layout_height="7dp"
-                    android:layout_marginEnd="9dp" android:background="@drawable/dot_off"/>
-                <TextView android:id="@+id/home_mac_text"
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="4dp" android:orientation="horizontal"
+                android:gravity="center_vertical">
+                <View android:id="@+id/home_hero_dot"
+                    android:layout_width="10dp" android:layout_height="10dp"
+                    android:layout_marginEnd="10dp" android:background="@drawable/kit_dot"/>
+                <TextView android:id="@+id/home_hero_status"
                     android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
-                    android:text="Mac" android:textColor="@color/dim" android:textSize="13.5sp"/>
-                <TextView android:id="@+id/home_mac_go"
-                    android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="Set up ›" android:textColor="@color/dim" android:textSize="12.5sp"/>
+                    android:text="Checking the Raspberry Pi" android:textColor="@color/text"
+                    android:textSize="18sp" android:textStyle="bold"/>
             </LinearLayout>
 
-            <!-- pick up -->
             <include android:id="@+id/home_pickup_head" layout="@layout/kit_section_head"/>
             <LinearLayout android:id="@+id/home_pickup_content"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -84,7 +33,6 @@
                 <include android:id="@+id/home_recent" layout="@layout/kit_row"/>
             </LinearLayout>
 
-            <!-- capabilities -->
             <include android:id="@+id/home_cap_head" layout="@layout/kit_section_head"/>
             <LinearLayout android:id="@+id/home_cap_grid"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -97,13 +45,13 @@
                 </LinearLayout>
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="horizontal">
-                    <include android:id="@+id/home_camera" layout="@layout/kit_area_card"/>
                     <include android:id="@+id/home_share" layout="@layout/kit_area_card"/>
+                    <include android:id="@+id/home_display" layout="@layout/kit_area_card"/>
                 </LinearLayout>
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="horizontal">
+                    <include android:id="@+id/home_camera" layout="@layout/kit_area_card"/>
                     <include android:id="@+id/home_notes" layout="@layout/kit_area_card"/>
-                    <include android:id="@+id/home_display" layout="@layout/kit_area_card"/>
                 </LinearLayout>
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="horizontal">
@@ -112,6 +60,11 @@
                         android:layout_height="1dp" android:layout_margin="4dp"/>
                 </LinearLayout>
             </LinearLayout>
+
+            <include android:id="@+id/home_devices_head" layout="@layout/kit_section_head"/>
+            <LinearLayout android:id="@+id/home_devices"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical"/>
         </LinearLayout>
     </ScrollView>
 </LinearLayout>

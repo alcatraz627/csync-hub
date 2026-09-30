@@ -25,9 +25,6 @@
                     android:layout_height="wrap_content" android:layout_marginTop="4dp"
                     android:text="Reading service and power state" android:textSize="13sp"
                     android:textColor="@color/dim"/>
-                <Button android:id="@+id/tools_recheck" android:layout_width="wrap_content"
-                    android:layout_height="48dp" android:layout_marginTop="8dp"
-                    android:text="Recheck"/>
             </LinearLayout>
             <TextView android:id="@+id/tools_service_heading" android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:layout_marginTop="16dp" android:layout_marginBottom="8dp"

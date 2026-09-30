@@ -12,7 +12,10 @@ import android.content.SharedPreferences;
 import android.content.pm.ServiceInfo;
 import android.graphics.Color;
 import android.hardware.display.DisplayManager;
+import android.media.MediaMetadata;
 import android.media.MediaPlayer;
+import android.media.session.MediaSession;
+import android.media.session.PlaybackState;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
@@ -41,6 +44,7 @@ public final class PhonePlaybackService extends Service {
     });
     private MediaClient client;
     private MediaPlayer player;
+    private MediaSession mediaSession;
     private JSONObject item, session;
     private Observer observer;
     private SurfaceHolder surface;
@@ -72,19 +76,73 @@ public final class PhonePlaybackService extends Service {
         NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         manager.createNotificationChannel(new NotificationChannel("csync_media", "Media playback",
             NotificationManager.IMPORTANCE_LOW));
-        Intent open = new Intent(this, MediaActivity.class);
-        PendingIntent pending = PendingIntent.getActivity(this, 0, open,
-            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        Notification notification = new Notification.Builder(this, "csync_media")
-            .setSmallIcon(android.R.drawable.ic_media_play).setContentTitle("csync media")
-            .setContentText("Phone playback").setContentIntent(pending).setOngoing(true).build();
+        mediaSession = new MediaSession(this, "csync-phone");
+        mediaSession.setCallback(new MediaSession.Callback() {
+            @Override public void onPlay() { control("resume"); }
+            @Override public void onPause() { control("pause"); }
+            @Override public void onStop() { control("stop"); }
+            @Override public void onSeekTo(long position) { seek((int) position); }
+        });
+        mediaSession.setActive(true);
+        Notification notification = buildNotification();
         if (Build.VERSION.SDK_INT >= 29)
             startForeground(61, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
         else startForeground(61, notification);
         ui.postDelayed(this::tick, 2000);
     }
 
-    @Override public int onStartCommand(Intent intent, int flags, int startId) { return START_STICKY; }
+    /** Pause, Resume and Stop from the notification arrive here as the intent's action. */
+    @Override public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent != null && intent.getAction() != null) control(intent.getAction());
+        return START_STICKY;
+    }
+
+    /**
+     * Android's media notification for what this phone is playing. It carries the
+     * media session, so the lock screen, the shade, headsets and the volume panel
+     * all control the same playback as the app's own player.
+     */
+    private Notification buildNotification() {
+        PendingIntent open = PendingIntent.getActivity(this, 0, new Intent(this, MediaActivity.class),
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        boolean playing = playing();
+        String words = player == null ? "Stopped" : !prepared ? "Loading" : playing ? "Playing on this phone" : "Paused on this phone";
+        return new Notification.Builder(this, "csync_media")
+            .setSmallIcon(R.drawable.csi_media)
+            .setContentTitle(item == null ? "csync" : item.optString("name", "Media"))
+            .setContentText(words).setContentIntent(open).setOngoing(playing)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
+            .addAction(notificationAction(playing ? R.drawable.csi_pause : R.drawable.csi_play,
+                playing ? "Pause" : "Resume", playing ? "pause" : "resume"))
+            .addAction(notificationAction(R.drawable.csi_stop, "Stop", "stop"))
+            .setStyle(new Notification.MediaStyle().setMediaSession(mediaSession.getSessionToken())
+                .setShowActionsInCompactView(0, 1))
+            .build();
+    }
+
+    private Notification.Action notificationAction(int icon, String label, String command) {
+        PendingIntent send = PendingIntent.getService(this, command.hashCode(),
+            new Intent(this, PhonePlaybackService.class).setAction(command),
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        return new Notification.Action.Builder(
+            android.graphics.drawable.Icon.createWithResource(this, icon), label, send).build();
+    }
+
+    /** Tell Android what is playing and how far in, and redraw the notification to match. */
+    private void publish() {
+        if (mediaSession == null) return;
+        int state = player == null ? PlaybackState.STATE_STOPPED : !prepared ? PlaybackState.STATE_BUFFERING
+            : playing() ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED;
+        mediaSession.setPlaybackState(new PlaybackState.Builder()
+            .setActions(PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE
+                | PlaybackState.ACTION_STOP | PlaybackState.ACTION_SEEK_TO)
+            .setState(state, position(), speed).build());
+        mediaSession.setMetadata(new MediaMetadata.Builder()
+            .putString(MediaMetadata.METADATA_KEY_TITLE, item == null ? "csync" : item.optString("name", "Media"))
+            .putString(MediaMetadata.METADATA_KEY_ARTIST, "On this phone")
+            .putLong(MediaMetadata.METADATA_KEY_DURATION, duration()).build());
+        ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).notify(61, buildNotification());
+    }
     @Override public IBinder onBind(Intent intent) { return null; }
 
     void attach(Observer next, SurfaceHolder holder) {
@@ -145,6 +203,7 @@ public final class PhonePlaybackService extends Service {
 
     private void changed(String message) {
         status = message;
+        publish();
         if (observer != null) observer.changed(message);
     }
 
@@ -379,6 +438,8 @@ public final class PhonePlaybackService extends Service {
         progressQueue.shutdown();
         displays.unregisterDisplayListener(displayListener);
         closePresentation();
+        mediaSession.release();
+        mediaSession = null;
         current = null;
         super.onDestroy();
     }

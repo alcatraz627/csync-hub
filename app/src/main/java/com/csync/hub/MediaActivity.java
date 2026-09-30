@@ -578,21 +578,16 @@ public final class MediaActivity extends AppCompatActivity {
         else row.setClickable(false);
     }
 
-    /** The top bar: Home, then Media or Player. Back leaves the current level and never walks folders. */
+    /** The top bar: Media alone, or Media then the player. Back leaves the player and never walks folders. */
     private void renderTop() {
         View top = findViewById(R.id.media_top);
-        Runnable home = () -> startActivity(new Intent(this, MainActivity.class)
-            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            .putExtra("destination", "home"));
         if (fullPlayer || videoMode) {
             Kit.pageTop(top, () -> { if (videoMode) exitVideoMode(); else closeFullPlayer(); },
-                new Kit.Crumb(Kit.Icon.HOME, "Home", home),
                 new Kit.Crumb(Kit.Icon.MEDIA, "Media", this::closeFullPlayer),
                 new Kit.Crumb(R.drawable.csi_play, "Player", null));
             return;
         }
-        Kit.pageTop(top, this::finish, new Kit.Crumb(Kit.Icon.HOME, "Home", home),
-            new Kit.Crumb(Kit.Icon.MEDIA, "Media", null));
+        Kit.pageTop(top, "media", id -> { });
         if (activeTab != R.id.media_files) return;
         Kit.topAction(top, Kit.Icon.SEARCH, "Search this source", v -> {
             findViewById(R.id.media_search_line).setVisibility(View.VISIBLE);

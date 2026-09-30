@@ -78,6 +78,30 @@ final class Kit {
         action.setVisibility(View.VISIBLE);
     }
 
+    /** Put a status at the row's end: a dot in the status colour, then the words. */
+    static void rowStatus(View row, Status status, CharSequence words) {
+        TextView end = row.findViewById(R.id.kit_end);
+        Context c = row.getContext();
+        android.graphics.drawable.GradientDrawable dot = new android.graphics.drawable.GradientDrawable();
+        dot.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        dot.setColor(statusColor(c, status));
+        dot.setBounds(0, 0, dp(c, 8), dp(c, 8));
+        end.setCompoundDrawablesRelative(dot, null, null, null);
+        end.setCompoundDrawablePadding(dp(c, 6));
+        end.setText(words);
+        end.setVisibility(View.VISIBLE);
+        row.setContentDescription(((TextView) row.findViewById(R.id.kit_title)).getText() + ", " + words);
+    }
+
+    /** The line under a tab that marks it as the chosen one. */
+    static android.graphics.drawable.Drawable underline(Context c, int color) {
+        android.graphics.drawable.LayerDrawable line = new android.graphics.drawable.LayerDrawable(
+            new android.graphics.drawable.Drawable[]{new android.graphics.drawable.ColorDrawable(color)});
+        line.setLayerGravity(0, android.view.Gravity.BOTTOM);
+        line.setLayerHeight(0, dp(c, 2));
+        return line;
+    }
+
     /** A card that holds rows separated by thin dividers, like every list in the mock. */
     static LinearLayout group(ViewGroup parent) {
         Context c = parent.getContext();
@@ -206,7 +230,9 @@ final class Kit {
      * hides it and turns the caret; without, the caret is hidden.
      */
     static void bindSection(View head, int icon, CharSequence title, View collapses) {
-        ((ImageView) head.findViewById(R.id.kit_icon)).setImageResource(icon);
+        ImageView symbol = head.findViewById(R.id.kit_icon);
+        symbol.setVisibility(icon == 0 ? View.GONE : View.VISIBLE);
+        if (icon != 0) symbol.setImageResource(icon);
         ((TextView) head.findViewById(R.id.kit_title)).setText(title);
         View caret = head.findViewById(R.id.kit_chevron);
         if (collapses == null) {
@@ -232,12 +258,34 @@ final class Kit {
         Crumb(int icon, String label, Runnable open) { this.icon = icon; this.label = label; this.open = open; }
     }
 
+    /** Opens a place by its id in the map. Each activity supplies how. */
+    interface Open { void place(String id); }
+
+    /**
+     * Fill the top bar for a place in the map. A bar place shows its name and no Back.
+     * A child place shows the path from its bar place, and Back goes one level up.
+     * {@code deeper} adds steps below the place for a view that is not in the map.
+     */
+    static void pageTop(View top, String placeId, Open open, Crumb... deeper) {
+        java.util.List<Places.Place> path = Places.path(placeId);
+        java.util.List<Crumb> crumbs = new java.util.ArrayList<>();
+        for (int i = 0; i < path.size(); i++) {
+            Places.Place place = path.get(i);
+            boolean current = deeper.length == 0 && i == path.size() - 1;
+            crumbs.add(new Crumb(place.icon, place.label, current ? null : () -> open.place(place.id)));
+        }
+        crumbs.addAll(java.util.Arrays.asList(deeper));
+        Runnable up = crumbs.size() == 1 ? null : crumbs.get(crumbs.size() - 2).open;
+        pageTop(top, up, crumbs.toArray(new Crumb[0]));
+    }
+
     /**
      * Fill the fixed top bar. Back goes exactly one level up via {@code up}; pass null
      * on a top-level page to hide it. Each crumb always shows its own icon.
      */
     static void pageTop(View top, Runnable up, Crumb... crumbs) {
         Context c = top.getContext();
+        boolean alone = crumbs.length == 1;
         View back = top.findViewById(R.id.kit_back);
         back.setVisibility(up == null ? View.GONE : View.VISIBLE);
         if (up != null) back.setOnClickListener(v -> up.run());
@@ -265,12 +313,14 @@ final class Kit {
             symbol.setImageResource(crumb.icon);
             symbol.setImageTintList(ColorStateList.valueOf(ContextCompat.getColor(c,
                 current ? R.color.text : R.color.dim)));
-            step.addView(symbol, new LinearLayout.LayoutParams(dp(c, 14), dp(c, 14)));
+            int glyph = alone ? 19 : 14;
+            step.addView(symbol, new LinearLayout.LayoutParams(dp(c, glyph), dp(c, glyph)));
             TextView label = new TextView(c);
             label.setTextAppearance(current ? R.style.Kit_Text_CrumbCurrent : R.style.Kit_Text_Crumb);
+            if (alone) label.setTextSize(17);
             label.setText(crumb.label);
             label.setSingleLine(true);
-            label.setPadding(dp(c, 5), 0, 0, 0);
+            label.setPadding(dp(c, alone ? 9 : 5), 0, 0, 0);
             step.addView(label);
             if (!current && crumb.open != null) {
                 step.setBackgroundResource(outValue(c));

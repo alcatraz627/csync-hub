@@ -163,10 +163,11 @@ public final class NotesActivity extends AppCompatActivity {
         super.onSaveInstanceState(state);
     }
 
-    private Kit.Crumb homeCrumb() {
-        return new Kit.Crumb(Kit.Icon.HOME, "Home", () -> startActivity(new Intent(this, MainActivity.class)
+    /** Notes lives under More, so its path starts there. */
+    private Kit.Crumb moreCrumb() {
+        return new Kit.Crumb(Kit.Icon.MORE, "More", () -> startActivity(new Intent(this, MainActivity.class)
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            .putExtra("destination", "home")));
+            .putExtra("destination", "more")));
     }
 
     private int dp(int value) {
@@ -278,7 +279,7 @@ public final class NotesActivity extends AppCompatActivity {
         noteId = null;
         editing = false;
         reset();
-        Kit.pageTop(topBar, this::finish, homeCrumb(), new Kit.Crumb(Kit.Icon.NOTES, "Notes", null));
+        Kit.pageTop(topBar, this::finish, moreCrumb(), new Kit.Crumb(Kit.Icon.NOTES, "Notes", null));
         heading.setText("Notes");
         search.setVisibility(View.VISIBLE);
         actions.setVisibility(View.GONE);
@@ -675,7 +676,7 @@ public final class NotesActivity extends AppCompatActivity {
         revision = note.optInt("revision");
         editing = false;
         reset();
-        Kit.pageTop(topBar, this::showList, homeCrumb(), new Kit.Crumb(Kit.Icon.NOTES, "Notes", this::showList),
+        Kit.pageTop(topBar, this::showList, moreCrumb(), new Kit.Crumb(Kit.Icon.NOTES, "Notes", this::showList),
             new Kit.Crumb(R.drawable.csi_markdown, "Note", null));
         heading.setText(note.optString("title"));
         search.setVisibility(View.GONE);
@@ -820,7 +821,7 @@ public final class NotesActivity extends AppCompatActivity {
             if (noteId == null) { sharedImage = null; showList(); }
             else loadNote(noteId);
         };
-        Kit.pageTop(topBar, leave, homeCrumb(), new Kit.Crumb(Kit.Icon.NOTES, "Notes", this::showList),
+        Kit.pageTop(topBar, leave, moreCrumb(), new Kit.Crumb(Kit.Icon.NOTES, "Notes", this::showList),
             new Kit.Crumb(R.drawable.csi_edit, "Edit", null));
         heading.setText(noteId == null ? "New note" : "Edit note");
         search.setVisibility(View.GONE);

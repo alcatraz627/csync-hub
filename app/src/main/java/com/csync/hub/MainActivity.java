@@ -264,16 +264,17 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         homeCaps = pageMore.findViewById(R.id.home_caps);
         com.google.android.material.bottomnavigation.BottomNavigationView nav = findViewById(R.id.nav);
         View top = pageHome.findViewById(R.id.home_top);
-        Kit.pageTop(top, null, new Kit.Crumb(Kit.Icon.HOME, "Home", null));
-        Kit.topAction(top, Kit.Icon.SEARCH, "Search your hub", v -> openHomeSearch());
-        Kit.bindSection(pageHome.findViewById(R.id.home_cap_head), Kit.Icon.HOME, "Do something",
-            pageHome.findViewById(R.id.home_cap_grid));
-        Kit.bindSection(pageHome.findViewById(R.id.home_pickup_head), Kit.Icon.HISTORY, "Pick up where you left off",
+        Kit.pageTop(top, "home", this::openPlace);
+        Kit.topAction(top, Kit.Icon.SEARCH, "Search", v -> openHomeSearch());
+        Kit.bindSection(pageHome.findViewById(R.id.home_pickup_head), 0, "Pick up",
             pageHome.findViewById(R.id.home_pickup_content));
+        Kit.bindSection(pageHome.findViewById(R.id.home_cap_head), 0, "Capabilities",
+            pageHome.findViewById(R.id.home_cap_grid));
+        Kit.bindSection(pageHome.findViewById(R.id.home_devices_head), 0, "Devices",
+            pageHome.findViewById(R.id.home_devices));
         pageHome.findViewById(R.id.home_share).setOnClickListener(v -> nav.setSelectedItemId(R.id.nav_share));
         pageHome.findViewById(R.id.home_chat).setOnClickListener(v -> nav.setSelectedItemId(R.id.nav_chat));
         pageHome.findViewById(R.id.home_cap_media).setOnClickListener(v -> startActivity(new Intent(this, MediaActivity.class)));
-        pageHome.findViewById(R.id.home_mac).setOnClickListener(v -> nav.setSelectedItemId(R.id.nav_share));
         pageHome.findViewById(R.id.home_camera).setOnClickListener(v -> { nav.setSelectedItemId(R.id.nav_more); show(5); });
         pageHome.findViewById(R.id.home_notes).setOnClickListener(v ->
             startActivity(new Intent(this, NotesActivity.class)));
@@ -335,7 +336,6 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageTools.findViewById(R.id.tools_widgets_route).setOnClickListener(v -> showToolsDetail(2));
         pageTools.findViewById(R.id.tools_update).setOnClickListener(v ->
             AppUpdater.start(this, pageTools.findViewById(R.id.tools_update_status)));
-        pageTools.findViewById(R.id.tools_recheck).setOnClickListener(v -> refreshToolsHealth());
         pageTools.findViewById(R.id.tools_media_health_row).setOnClickListener(v ->
             showToolsStatus("Pi media service", R.id.tools_media_status));
         pageTools.findViewById(R.id.tools_power_health_row).setOnClickListener(v ->
@@ -366,11 +366,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageMore.findViewById(R.id.more_overview).setVisibility(detail == 0 ? View.VISIBLE : View.GONE);
         pageMore.findViewById(R.id.more_guide).setVisibility(detail == 1 ? View.VISIBLE : View.GONE);
         pageMore.findViewById(R.id.more_help).setVisibility(detail == 2 ? View.VISIBLE : View.GONE);
-        View top = pageMore.findViewById(R.id.more_crumb);
-        Kit.Crumb home = new Kit.Crumb(Kit.Icon.HOME, "Home", () -> show(0));
-        if (detail == 0) Kit.pageTop(top, () -> show(0), home, new Kit.Crumb(Kit.Icon.MORE, "More", null));
-        else Kit.pageTop(top, () -> showMoreDetail(0), home, new Kit.Crumb(Kit.Icon.MORE, "More", () -> showMoreDetail(0)),
-            new Kit.Crumb(detail == 1 ? Kit.Icon.CHAT : R.drawable.csi_help, detail == 1 ? "Capabilities" : "Help", null));
+        Kit.pageTop(pageMore.findViewById(R.id.more_crumb), detail == 0 ? "more" : detail == 1 ? "guide" : "help", this::openPlace);
         if (detail == 2) {
             String version;
             try { version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; }
@@ -397,10 +393,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             "xkcd is ready. More shortcuts are planned." :
             "Pi service health and phone utilities.");
         View top = pageTools.findViewById(R.id.tools_back);
-        Kit.Crumb home = new Kit.Crumb(Kit.Icon.HOME, "Home", () -> show(0));
-        if (overview) Kit.pageTop(top, () -> show(6), home, new Kit.Crumb(Kit.Icon.TOOLS, "Tools", null));
-        else Kit.pageTop(top, () -> showToolsDetail(0), home, new Kit.Crumb(Kit.Icon.TOOLS, "Tools", () -> showToolsDetail(0)),
-            new Kit.Crumb(detail == 1 ? Kit.Icon.DEVICE : R.drawable.csi_launcher, detail == 1 ? "Process" : "Widgets", null));
+        Kit.pageTop(top, overview ? "tools" : detail == 1 ? "process" : "widgets", this::openPlace);
+        if (overview) Kit.topAction(top, R.drawable.csi_refresh, "Check again", v -> refreshToolsHealth());
         ((android.widget.ScrollView) pageTools.findViewById(R.id.tools_scroll)).scrollTo(0, 0);
         if (detail == 1 && resumed) ensureShizuku();
     }
@@ -411,12 +405,10 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageSettings.findViewById(R.id.settings_overview).setVisibility(View.GONE);
         View detail = pageSettings.findViewById(id);
         detail.setVisibility(View.VISIBLE);
-        Kit.pageTop(pageSettings.findViewById(R.id.settings_back), this::closeSettingsDetail,
-            new Kit.Crumb(Kit.Icon.HOME, "Home", () -> show(0)),
-            new Kit.Crumb(Kit.Icon.SETTINGS, "Settings", this::closeSettingsDetail),
-            id == R.id.settings_appearance_detail ? new Kit.Crumb(R.drawable.csi_palette, "Appearance", null) :
-            id == R.id.settings_assistant_detail ? new Kit.Crumb(Kit.Icon.CHAT, "Assistant", null) :
-            new Kit.Crumb(Kit.Icon.DEVICE, "Connections", null));
+        View top = pageSettings.findViewById(R.id.settings_back);
+        if (id == R.id.settings_connection_detail) Kit.pageTop(top, "connection", this::openPlace);
+        else Kit.pageTop(top, "settings", this::openPlace, id == R.id.settings_appearance_detail
+            ? new Kit.Crumb(R.drawable.csi_palette, "Appearance", null) : new Kit.Crumb(Kit.Icon.CHAT, "Assistant", null));
         pageSettings.findViewById(R.id.settings_scroll).post(() ->
             ((android.widget.ScrollView) pageSettings.findViewById(R.id.settings_scroll))
                 .scrollTo(0, 0));
@@ -428,8 +420,32 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                 R.id.settings_connection_detail, R.id.settings_assistant_detail})
             pageSettings.findViewById(id).setVisibility(View.GONE);
         pageSettings.findViewById(R.id.settings_overview).setVisibility(View.VISIBLE);
-        Kit.pageTop(pageSettings.findViewById(R.id.settings_back), () -> show(6),
-            new Kit.Crumb(Kit.Icon.HOME, "Home", () -> show(0)), new Kit.Crumb(Kit.Icon.SETTINGS, "Settings", null));
+        Kit.pageTop(pageSettings.findViewById(R.id.settings_back), "settings", this::openPlace);
+    }
+
+    /** Go to a place in the map. The top bar's path and Back both come through here. */
+    private void openPlace(String id) {
+        com.google.android.material.bottomnavigation.BottomNavigationView nav = findViewById(R.id.nav);
+        switch (id) {
+            case "home": nav.setSelectedItemId(R.id.nav_home); break;
+            case "media": startActivity(new Intent(this, MediaActivity.class)); break;
+            case "share":
+                if (current != 1) nav.setSelectedItemId(R.id.nav_share);
+                setShareMode(false);
+                break;
+            case "chat":
+                if (chatConvoMode && searchResultChat) { finish(); break; }
+                if (current != 2) nav.setSelectedItemId(R.id.nav_chat);
+                showChatList();
+                break;
+            case "more":
+                if (current == 6) showMoreDetail(0); else show(6);
+                break;
+            case "tools": show(3); break;
+            case "settings": show(4); break;
+            case "camera": show(5); break;
+            default: break;
+        }
     }
 
     private void refreshToolsHealth() {
@@ -481,13 +497,16 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     }
 
     @Override public void onBackPressed() {
-        if (current == 6 && moreDetail != 0) showMoreDetail(0);
+        if (current == 2 && chatConvoMode) openPlace("chat");
+        else if (current == 1 && shareInboxMode) setShareMode(false);
+        else if (current == 6 && moreDetail != 0) showMoreDetail(0);
         else if (current == 4 && settingsDetail != 0) closeSettingsDetail();
         else if (current == 3 && toolsDetail != 0) showToolsDetail(0);
         else if (current == 5) {
             if (!cameraController.closeChildPage()) show(6);
         }
         else if (current == 3 || current == 4) show(6);
+        else if (current != 0) openPlace("home");
         else super.onBackPressed();
     }
 
@@ -500,7 +519,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         if (recent == null) Kit.bindRow(pageHome.findViewById(R.id.home_recent), Kit.Icon.CHAT,
             "Start a conversation", "Ask the Pi assistant", null, true);
         else Kit.bindRow(pageHome.findViewById(R.id.home_recent), Kit.Icon.CHAT,
-            recent.optString("title", "Chat"), "Last conversation", null, true);
+            recent.optString("title", "Chat"), "Conversation · " + relTime(recent.optLong("updated")), null, true);
         new Thread(() -> {
             final boolean mac = !home.isEmpty() && MeshClient.reachable(home, MeshClient.PORT);
             final boolean pi = !assist.isEmpty() && MeshClient.reachable(assist, MeshClient.ASSIST_PORT);
@@ -515,51 +534,61 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         refreshCapabilities();
     }
 
-    /** Fill Home's device rows and capability cards. A null reading means it is still being checked. */
-    private void setPill(int id, boolean on) {
-        TextView pill = pageHome.findViewById(id);
-        pill.setBackgroundResource(on ? R.drawable.pill_on : R.drawable.pill_off);
-        pill.setTextColor(col(on ? R.color.coral_soft : R.color.dim));
-    }
-
+    /**
+     * Fill Home's lead line, capability cards and device rows. A null reading means it
+     * is still being checked. The words are the status vocabulary of the app model.
+     */
     private void bindHomeStatus(Boolean pi, boolean media, Boolean mac) {
         boolean checking = pi == null;
         boolean piUp = !checking && (pi || media);
         ((TextView) pageHome.findViewById(R.id.home_hero_status)).setText(
-            checking ? "Checking your hub"
-                : piUp ? "Reachable now over Tailscale" : "Offline, check the Pi connection");
-        pageHome.findViewById(R.id.home_hero_dot).setBackgroundResource(
-            !checking && piUp ? R.drawable.dot_live : R.drawable.dot_off);
-        setPill(R.id.home_pill_media, !checking && media);
-        setPill(R.id.home_pill_assistant, !checking && Boolean.TRUE.equals(pi));
-        setPill(R.id.home_pill_camera, !checking && media);
-        setPill(R.id.home_pill_screen, !checking && media);
+            checking ? "Checking the Raspberry Pi" : piUp ? "Raspberry Pi is online" : "Raspberry Pi is offline");
+        Kit.setStatus(pageHome.findViewById(R.id.home_hero_dot), piUp ? Kit.Status.GOOD : Kit.Status.IDLE);
 
-        boolean macUp = Boolean.TRUE.equals(mac);
-        ((TextView) pageHome.findViewById(R.id.home_mac_text)).setText(
-            mac == null ? "Mac, checking" : macUp ? "Mac online, sharing receiver" : "Mac, sharing receiver offline");
-        pageHome.findViewById(R.id.home_mac_dot).setBackgroundResource(macUp ? R.drawable.dot_live : R.drawable.dot_off);
-        pageHome.findViewById(R.id.home_mac_go).setVisibility(macUp ? View.GONE : View.VISIBLE);
-
-        int threads = ChatStore.index(this).length();
-        String saved = threads == 1 ? "1 thread" : threads + " threads";
-        Kit.Status mediaStatus = checking ? Kit.Status.IDLE : media ? Kit.Status.GOOD : Kit.Status.BAD;
-        Kit.bindArea(pageHome.findViewById(R.id.home_cap_media), Kit.Icon.MEDIA, "Media", mediaStatus,
-            checking ? "Checking Pi media" : media ? "Pi media ready" : "Media offline");
-        Kit.bindArea(pageHome.findViewById(R.id.home_share), Kit.Icon.SHARE, "Share",
-            mac == null ? Kit.Status.IDLE : mac ? Kit.Status.GOOD : Kit.Status.IDLE,
-            mac == null ? "Checking Mac" : mac ? "Mac online" : "Mac offline · choose a device");
+        Kit.Status onPi = checking ? Kit.Status.WARN : media ? Kit.Status.GOOD : Kit.Status.IDLE;
+        String piWords = checking ? "Checking" : media ? "Ready" : "Offline";
+        Kit.bindArea(pageHome.findViewById(R.id.home_cap_media), Kit.Icon.MEDIA, "Media", onPi, piWords);
         Kit.bindArea(pageHome.findViewById(R.id.home_chat), Kit.Icon.CHAT, "Chat",
-            checking ? Kit.Status.IDLE : pi ? Kit.Status.GOOD : Kit.Status.BAD,
-            checking ? saved : saved + (pi ? " · assistant ready" : " · assistant offline"));
-        Kit.bindArea(pageHome.findViewById(R.id.home_camera), Kit.Icon.CAMERA, "Camera", mediaStatus,
-            checking ? "Checking Pi camera" : media ? "Pi preview ready" : "Pi camera offline");
-        Kit.bindArea(pageHome.findViewById(R.id.home_notes), Kit.Icon.NOTES, "Notes", mediaStatus,
-            checking ? "Checking the Pi" : media ? "Saved on the Pi" : "Pi offline");
-        Kit.bindArea(pageHome.findViewById(R.id.home_display), Kit.Icon.DISPLAY, "Pi display", mediaStatus,
-            checking ? "Checking the screen" : media ? "Screen and playback" : "Pi offline");
-        Kit.bindArea(pageHome.findViewById(R.id.home_tools), Kit.Icon.TOOLS, "Tools", Kit.Status.IDLE,
-            "Diagnostics and updates");
+            checking ? Kit.Status.WARN : pi ? Kit.Status.GOOD : Kit.Status.IDLE,
+            checking ? "Checking" : pi ? "Ready" : "Offline");
+        Kit.bindArea(pageHome.findViewById(R.id.home_display), Kit.Icon.DISPLAY, "Pi screen", onPi, piWords);
+        Kit.bindArea(pageHome.findViewById(R.id.home_camera), Kit.Icon.CAMERA, "Pi camera", onPi, piWords);
+        Kit.bindArea(pageHome.findViewById(R.id.home_notes), Kit.Icon.NOTES, "Notes", onPi, piWords);
+        Kit.bindArea(pageHome.findViewById(R.id.home_tools), Kit.Icon.TOOLS, "Tools", onPi, piWords);
+
+        // Devices: the Pi first, then every named peer this phone knows, online ones before offline.
+        com.google.android.material.bottomnavigation.BottomNavigationView nav = findViewById(R.id.nav);
+        LinearLayout box = pageHome.findViewById(R.id.home_devices);
+        box.removeAllViews();
+        LinearLayout group = Kit.group(box);
+        View hub = Kit.addRow(group);
+        Kit.bindRow(hub, Kit.Icon.DEVICE, "Raspberry Pi", null, null, true);
+        Kit.rowStatus(hub, checking ? Kit.Status.WARN : piUp ? Kit.Status.GOOD : Kit.Status.IDLE,
+            checking ? "Checking" : piUp ? "Online" : "Offline");
+        hub.setOnClickListener(v -> { nav.setSelectedItemId(R.id.nav_more); show(3); });
+        JSONArray roster = PeerStore.load(this);
+        String self = Prefs.deviceName(this);
+        int online = 0;
+        for (int pass = 0; pass < 2; pass++) {
+            for (int i = 0; roster != null && i < roster.length(); i++) {
+                JSONObject peer = roster.optJSONObject(i);
+                if (peer == null || self.equals(peer.optString("name"))) continue;
+                boolean up = peer.optBoolean("online");
+                if (up != (pass == 0)) continue;
+                if (up) online++;
+                String name = peer.optString("name");
+                View row = Kit.addRow(group);
+                Kit.bindRow(row, Kit.Icon.DEVICE, name, null, null, true);
+                Kit.rowStatus(row, up ? Kit.Status.GOOD : Kit.Status.IDLE, up ? "Online" : "Offline");
+                row.setOnClickListener(v -> {
+                    PeerStore.select(this, name);
+                    nav.setSelectedItemId(R.id.nav_share);
+                });
+            }
+        }
+        Kit.bindArea(pageHome.findViewById(R.id.home_share), Kit.Icon.SHARE, "Share",
+            online > 0 ? Kit.Status.GOOD : Kit.Status.IDLE,
+            online == 0 ? "No device online" : online == 1 ? "1 device online" : online + " devices online");
     }
 
     private void refreshCapabilities() {
@@ -1002,20 +1031,16 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageShare.findViewById(R.id.share_compose).setVisibility(inbox ? View.GONE : View.VISIBLE);
         pageShare.findViewById(R.id.share_inbox_section).setVisibility(inbox ? View.VISIBLE : View.GONE);
         View top = pageShare.findViewById(R.id.share_top);
-        com.google.android.material.bottomnavigation.BottomNavigationView nav = findViewById(R.id.nav);
-        Runnable home = () -> nav.setSelectedItemId(R.id.nav_home);
         if (inbox) {
-            Kit.pageTop(top, () -> setShareMode(false), new Kit.Crumb(Kit.Icon.HOME, "Home", home),
-                new Kit.Crumb(R.drawable.csi_download, "Inbox", null));
-            ((TextView) pageShare.findViewById(R.id.share_heading)).setText("Inbox");
+            Kit.pageTop(top, "received", this::openPlace);
+            ((TextView) pageShare.findViewById(R.id.share_heading)).setText("Received");
             ((TextView) pageShare.findViewById(R.id.share_sub)).setText("Open an item, or share it on.");
             renderInbox();
             return;
         }
-        Kit.pageTop(top, home, new Kit.Crumb(Kit.Icon.HOME, "Home", home),
-            new Kit.Crumb(Kit.Icon.SHARE, "Compose", null));
-        Kit.topAction(top, Kit.Icon.DEVICE, "Choose recipient", v -> openRecipientSheet());
-        Kit.topAction(top, R.drawable.csi_download, "Open Inbox", v -> setShareMode(true));
+        Kit.pageTop(top, "share", this::openPlace);
+        Kit.topAction(top, Kit.Icon.DEVICE, "Choose who receives", v -> openRecipientSheet());
+        Kit.topAction(top, R.drawable.csi_download, "Received", v -> setShareMode(true));
         ((TextView) pageShare.findViewById(R.id.share_sub)).setText(
             "Your recipient stays visible while you choose what to send.");
         refreshShareHeading();
@@ -1646,8 +1671,6 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             return false;
         });
         pageChat.findViewById(R.id.chat_send).setOnClickListener(v -> sendChat());
-        pageChat.findViewById(R.id.chat_list_new).setOnClickListener(v -> newConversation());
-        pageChat.findViewById(R.id.chat_list_settings).setOnClickListener(v -> show(4));
         chatBack.setOnClickListener(v -> showChatList());
         chatSubtitle.setOnClickListener(v -> { if (chatConvoMode) openConfigDialog(); });
         // Long-press the Chats title to open the feature roadmap the agent maintains.
@@ -1680,7 +1703,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             tab.setTextColor(selected ? accent() : col(R.color.dim));
             tab.setCompoundDrawableTintList(android.content.res.ColorStateList.valueOf(
                 selected ? accent() : col(R.color.dim)));
-            tab.setBackground(selected ? bg(col(R.color.surface), 10) : null);
+            tab.setBackground(selected ? Kit.underline(this, accent()) : null);
             tab.setSelected(selected);
         }
         boolean tools = "Tools".equals(filter);
@@ -1821,16 +1844,13 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     /** Chats list: Home / Chats. A conversation: Home / Chat, where back returns to the list. */
     private void renderChatTop() {
         View top = pageChat.findViewById(R.id.chat_top);
-        com.google.android.material.bottomnavigation.BottomNavigationView nav = findViewById(R.id.nav);
-        Runnable home = () -> nav.setSelectedItemId(R.id.nav_home);
-        if (!chatConvoMode) {
-            Kit.pageTop(top, home, new Kit.Crumb(Kit.Icon.HOME, "Home", home),
-                new Kit.Crumb(Kit.Icon.CHAT, "Chats", null));
-            return;
-        }
-        Runnable list = () -> { if (searchResultChat) finish(); else showChatList(); };
-        Kit.pageTop(top, list, new Kit.Crumb(Kit.Icon.HOME, "Home", home),
-            new Kit.Crumb(Kit.Icon.CHAT, "Chat", null));
+        if (chatConvoMode) { Kit.pageTop(top, "conversation", this::openPlace); return; }
+        Kit.pageTop(top, "chat", this::openPlace);
+        Kit.topAction(top, R.drawable.csi_sliders, "Model for new conversations", v -> {
+            show(4);
+            revealSettingsDetail(R.id.settings_assistant_detail);
+        });
+        Kit.topAction(top, R.drawable.csi_plus, "New chat", v -> newConversation());
     }
 
     /** A short conversation title from the first message: one line, cut at a word, no ellipsis. */
@@ -2020,6 +2040,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     }
 
     private void updateConfigSubtitle() {
+        chatSubtitle.setTextAppearance(R.style.Kit_Text_PageSub);
         // The owner asked for the effort to read lighter than the model id.
         String summary = configSummary();
         android.text.SpannableString styled = new android.text.SpannableString(summary);
@@ -2081,7 +2102,11 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         chatTitle.setVisibility(View.VISIBLE);
         chatEdit.setVisibility(View.GONE);
         updateConversationActions();
-        chatTitle.setText("Conversations");
+        // The top bar already says Chat, so the list leads with how the assistant is instead of a second title.
+        chatTitle.setVisibility(View.GONE);
+        chatSubtitle.setTextAppearance(R.style.Kit_Text_Section);
+        chatSubtitle.setTextSize(18);
+        chatSubtitle.setTextColor(col(R.color.text));
         pageChat.findViewById(R.id.chat_presence_dot).setVisibility(View.VISIBLE);
         chatSubtitle.setCompoundDrawablesWithIntrinsicBounds(0, 0, 0, 0);
         selectChatFilter(chatFilter);
@@ -2198,13 +2223,13 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         final String ip = Prefs.assistIp(this);
         View dot = pageChat.findViewById(R.id.chat_presence_dot);
         if (ip.isEmpty()) { chatSubtitle.setText("Set the assistant in Settings"); setDot(dot, false); return; }
-        chatSubtitle.setText("Checking Pi");
+        chatSubtitle.setText("Checking the Pi assistant");
         dot.setBackgroundTintList(android.content.res.ColorStateList.valueOf(col(R.color.offline)));
         new Thread(() -> {
             boolean up = MeshClient.reachable(ip, MeshClient.ASSIST_PORT);
             ui.post(() -> {
                 if (chatConvoMode) return;
-                chatSubtitle.setText(up ? "Pi online · saved threads" : "Pi offline · saved threads available");
+                chatSubtitle.setText(up ? "The Pi assistant is online" : "The Pi assistant is offline");
                 setDot(dot, up);
             });
         }).start();

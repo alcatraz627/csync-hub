@@ -71,8 +71,7 @@
         android:paddingStart="@dimen/kit_gutter" android:paddingEnd="@dimen/kit_gutter"
         android:paddingTop="8dp" android:paddingBottom="0dp">
         <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:fillViewport="true" android:scrollbars="none"
-            android:background="@drawable/card_bg">
+            android:fillViewport="true" android:scrollbars="none">
         <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content"
             android:orientation="horizontal" android:gravity="center">
             <TextView android:id="@+id/chat_filter_all" style="@style/CsyncChatTab"
@@ -126,25 +125,6 @@
         <LinearLayout android:id="@+id/chat_tools_list"
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:orientation="vertical" android:visibility="gone"/>
-        <LinearLayout android:id="@+id/chat_list_actions"
-            android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:orientation="horizontal" android:layout_marginTop="14dp">
-            <TextView android:id="@+id/chat_list_new"
-                android:layout_width="wrap_content" android:layout_height="48dp"
-                android:gravity="center" android:paddingStart="15dp" android:paddingEnd="15dp"
-                android:drawableStart="@drawable/csi_plus" android:drawablePadding="6dp"
-                android:drawableTint="@color/onAccent" android:text="New chat"
-                android:textSize="13sp" android:textStyle="bold" android:textColor="@color/onAccent"
-                android:background="@drawable/player_primary_bg"/>
-            <TextView android:id="@+id/chat_list_settings"
-                android:layout_width="wrap_content" android:layout_height="48dp"
-                android:layout_marginStart="8dp" android:gravity="center"
-                android:paddingStart="15dp" android:paddingEnd="15dp"
-                android:drawableStart="@drawable/csi_sliders" android:drawablePadding="6dp"
-                android:drawableTint="@color/dim" android:text="Settings"
-                android:textSize="13sp" android:textStyle="bold" android:textColor="@color/text"
-                android:background="@drawable/card_bg"/>
-        </LinearLayout>
         </LinearLayout>
     </ScrollView>
 
