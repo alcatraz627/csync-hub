@@ -148,15 +148,28 @@ final class CameraController {
         return true;
     }
 
+    // How the crumbs above the camera reach other places, and what Back does on the camera page
+    // itself; both belong to the activity that owns the map.
+    private Kit.Open places;
+    private java.util.function.Supplier<Runnable> cameraBack;
+
+    void navigation(Kit.Open places, java.util.function.Supplier<Runnable> cameraBack) {
+        this.places = places;
+        this.cameraBack = cameraBack;
+    }
+
     private void renderPage() {
         cameraPage.setVisibility(showingCaptures ? View.GONE : View.VISIBLE);
         capturesPage.setVisibility(showingCaptures ? View.VISIBLE : View.GONE);
         Kit.Open open = id -> {
             boolean wasCaptures = showingCaptures;
             if (wasCaptures) closeCaptures();
-            if (!"camera".equals(id)) activity.getOnBackPressedDispatcher().onBackPressed();
+            if ("camera".equals(id)) return;
+            if (places != null) places.place(id);
+            else activity.getOnBackPressedDispatcher().onBackPressed();
         };
-        Kit.pageTop(top, showingCaptures ? "captures" : "camera", open);
+        Kit.pageTop(top, showingCaptures ? "captures" : "camera", open,
+            showingCaptures || cameraBack == null ? null : cameraBack.get());
         if (!showingCaptures) Kit.topAction(top, Kit.Icon.PHOTO, "Captures", v -> openCaptures());
         else Kit.topAction(top, R.drawable.csi_refresh, "Read the list again", v -> loadCaptures());
         capturesBack.setEnabled(visible && showingCaptures);

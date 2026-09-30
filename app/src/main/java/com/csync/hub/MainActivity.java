@@ -107,6 +107,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         content.addView(pageCamera);
         content.addView(pageMore);
         cameraController = new CameraController(this, pageCamera);
+        cameraController.navigation(this::openPlace, this::rootBack);
         miniPlayer = new MediaMiniPlayer(this);
         getOnBackPressedDispatcher().addCallback(this, backInApp);
         // A conversation uses the whole width; every other page stays one column on a wide screen.
@@ -136,6 +137,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             androidx.core.graphics.ColorUtils.blendARGB(col(R.color.surface), accent(), 0.13f)));
         nav.setOnItemSelectedListener(item -> {
             int id = item.getItemId();
+            fromHome = false;
             if (visitor && id != R.id.nav_media) {
                 leaveVisit(id == R.id.nav_share ? "share" : id == R.id.nav_chat ? "chat" : id == R.id.nav_more ? "more" : "home");
                 return false;
@@ -421,12 +423,12 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         Kit.bindAction(pageHome.findViewById(R.id.home_do_play), Kit.Icon.MEDIA, "Play", "Play something from Media",
             v -> startActivity(new Intent(this, MediaActivity.class)));
         Kit.bindAction(pageHome.findViewById(R.id.home_do_ask), Kit.Icon.CHAT, "Ask", "Ask the Pi assistant in a new conversation",
-            v -> { nav.setSelectedItemId(R.id.nav_chat); newConversation(); });
+            v -> fromHome(R.id.nav_chat, this::newConversation));
         Kit.bindAction(pageHome.findViewById(R.id.home_do_send), Kit.Icon.SHARE, "Send", "Send something to a device",
             v -> nav.setSelectedItemId(R.id.nav_share));
         Kit.bindAction(pageHome.findViewById(R.id.home_do_camera), Kit.Icon.CAMERA, "Camera", "Open the Pi camera",
-            v -> { nav.setSelectedItemId(R.id.nav_more); show(5); });
-        pageHome.findViewById(R.id.home_status).setOnClickListener(v -> { nav.setSelectedItemId(R.id.nav_more); show(3); });
+            v -> fromHome(R.id.nav_more, () -> show(5)));
+        pageHome.findViewById(R.id.home_status).setOnClickListener(v -> fromHome(R.id.nav_more, () -> show(3)));
         bindHomeStatus(null, false, null);
         renderMore(null);
         showMoreDetail(0);
@@ -684,7 +686,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageTools.findViewById(R.id.tools_widget_section).setVisibility(detail == 2 ? View.VISIBLE : View.GONE);
         View top = pageTools.findViewById(R.id.tools_back);
         // Pulling the page down checks again, so the top bar carries no refresh icon.
-        Kit.pageTop(top, overview ? "tools" : detail == 1 ? "process" : "widgets", this::openPlace, visitBack());
+        Kit.pageTop(top, overview ? "tools" : detail == 1 ? "process" : "widgets", this::openPlace, overview ? rootBack() : visitBack());
         ((android.widget.ScrollView) pageTools.findViewById(R.id.tools_scroll)).scrollTo(0, 0);
         if (detail == 1 && resumed) ensureShizuku();
         if (detail == 2) renderWidgetsPage();
@@ -707,11 +709,12 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         settingsDetail = 0;
         pageSettings.findViewById(R.id.settings_connection_detail).setVisibility(View.GONE);
         pageSettings.findViewById(R.id.settings_overview).setVisibility(View.VISIBLE);
-        Kit.pageTop(pageSettings.findViewById(R.id.settings_back), "settings", this::openPlace, visitBack());
+        Kit.pageTop(pageSettings.findViewById(R.id.settings_back), "settings", this::openPlace, rootBack());
     }
 
     /** Go to a place in the map. The top bar's path and Back both come through here. */
     private void openPlace(String id) {
+        fromHome = false;
         if (visitor) {
             if ("media".equals(id)) { finish(); startActivity(new Intent(this, MediaActivity.class)); }
             else leaveVisit(id);
@@ -840,15 +843,16 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         if (current == 2 && chatConvoMode && chatSuggest.isOpen()) chatSuggest.close();
         else if (current == 2 && chatConvoMode && chatFind.isOpen()) chatFind.close();
         else if (visitor) finish();
-        else if (current == 2 && chatConvoMode) openPlace("chat");
+        else if (current == 2 && chatConvoMode) openPlace(fromHome ? "home" : "chat");
         else if (current == 1 && shareInboxMode) setShareMode(false);
         else if (current == 6 && moreDetail != 0) showMoreDetail(0);
         else if (current == 4 && settingsDetail != 0) closeSettingsDetail();
         else if (current == 3 && toolsDetail != 0) showToolsDetail(0);
         else if (current == 5) {
-            if (!cameraController.closeChildPage()) show(6);
+            if (cameraController.closeChildPage()) return;
+            if (fromHome) openPlace("home"); else show(6);
         }
-        else if (current == 3 || current == 4) show(6);
+        else if (current == 3 || current == 4) { if (fromHome) openPlace("home"); else show(6); }
         else if (current != 0) openPlace("home");
     }
 
@@ -928,11 +932,10 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         if (recent == null) Kit.bindRow(talk, Kit.Icon.CHAT, "Start a conversation", "Ask the Pi assistant", null, true);
         else Kit.bindRow(talk, Kit.Icon.CHAT, recent.optString("title", "Chat"),
             "Conversation · " + relTime(recent.optLong("updated")), null, true);
-        talk.setOnClickListener(v -> {
-            nav.setSelectedItemId(R.id.nav_chat);
+        talk.setOnClickListener(v -> fromHome(R.id.nav_chat, () -> {
             if (recent != null) openConversation(recent.optString("id"), recent.optString("title"));
             else newConversation();
-        });
+        }));
         if (played == null || played.optString("name").isEmpty()) return;
         View watch = Kit.addRow(group);
         boolean onPhone = "phone".equals(played.optString("target"));
@@ -958,6 +961,23 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private boolean visitor;
 
     private Runnable visitBack() { return visitor ? this::finish : null; }
+
+    // Home opened the page one step below a bar root (a conversation, the camera, Tools), so Back
+    // from that page returns to Home rather than to the root; a crumb or a bar tap ends this.
+    private boolean fromHome;
+
+    /** Back for a page one step below a bar root: out of a visit, back to Home, or up the path. */
+    private Runnable rootBack() {
+        if (visitor) return this::finish;
+        return fromHome ? () -> openPlace("home") : null;
+    }
+
+    /** Open a page from Home so that Back brings the user back to Home. */
+    private void fromHome(int barItem, Runnable open) {
+        ((com.google.android.material.bottomnavigation.BottomNavigationView) findViewById(R.id.nav)).setSelectedItemId(barItem);
+        fromHome = true;
+        open.run();
+    }
 
     /**
      * Hand a place to the Main underneath and leave. This one finishes first so the launch finds
@@ -2514,7 +2534,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private void renderChatTop() {
         View top = pageChat.findViewById(R.id.chat_top);
         if (chatConvoMode) {
-            Kit.pageTop(top, "conversation", this::openPlace, visitBack());
+            Kit.pageTop(top, "conversation", this::openPlace, rootBack());
             Kit.topAction(top, R.drawable.csi_search, "Find in this conversation", v -> chatFind.open());
             Kit.topAction(top, R.drawable.csi_download, "Save this conversation", v -> exportConversation());
             return;
