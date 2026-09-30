@@ -97,7 +97,10 @@ public final class SearchActivity extends AppCompatActivity {
             int id = item.getItemId();
             if (id == R.id.nav_home) { finish(); return true; }
             if (id == R.id.nav_media) startActivity(new Intent(this, MediaActivity.class));
-            else openMain(id == R.id.nav_share ? "share" : id == R.id.nav_chat ? "chat" : "more", null, null);
+            // A bar place is the Main this search came from, not a visit on top of it.
+            else startActivity(new Intent(this, MainActivity.class)
+                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                .putExtra("destination", id == R.id.nav_share ? "share" : id == R.id.nav_chat ? "chat" : "more"));
             return false;
         });
 
