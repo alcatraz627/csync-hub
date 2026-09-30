@@ -288,8 +288,8 @@ public class ShareActivity extends AppCompatActivity {
     }
 
     private void confirmPiCover() {
-        Kit.sheet(this, "Use this image on the Pi screen?", "It becomes the Pi cover and replaces what is playing there.",
-            new Kit.Action(R.drawable.csi_image, "Set as the Pi cover", null, () -> sendImageToPi(files.get(0), true)));
+        Kit.confirm(this, "Replace the Pi cover with this image?", "It also takes the place of whatever is on the Pi screen now.",
+            R.drawable.csi_image, "Replace", () -> sendImageToPi(files.get(0), true));
     }
 
     /** Put shared words up on the Pi screen, large enough to read from across the room. */
@@ -300,7 +300,7 @@ public class ShareActivity extends AppCompatActivity {
         new Thread(() -> {
             String failure = null;
             JSONObject result = null;
-            try { result = new MediaClient(host, token).post("/v1/display/show", new JSONObject().put("text", text)); }
+            try { result = new MediaClient(host, token).post("/v1/display/show", new JSONObject().put("text", MediaClient.screenText(text))); }
             catch (Exception error) { failure = error.getMessage() == null ? "The Pi did not answer." : error.getMessage(); }
             final String error = failure;
             final JSONObject shown = result;

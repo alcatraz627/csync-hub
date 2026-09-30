@@ -1075,7 +1075,8 @@ public final class NotesActivity extends AppCompatActivity {
                 String words = note.optString("body").trim();
                 lit = client.post("/v1/display/show", new JSONObject()
                     .put("title", note.optString("title"))
-                    .put("text", words.isEmpty() ? note.optString("title") : words)).optBoolean("sentToDisplay");
+                    .put("text", words.isEmpty() ? note.optString("title") : MediaClient.screenText(words)))
+                    .optBoolean("sentToDisplay");
             } catch (Exception error) { problem = error.getMessage() == null ? "The Pi did not answer." : error.getMessage(); }
             String failure = problem;
             boolean shown = lit;

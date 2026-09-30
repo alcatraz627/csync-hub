@@ -8,50 +8,44 @@
         android:layout_height="0dp" android:layout_weight="1">
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
             android:orientation="vertical">
-        <TextView android:id="@+id/media_heading" style="@style/Kit.Text.PageTitle"
-            android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="6dp" android:paddingStart="20dp" android:paddingEnd="20dp"
-            android:text="Files"/>
-        <TextView android:id="@+id/media_subtitle" style="@style/Kit.Text.PageSub"
-            android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="5dp" android:paddingStart="20dp" android:paddingEnd="20dp"
-            android:text="Connected storage on the Pi"/>
+        <!-- The search box stays away until the search button in the top bar asks for it, so the list starts higher. -->
         <LinearLayout android:id="@+id/media_search_line" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:orientation="horizontal" android:gravity="center_vertical"
-            android:layout_marginStart="20dp" android:layout_marginEnd="20dp" android:layout_marginTop="12dp"
+            android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone"
+            android:layout_marginStart="@dimen/kit_gutter" android:layout_marginEnd="@dimen/kit_gutter" android:layout_marginTop="8dp"
             android:background="@drawable/card_bg" android:paddingStart="12dp">
             <EditText android:id="@+id/media_search" android:layout_width="0dp" android:layout_weight="1"
-                android:layout_height="44dp" android:singleLine="true" android:hint="Search connected media"
-                android:inputType="text" android:textSize="14sp" android:background="@android:color/transparent"/>
+                android:layout_height="48dp" android:singleLine="true" android:hint="Search connected media"
+                android:inputType="text" android:imeOptions="actionSearch" android:textSize="14.5sp"
+                android:textColor="@color/text" android:textColorHint="@color/dim"
+                android:background="@android:color/transparent"/>
             <ImageView android:id="@+id/media_find" android:layout_width="48dp" android:layout_height="48dp"
                 android:padding="14dp" android:src="@drawable/csi_search" app:tint="@color/dim"
                 android:contentDescription="Search media"
                 android:background="?attr/selectableItemBackground"/>
         </LinearLayout>
-        <HorizontalScrollView android:id="@+id/media_sections" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="16dp" android:layout_marginStart="20dp"
-            android:layout_marginEnd="20dp" android:fillViewport="true" android:scrollbars="none">
-            <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:orientation="horizontal" android:paddingStart="3dp" android:paddingEnd="3dp">
-                <TextView android:id="@+id/media_files" style="@style/CsyncMediaTab"
-                    android:drawableStart="@drawable/csi_files" android:drawablePadding="5dp" android:text="Files"/>
-                <TextView android:id="@+id/media_videos" style="@style/CsyncMediaTab"
-                    android:drawableStart="@drawable/csi_video" android:drawablePadding="5dp" android:text="Videos"/>
-                <TextView android:id="@+id/media_history" style="@style/CsyncMediaTab"
-                    android:drawableStart="@drawable/csi_history" android:drawablePadding="5dp" android:text="History"/>
-                <TextView android:id="@+id/media_connections" style="@style/CsyncMediaTab"
-                    android:drawableStart="@drawable/csi_access" android:drawablePadding="5dp" android:text="Access"/>
-            </LinearLayout>
-        </HorizontalScrollView>
+        <LinearLayout android:id="@+id/media_tabs" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginTop="4dp"
+            android:layout_marginStart="@dimen/kit_gutter" android:layout_marginEnd="@dimen/kit_gutter"/>
+        <!-- Which drive, and which folder in it, the list is showing. -->
+        <TextView android:id="@+id/media_scope" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:visibility="gone"
+            android:paddingStart="@dimen/kit_gutter" android:paddingEnd="@dimen/kit_gutter" android:paddingTop="16dp"
+            android:drawableStart="@drawable/csi_files" android:drawablePadding="8dp" android:drawableTint="@color/text"
+            android:textSize="13.5sp" android:textStyle="bold" android:textColor="@color/text"/>
+        <!-- What just happened, said once and then taken away. -->
+        <TextView android:id="@+id/media_say" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:visibility="gone"
+            android:paddingStart="@dimen/kit_gutter" android:paddingEnd="@dimen/kit_gutter" android:paddingTop="12dp"
+            android:textSize="13sp" android:textColor="@color/dim"/>
         <TextView android:id="@+id/media_status" style="@style/Kit.Text.Section"
             android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="16dp" android:paddingBottom="8dp"
+            android:paddingStart="@dimen/kit_gutter" android:paddingEnd="@dimen/kit_gutter" android:paddingTop="16dp" android:paddingBottom="8dp"
             android:text="Checking drives"/>
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical">
                 <LinearLayout android:id="@+id/media_rows" android:layout_width="match_parent"
                     android:layout_height="wrap_content" android:orientation="vertical"
-                    android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingBottom="16dp"/>
+                    android:paddingStart="@dimen/kit_gutter" android:paddingEnd="@dimen/kit_gutter" android:paddingBottom="16dp"/>
             <LinearLayout android:id="@+id/media_actions_toggle" android:layout_width="match_parent"
                 android:layout_height="56dp" android:orientation="horizontal" android:gravity="center_vertical"
                 android:visibility="gone"
@@ -98,18 +92,24 @@
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
             android:orientation="vertical" android:paddingStart="16dp" android:paddingEnd="16dp"
             android:paddingTop="12dp" android:paddingBottom="12dp">
-            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            <TextView android:id="@+id/player_title" android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:maxLines="2" android:textSize="20sp" android:textStyle="bold"
+                android:letterSpacing="-0.02" android:textColor="@color/text"/>
+            <LinearLayout android:id="@+id/player_state_row" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:layout_marginTop="5dp"
                 android:gravity="center_vertical" android:orientation="horizontal">
                 <View android:id="@+id/player_dot" android:layout_width="8dp" android:layout_height="8dp"
                     android:layout_marginEnd="6dp" android:background="@drawable/dot_circle"/>
                 <TextView android:id="@+id/player_target_state" android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:textSize="12sp" android:textColor="@color/dim"/>
+                    android:textSize="13sp" android:textColor="@color/dim"/>
             </LinearLayout>
-            <TextView android:id="@+id/player_title" android:layout_width="match_parent"
-                android:layout_height="wrap_content" android:layout_marginTop="3dp"
-                android:text="No media selected" android:textSize="18sp" android:textStyle="bold"
-                android:textColor="@color/text"/>
+            <!-- What the page shows when the output has no session: the cover and the ways to put something on it. -->
+            <LinearLayout android:id="@+id/player_idle" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone"/>
+            <LinearLayout android:id="@+id/player_live" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:orientation="vertical">
             <TextView android:id="@+id/player_art" android:layout_width="match_parent" android:layout_height="150dp"
                 android:layout_marginTop="10dp" android:gravity="bottom|start" android:padding="12dp"
                 android:textSize="13sp" android:textStyle="bold"
@@ -117,6 +117,8 @@
             <TextView android:id="@+id/player_feedback" android:layout_width="match_parent"
                 android:layout_height="wrap_content" android:layout_marginTop="5dp"
                 android:textSize="12sp" android:textColor="@color/dim"/>
+            <LinearLayout android:id="@+id/player_seek_block" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:orientation="vertical">
             <SeekBar android:id="@+id/player_seek" android:layout_width="match_parent"
                 android:layout_height="36dp" android:layout_marginTop="3dp"
                 android:progressTint="?attr/colorPrimary" android:thumbTint="?attr/colorPrimary"
@@ -131,7 +133,11 @@
                     android:layout_height="wrap_content"
                     android:textSize="12sp" android:textColor="@color/dim"/>
             </LinearLayout>
-            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            </LinearLayout>
+            <!-- Something shown rather than played has one control, so it gets a button with its name on it. -->
+            <FrameLayout android:id="@+id/player_shown_stop" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:layout_marginTop="12dp" android:visibility="gone"/>
+            <LinearLayout android:id="@+id/player_transport" android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:layout_marginTop="8dp" android:gravity="center" android:orientation="horizontal">
                 <ImageView android:id="@+id/player_favorite" style="@style/CsyncPlayerIcon"
                     android:src="@drawable/csi_favorite" android:contentDescription="Favorite"/>
@@ -147,6 +153,9 @@
                 <ImageView android:id="@+id/player_stop" style="@style/CsyncPlayerIcon"
                     android:src="@drawable/csi_stop" android:contentDescription="Stop"/>
             </LinearLayout>
+            <!-- Volume, Speed, Rotate and Loop belong to something that plays; a picture or a slideshow has none of them. -->
+            <LinearLayout android:id="@+id/player_settings_block" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:orientation="vertical">
             <TextView style="@style/Kit.Text.Section" android:layout_width="match_parent"
                 android:layout_height="wrap_content" android:layout_marginTop="14dp"
                 android:layout_marginBottom="8dp" android:text="Playback"/>
@@ -170,6 +179,8 @@
                 android:layout_height="48dp" android:gravity="center_vertical" android:visibility="gone"
                 android:text="Skip · 10 seconds" android:textSize="13sp"
                 android:textColor="@color/dim" android:background="?attr/selectableItemBackground"/>
+            </LinearLayout>
+            </LinearLayout>
         </LinearLayout>
     </ScrollView>
     <SurfaceView android:id="@+id/media_video" android:layout_width="match_parent"
@@ -184,7 +195,7 @@
             android:minHeight="52dp"
             android:gravity="center_vertical" android:orientation="horizontal">
             <ImageView android:layout_width="24dp" android:layout_height="24dp"
-                android:src="@drawable/csi_media" app:tint="?attr/colorPrimary"
+                android:src="@drawable/csi_media" app:tint="@color/dim"
                 android:importantForAccessibility="no"/>
             <LinearLayout android:layout_width="0dp" android:layout_weight="1"
                 android:layout_height="wrap_content" android:orientation="vertical"

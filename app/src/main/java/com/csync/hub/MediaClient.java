@@ -35,6 +35,17 @@ final class MediaClient {
         catch (Exception e) { throw new IllegalArgumentException(e); }
     }
 
+    /**
+     * Words as the Pi screen will take them. It accepts 4000 characters, far more than fit on
+     * it, so a longer text is cut after its last whole word inside that limit.
+     */
+    static String screenText(String text) {
+        if (text.length() <= 4000) return text;
+        int cut = 4000;
+        while (cut > 0 && !Character.isWhitespace(text.charAt(cut))) cut--;
+        return text.substring(0, cut == 0 ? 4000 : cut).trim();
+    }
+
     JSONObject get(String path) throws Exception { return request("GET", path, null); }
     JSONObject post(String path, JSONObject body) throws Exception { return request("POST", path, body); }
     JSONObject put(String path, JSONObject body) throws Exception { return request("PUT", path, body); }

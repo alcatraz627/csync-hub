@@ -145,10 +145,13 @@ final class Kit {
         final int icon; final String label; final String sub; final Runnable run;
         // True when the choice leads to another question, which the row shows with a chevron.
         final boolean opens;
+        // What the choice is set to now, written at the row's end. Null leaves the end empty.
+        String value;
         Action(int icon, String label, String sub, Runnable run) { this(icon, label, sub, run, false); }
         Action(int icon, String label, String sub, Runnable run, boolean opens) {
             this.icon = icon; this.label = label; this.sub = sub; this.run = run; this.opens = opens;
         }
+        Action value(String now) { value = now; return this; }
     }
 
     /** A labelled set of choices. A null label draws the set without a heading. */
@@ -172,7 +175,7 @@ final class Kit {
             LinearLayout rows = group(parent);
             for (Action action : section.actions) {
                 View row = addRow(rows);
-                bindRow(row, action.icon, action.label, action.sub, null, action.opens);
+                bindRow(row, action.icon, action.label, action.sub, action.value, action.opens);
                 row.setOnClickListener(v -> { if (before != null) before.run(); action.run.run(); });
             }
         }
@@ -225,7 +228,21 @@ final class Kit {
 
     /** An outlined button with an icon and words in one colour, as the mock draws every plain button. */
     static View button(Context c, int icon, String words, int colorRes, Runnable click) {
-        int color = ContextCompat.getColor(c, colorRes);
+        return button(c, icon, words, click, ContextCompat.getColor(c, colorRes));
+    }
+
+    /** The button that confirms a choice inside a drawer: tinted with the accent, never filled. */
+    static View tonalButton(Context c, int icon, String words, Runnable click) {
+        View button = button(c, icon, words, click, accentText(c));
+        android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
+        shape.setColor(androidx.core.graphics.ColorUtils.blendARGB(
+            ContextCompat.getColor(c, R.color.surface), accentText(c), 0.16f));
+        shape.setCornerRadius(dp(c, 14));
+        button.setBackground(shape);
+        return button;
+    }
+
+    private static View button(Context c, int icon, String words, Runnable click, int color) {
         LinearLayout button = new LinearLayout(c);
         button.setOrientation(LinearLayout.HORIZONTAL);
         button.setGravity(android.view.Gravity.CENTER);
@@ -342,18 +359,89 @@ final class Kit {
 
     /** A drawer that shows one picture, for looking at an image without leaving the page. */
     static void pictureSheet(Context c, CharSequence title, android.graphics.Bitmap picture) {
+        pictureSheet(c, title, null, picture, 0, null, null);
+    }
+
+    /**
+     * A drawer that shows one picture with one thing to do about it under it. A null picture
+     * leaves the picture out, and a null {@code go} leaves the button out.
+     */
+    static void pictureSheet(Context c, CharSequence title, CharSequence sub, android.graphics.Bitmap picture,
+                             int icon, String go, Runnable run) {
         com.google.android.material.bottomsheet.BottomSheetDialog dialog =
             new com.google.android.material.bottomsheet.BottomSheetDialog(c);
         View body = LayoutInflater.from(c).inflate(R.layout.kit_sheet, null, false);
         ((TextView) body.findViewById(R.id.kit_title)).setText(title);
-        setOptional(body.findViewById(R.id.kit_sub), null);
-        ImageView image = new ImageView(c);
-        image.setImageBitmap(picture);
-        image.setAdjustViewBounds(true);
-        image.setContentDescription(title);
-        image.setBackgroundResource(R.drawable.card_bg);
-        image.setClipToOutline(true);
-        ((LinearLayout) body.findViewById(R.id.kit_rows)).addView(image, new LinearLayout.LayoutParams(-1, -2));
+        setOptional(body.findViewById(R.id.kit_sub), sub);
+        LinearLayout rows = body.findViewById(R.id.kit_rows);
+        if (picture != null) {
+            ImageView image = new ImageView(c);
+            image.setImageBitmap(picture);
+            image.setAdjustViewBounds(true);
+            image.setContentDescription(title);
+            image.setBackgroundResource(R.drawable.card_bg);
+            image.setClipToOutline(true);
+            rows.addView(image, new LinearLayout.LayoutParams(-1, -2));
+        }
+        if (go != null) {
+            LinearLayout.LayoutParams below = new LinearLayout.LayoutParams(-1, -2);
+            below.topMargin = dp(c, picture == null ? 0 : 12);
+            rows.addView(button(c, icon, go, R.color.text, () -> { dialog.dismiss(); run.run(); }), below);
+        }
+        dialog.setContentView(scrolling(body));
+        openFully(dialog);
+        dialog.show();
+    }
+
+    interface Typed { void text(String words); }
+
+    /**
+     * A drawer with one box to type or paste into and one button that acts on it. The button
+     * stays quiet until something is typed. {@code note} is a line of help under the box.
+     */
+    static void fieldSheet(Context c, CharSequence title, CharSequence sub, String hint, String note,
+                           int icon, String go, Typed typed) {
+        com.google.android.material.bottomsheet.BottomSheetDialog dialog =
+            new com.google.android.material.bottomsheet.BottomSheetDialog(c);
+        View body = LayoutInflater.from(c).inflate(R.layout.kit_sheet, null, false);
+        ((TextView) body.findViewById(R.id.kit_title)).setText(title);
+        setOptional(body.findViewById(R.id.kit_sub), sub);
+        LinearLayout rows = body.findViewById(R.id.kit_rows);
+        android.widget.EditText field = new android.widget.EditText(c);
+        field.setHint(hint);
+        field.setSingleLine(true);
+        field.setTextSize(15);
+        field.setTextColor(ContextCompat.getColor(c, R.color.text));
+        field.setHintTextColor(ContextCompat.getColor(c, R.color.dim));
+        field.setBackgroundResource(R.drawable.card_bg);
+        field.setPadding(dp(c, 14), dp(c, 12), dp(c, 14), dp(c, 12));
+        field.setMinHeight(dp(c, 48));
+        field.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
+        rows.addView(field, new LinearLayout.LayoutParams(-1, -2));
+        if (note != null) {
+            TextView help = new TextView(c);
+            help.setTextAppearance(R.style.Kit_Text_RowSub);
+            help.setText(note);
+            help.setPadding(dp(c, 2), dp(c, 8), dp(c, 2), 0);
+            rows.addView(help);
+        }
+        View button = tonalButton(c, icon, go, () -> {
+            String words = field.getText().toString().trim();
+            if (words.isEmpty()) return;
+            dialog.dismiss();
+            typed.text(words);
+        });
+        button.setAlpha(0.45f);
+        field.addTextChangedListener(new android.text.TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            public void afterTextChanged(android.text.Editable s) {
+                button.setAlpha(s.toString().trim().isEmpty() ? 0.45f : 1f);
+            }
+        });
+        LinearLayout.LayoutParams below = new LinearLayout.LayoutParams(-1, -2);
+        below.topMargin = dp(c, 12);
+        rows.addView(button, below);
         dialog.setContentView(scrolling(body));
         openFully(dialog);
         dialog.show();
@@ -373,7 +461,7 @@ final class Kit {
         LinearLayout rows = actions.length == 0 ? null : group(body.findViewById(R.id.kit_rows));
         for (Action action : actions) {
             View row = addRow(rows);
-            bindRow(row, action.icon, action.label, action.sub, null, action.opens);
+            bindRow(row, action.icon, action.label, action.sub, action.value, action.opens);
             row.setOnClickListener(v -> { dialog.dismiss(); action.run.run(); });
         }
         dialog.setContentView(scrolling(body));

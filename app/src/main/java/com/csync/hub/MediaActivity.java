@@ -1,6 +1,5 @@
 package com.csync.hub;
 
-import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -64,7 +63,8 @@ public final class MediaActivity extends AppCompatActivity {
     private boolean screenActive = true;
     private boolean openedFromSearch;
     private boolean showingVideos;
-    private int activeTab = R.id.media_files;
+    private static final int FILES = 0, VIDEOS = 1, HISTORY = 2, ACCESS = 3;
+    private int activeTab = FILES;
     private boolean firstDriveLoad = true;
     private long listingIntent;
     private volatile long outputIntent;
@@ -135,11 +135,8 @@ public final class MediaActivity extends AppCompatActivity {
         });
         video.setOnClickListener(v -> { if (videoMode) setVideoControls(!videoControlsVisible); });
         renderTop();
-        findViewById(R.id.media_files).setOnClickListener(v -> { selectTab(R.id.media_files); if (driveId.isEmpty()) drives(); else browse(); });
-        findViewById(R.id.media_videos).setOnClickListener(v -> { selectTab(R.id.media_videos); videos(0, false); });
         findViewById(R.id.media_find).setOnClickListener(v -> find());
-        findViewById(R.id.media_history).setOnClickListener(v -> { selectTab(R.id.media_history); history(); });
-        findViewById(R.id.media_connections).setOnClickListener(v -> { selectTab(R.id.media_connections); connections(); });
+        search.setOnEditorActionListener((v, action, event) -> { find(); return true; });
         findViewById(R.id.media_actions_toggle).setOnClickListener(v -> {
             View actions = findViewById(R.id.media_actions);
             boolean opening = actions.getVisibility() != View.VISIBLE;
@@ -157,6 +154,7 @@ public final class MediaActivity extends AppCompatActivity {
         findViewById(R.id.media_volume).setOnClickListener(v -> chooseVolume());
         findViewById(R.id.media_settings).setOnClickListener(v -> chooseSetting());
         findViewById(R.id.media_now).setOnClickListener(v -> showFullPlayer());
+        findViewById(R.id.media_player_controls).setOnClickListener(v -> showFullPlayer());
         findViewById(R.id.player_pause).setOnClickListener(v ->
             control("Resume".contentEquals(v.getContentDescription()) ? "resume" : "pause"));
         findViewById(R.id.player_skip_choice).setOnClickListener(v -> chooseSkip());
@@ -203,52 +201,45 @@ public final class MediaActivity extends AppCompatActivity {
         ui.postDelayed(this::refreshState, 1000);
     }
 
-    private void selectTab(int selectedId) {
-        activeTab = selectedId;
-        String title = selectedId == R.id.media_videos ? "Videos" :
-            selectedId == R.id.media_history ? "History" :
-            selectedId == R.id.media_connections ? "Access" : "Files";
-        ((TextView) findViewById(R.id.media_heading)).setText(title);
-        TextView subtitle = findViewById(R.id.media_subtitle);
-        subtitle.setText(selectedId == R.id.media_videos ? "Videos on connected drives" :
-            selectedId == R.id.media_history ? "Your position is saved even when a drive is absent." :
-            selectedId == R.id.media_connections ? "Open Pi files from another device" :
-            "Search connected media, then choose where a file plays.");
-        findViewById(R.id.media_search_line).setVisibility(
-            selectedId == R.id.media_files ? View.VISIBLE : View.GONE);
+    /** Draw the four views of Media with {@code tab} chosen. Showing a view's content is openTab's job. */
+    private void selectTab(int tab) {
+        activeTab = tab;
+        Kit.tabs(findViewById(R.id.media_tabs),
+            new int[]{Kit.Icon.FILES, Kit.Icon.VIDEO, Kit.Icon.HISTORY, Kit.Icon.ACCESS},
+            new String[]{"Files", "Videos", "History", "Access"}, tab, this::openTab);
+        // The search box and the line naming the drive belong to browsing, so they leave with Files.
+        if (tab != FILES) {
+            findViewById(R.id.media_search_line).setVisibility(View.GONE);
+            findViewById(R.id.media_scope).setVisibility(View.GONE);
+        }
         renderTop();
         findViewById(R.id.media_actions_toggle).setVisibility(View.GONE);
         findViewById(R.id.media_actions).setVisibility(View.GONE);
-        findViewById(R.id.media_status).setVisibility(
-            selectedId == R.id.media_history || selectedId == R.id.media_connections ? View.GONE : View.VISIBLE);
-        int accent = com.google.android.material.color.MaterialColors.getColor(
-            this, com.google.android.material.R.attr.colorPrimary, getColor(R.color.coral));
-        for (int id : new int[]{R.id.media_files, R.id.media_videos, R.id.media_history, R.id.media_connections}) {
-            TextView tab = findViewById(id);
-            tab.setTextColor(id == selectedId ? Kit.accentText(this) : getColor(R.color.dim));
-            tab.setCompoundDrawableTintList(android.content.res.ColorStateList.valueOf(
-                id == selectedId ? accent : getColor(R.color.dim)));
-            tab.setTypeface(null, id == selectedId ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
-            if (id == selectedId) {
-                tab.setBackground(Kit.underline(this, accent));
-            } else {
-                android.util.TypedValue ripple = new android.util.TypedValue();
-                getTheme().resolveAttribute(android.R.attr.selectableItemBackground, ripple, true);
-                tab.setBackgroundResource(ripple.resourceId);
-            }
-        }
-        HorizontalScrollView sections = findViewById(R.id.media_sections);
-        TextView selected = findViewById(selectedId);
-        sections.post(() -> sections.smoothScrollTo(
-            Math.max(0, selected.getLeft() - (sections.getWidth() - selected.getWidth()) / 2), 0));
+        findViewById(R.id.media_status).setVisibility(tab == HISTORY || tab == ACCESS ? View.GONE : View.VISIBLE);
         android.widget.ScrollView browser = findViewById(R.id.media_list);
         browser.post(() -> browser.smoothScrollTo(0, 0));
+    }
+
+    private void openTab(int tab) {
+        selectTab(tab);
+        if (tab == VIDEOS) videos(0, false);
+        else if (tab == HISTORY) history();
+        else if (tab == ACCESS) connections();
+        else if (driveId.isEmpty()) drives();
+        else browse();
+    }
+
+    /** Say which drive, and which folder in it, the list below is showing. */
+    private void showScope() {
+        TextView scope = findViewById(R.id.media_scope);
+        scope.setText(path.isEmpty() ? driveLabel : driveLabel + "  /  " + path.replace("/", "  /  "));
+        scope.setVisibility(driveLabel.isEmpty() ? View.GONE : View.VISIBLE);
     }
 
     private void openSearchItem(String itemId, String requestedDrive,
                                 String relativePath, String query) {
         firstDriveLoad = false;
-        selectTab(R.id.media_files);
+        selectTab(FILES);
         search.setText(query == null ? "" : query);
         long listing = ++listingIntent;
         clearRows("Finding selected item");
@@ -326,7 +317,7 @@ public final class MediaActivity extends AppCompatActivity {
     private interface Show { void accept(JSONObject value) throws Exception; }
 
     private void uploadWallpaper(Uri uri) {
-        setStatus("Preparing screen image");
+        say("Sending the image to the Pi");
         request(() -> {
             BitmapFactory.Options bounds = new BitmapFactory.Options();
             bounds.inJustDecodeBounds = true;
@@ -355,8 +346,14 @@ public final class MediaActivity extends AppCompatActivity {
                 }
             } finally { bitmap.recycle(); }
             return client.uploadWallpaper(output.toByteArray());
-        }, result -> setStatus(result.optBoolean("sentToDisplay") ?
-            "Screen image saved and sent to Pi" : "Screen image saved; Pi display is unavailable"));
+        }, result -> {
+            toast(result.optBoolean("sentToDisplay") ? "Saved as the cover and shown on the Pi screen"
+                : "Saved as the cover. The Pi screen is off");
+            // Forget the old cover so the idle page reads the new one from the Pi.
+            coverPicture = null;
+            coverStored = false;
+            if ("pi".equals(idleShown)) idleShown = null;
+        });
     }
 
     private void castPhoneFile(Uri uri) {
@@ -370,9 +367,9 @@ public final class MediaActivity extends AppCompatActivity {
                 if (nameColumn >= 0) name = cursor.getString(nameColumn);
                 if (sizeColumn >= 0 && !cursor.isNull(sizeColumn)) size = cursor.getLong(sizeColumn);
             }
-        } catch (Exception error) { setStatus("Could not read the selected file: " + error.getMessage()); return; }
+        } catch (Exception error) { say("Could not read the selected file: " + error.getMessage()); return; }
         if (name == null || name.isEmpty() || size <= 0) {
-            setStatus("Choose a local media file whose name and size are available");
+            say("That file cannot be read from this phone. Choose another.");
             return;
         }
         final String fileName = name;
@@ -381,33 +378,27 @@ public final class MediaActivity extends AppCompatActivity {
         stopPhoneForNewPlayback();
         target = "pi";
         selected = null;
-        setStatus("Sending " + fileName + " to Pi USB: 0%");
+        say("Sending " + fileName + " to Pi USB: 0%");
         request(intent, () -> {
             try (InputStream input = getContentResolver().openInputStream(uri)) {
                 if (input == null) throw new Exception("Could not open selected media");
                 return client.uploadMedia("sandisk", fileName, fileSize, input, sent -> {
                     int percent = (int) (sent * 100 / fileSize);
                     ui.post(() -> { if (screenActive && intent == outputIntent)
-                        setStatus("Sending " + fileName + " to Pi USB: " + percent + "%"); });
+                        say("Sending " + fileName + " to Pi USB: " + percent + "%"); });
                 });
             }
         }, result -> {
             JSONObject item = result.getJSONObject("item");
-            setStatus("Saved on Pi USB; opening on projector");
+            say("Saved on Pi USB. Opening it on the Pi screen");
             playPi(item);
         });
     }
 
     private void castYoutube() {
-        EditText address = new EditText(this);
-        address.setSingleLine(true);
-        address.setHint("Paste a YouTube link");
-        address.setInputType(android.text.InputType.TYPE_CLASS_TEXT |
-            android.text.InputType.TYPE_TEXT_VARIATION_URI);
-        new AlertDialog.Builder(this).setTitle("Play YouTube on Pi")
-            .setView(address).setNegativeButton("Cancel", null)
-            .setPositiveButton("Play muted", (dialog, which) ->
-                startYoutube(address.getText().toString().trim())).show();
+        Kit.fieldSheet(this, "A link", "Plays on the Pi screen, muted to begin with", "Paste a YouTube link",
+            "From YouTube or Instagram, use Share and choose Send to Pi screen.",
+            Kit.Icon.DISPLAY, "Play on Pi screen", this::startYoutube);
     }
 
     private void startYoutube(String url) {
@@ -415,17 +406,15 @@ public final class MediaActivity extends AppCompatActivity {
                 stopPhoneForNewPlayback();
                 target = "pi";
                 selected = null;
-                setStatus("Opening YouTube on Pi");
+                say("Opening the link on the Pi screen");
                 request(intent, () -> {
                     if (intent != outputIntent) throw new java.util.concurrent.CancellationException();
                     JSONObject result = client.post("/v1/cast/youtube", new JSONObject().put("url", url));
                     if (intent != outputIntent) stopStalePiStart(result);
                     return result;
                 }, result -> {
-                    JSONObject player = result.getJSONObject("player");
-                    nowPlaying.setText("Pi: " + player.optString("name", "YouTube video"));
-                    output.setText("Pi projector · starts muted; choose Volume for sound");
-                    setStatus("YouTube playing on Pi");
+                    showFullPlayer();
+                    say("It starts muted. Use Volume for sound.");
                 });
     }
 
@@ -448,11 +437,11 @@ public final class MediaActivity extends AppCompatActivity {
                 ui.post(() -> {
                     if (!screenActive || (intent >= 0 && intent != outputIntent) ||
                             (listing >= 0 && listing != listingIntent)) return;
-                    try { show.accept(result); } catch (Exception error) { setStatus(error.getMessage()); }
+                    try { show.accept(result); } catch (Exception error) { say(error.getMessage()); }
                 });
             } catch (Exception error) { ui.post(() -> {
                 if (screenActive && (intent < 0 || intent == outputIntent) &&
-                        (listing < 0 || listing == listingIntent)) setStatus(friendlyError(error));
+                        (listing < 0 || listing == listingIntent)) say(friendlyError(error));
             }); }
         }, "media-request").start();
     }
@@ -475,13 +464,35 @@ public final class MediaActivity extends AppCompatActivity {
         return error.getMessage() == null ? "Media request failed" : error.getMessage();
     }
 
-    private void setStatus(String text) { status.setText(text == null ? "Media unavailable" : text); }
+    /** Name the list below. History and Access bring their own headings, so there the line stays away. */
+    private void heading(String text) {
+        status.setText(text);
+        status.setVisibility(activeTab == HISTORY || activeTab == ACCESS || text.isEmpty() ? View.GONE : View.VISIBLE);
+    }
+
+    private final Runnable unsay = () -> findViewById(R.id.media_say).setVisibility(View.GONE);
+
+    /**
+     * Tell the person what just happened or is happening. Over the lists it is a line above
+     * them that leaves by itself; over the player, where that line is hidden, it is a toast.
+     */
+    private void say(String text) {
+        if (text == null || text.isEmpty()) return;
+        if (fullPlayer || videoMode) { toast(text); return; }
+        TextView line = findViewById(R.id.media_say);
+        line.setText(text);
+        line.setVisibility(View.VISIBLE);
+        ui.removeCallbacks(unsay);
+        ui.postDelayed(unsay, 6000);
+    }
 
     private void showFullPlayer() {
         if (videoMode) return;
         fullPlayer = true;
         findViewById(R.id.media_list).setVisibility(View.GONE);
         findViewById(R.id.media_full_player).setVisibility(View.VISIBLE);
+        // The page carries the controls itself, so the row that leads to it steps aside.
+        findViewById(R.id.media_player_controls).setVisibility(View.GONE);
         renderTop();
         if ("phone".equals(target) && PhonePlaybackService.current == null && phoneProblem == null)
             updateFullPlayer("This phone", "stopped", "", 0, 0, 0, 1);
@@ -492,6 +503,7 @@ public final class MediaActivity extends AppCompatActivity {
         fullPlayer = false;
         findViewById(R.id.media_full_player).setVisibility(View.GONE);
         findViewById(R.id.media_list).setVisibility(View.VISIBLE);
+        if ("pi".equals(target)) findViewById(R.id.media_player_controls).setVisibility(View.VISIBLE);
         selectTab(activeTab);
     }
 
@@ -608,14 +620,35 @@ public final class MediaActivity extends AppCompatActivity {
     private void updateFullPlayer(String outputName, String state, String title,
                                   int position, int duration, int volume, double speed, String problem) {
         boolean onPi = outputName.equals("Pi screen");
-        ((TextView) findViewById(R.id.player_target_state)).setText(stateWords(outputName, state, problem));
+        boolean offline = state.equals("offline");
+        boolean session = state.equals("playing") || state.equals("paused") || state.equals("loading") ||
+            state.equals("buffering") || state.equals("showing") || state.equals("finished");
+        // With no session the page offers ways to start one, never a row of controls that do nothing.
+        boolean idle = !offline && !session && problem == null;
+        showIdle(offline ? "offline" : !idle ? null : onPi ? "pi" : "phone");
+        TextView heading = findViewById(R.id.player_title);
+        TextView words = findViewById(R.id.player_target_state);
+        if (offline || idle) {
+            heading.setText(offline ? "Pi screen" : "Nothing is playing");
+            words.setText(offline ? "Offline" : coverStored ? "Showing the cover" : "Stopped");
+            Kit.setStatus(findViewById(R.id.player_dot), Kit.Status.IDLE);
+            playerTitle = "";
+            return;
+        }
+        words.setText(stateWords(outputName, state, problem));
         Kit.setStatus(findViewById(R.id.player_dot), stateStatus(state, problem));
-        if (!state.equals("offline"))
-            ((TextView) findViewById(R.id.player_feedback)).setText(problem == null ? "" : problem);
-        ((TextView) findViewById(R.id.player_title)).setText(
-            title == null || title.isEmpty() ? "Nothing chosen yet" : displayMediaName(title));
+        ((TextView) findViewById(R.id.player_feedback)).setText(problem == null ? "" : problem);
+        heading.setText(title == null || title.isEmpty() ? outputName : displayMediaName(title));
         playerTitle = title == null ? "" : displayMediaName(title);
         renderFavorite();
+        // Something shown (a picture, words, a slideshow) can only be stopped, so the rest is left out.
+        boolean shownOnly = state.equals("showing");
+        for (int id : new int[]{R.id.player_seek_block, R.id.player_settings_block, R.id.player_transport})
+            findViewById(id).setVisibility(shownOnly ? View.GONE : View.VISIBLE);
+        android.widget.FrameLayout stop = findViewById(R.id.player_shown_stop);
+        stop.setVisibility(shownOnly ? View.VISIBLE : View.GONE);
+        if (shownOnly && stop.getChildCount() == 0)
+            stop.addView(Kit.button(this, R.drawable.csi_stop, "Stop showing", R.color.danger, () -> control("stop")));
         boolean showing = state.equals("playing") || state.equals("paused");
         ((TextView) findViewById(R.id.player_art)).setText(
             showing && onPi ? "The picture is on the Pi screen" :
@@ -649,10 +682,194 @@ public final class MediaActivity extends AppCompatActivity {
             control.setAlpha(enabled ? 1f : 0.45f);
         }
     }
+
+    // What the idle page last drew, so the two-second refresh does not rebuild it each time.
+    private String idleShown;
+    private boolean coverStored;
+    private Bitmap coverPicture;
+    private String displayName;
+
+    /**
+     * Swap the player's controls for the page an output shows with no session, or back.
+     * {@code kind} is "pi", "phone" or "offline"; null brings the controls back.
+     */
+    private void showIdle(String kind) {
+        LinearLayout host = findViewById(R.id.player_idle);
+        host.setVisibility(kind == null ? View.GONE : View.VISIBLE);
+        findViewById(R.id.player_live).setVisibility(kind == null ? View.VISIBLE : View.GONE);
+        // An empty phone output says so in its empty state, so a heading above it would say it twice.
+        int headed = "phone".equals(kind) ? View.GONE : View.VISIBLE;
+        findViewById(R.id.player_title).setVisibility(headed);
+        findViewById(R.id.player_state_row).setVisibility(headed);
+        if (java.util.Objects.equals(kind, idleShown)) return;
+        idleShown = kind;
+        host.removeAllViews();
+        if (kind == null) return;
+        if (kind.equals("phone")) {
+            Kit.empty(host, Kit.Icon.DEVICE, "Nothing is playing on this phone", null,
+                Kit.button(this, Kit.Icon.MEDIA, "Browse Media", R.color.text, this::closeFullPlayer));
+        } else if (kind.equals("offline")) {
+            Kit.empty(host, Kit.Icon.DISPLAY, "The Pi cannot be reached",
+                "What it is showing is not known until it answers again.",
+                Kit.button(this, R.drawable.csi_wifi, "Open Connection", R.color.text, () ->
+                    startActivity(new Intent(this, MainActivity.class)
+                        .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                        .putExtra("destination", "settings"))));
+        } else piIdle(host);
+    }
+
+    /** The Pi screen with nothing on it: its cover, the ways to put something up, and the screen's own settings. */
+    private void piIdle(LinearLayout host) {
+        if (coverPicture != null) {
+            android.widget.ImageView cover = new android.widget.ImageView(this);
+            cover.setImageBitmap(coverPicture);
+            cover.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
+            cover.setBackgroundResource(R.drawable.player_poster_bg);
+            cover.setClipToOutline(true);
+            cover.setContentDescription("The cover image on the Pi screen");
+            LinearLayout.LayoutParams frame = new LinearLayout.LayoutParams(-1, dp(170));
+            frame.topMargin = dp(12);
+            host.addView(cover, frame);
+        }
+        java.util.List<Kit.Section> sections = new java.util.ArrayList<>();
+        sections.add(new Kit.Section("From the Pi", java.util.Arrays.asList(
+            new Kit.Action(Kit.Icon.MEDIA, "Browse Media", "Films, shows, photos", this::closeFullPlayer, true),
+            new Kit.Action(Kit.Icon.PHOTO, "Photos as a slideshow", "Every image in a folder, in turn",
+                this::chooseSlideshow, true))));
+        sections.add(new Kit.Section("From this phone", java.util.Arrays.asList(
+            new Kit.Action(Kit.Icon.FILE, "A file", "A video, a song or a photo kept on this phone",
+                () -> mediaPicker.launch("*/*"), true),
+            new Kit.Action(R.drawable.csi_link, "A link", "YouTube, or share a video from another app",
+                this::castYoutube, true),
+            new Kit.Action(Kit.Icon.NOTES, "A note", "Shown large, easy to read across a room",
+                this::chooseNote, true))));
+        sections.add(new Kit.Section("This screen", java.util.Arrays.asList(
+            new Kit.Action(R.drawable.csi_image, "Cover image", "Shown when nothing is playing", this::coverSheet, true),
+            new Kit.Action(Kit.Icon.DISPLAY, "Display", null, () -> DisplaySheet.open(this), true).value(displayName))));
+        Kit.sections(host, sections, null);
+        loadIdleFacts();
+    }
+
+    /** Read the cover and the screen's name from the Pi, and redraw the idle page when either is news. */
+    private void loadIdleFacts() {
+        new Thread(() -> {
+            Bitmap picture = null;
+            try {
+                byte[] jpeg = client.getBytes("/v1/display/wallpaper/image", 10 * 1024 * 1024);
+                BitmapFactory.Options options = new BitmapFactory.Options();
+                options.inJustDecodeBounds = true;
+                BitmapFactory.decodeByteArray(jpeg, 0, jpeg.length, options);
+                options.inSampleSize = 1;
+                while (options.outWidth / options.inSampleSize > 1280) options.inSampleSize *= 2;
+                options.inJustDecodeBounds = false;
+                picture = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.length, options);
+            } catch (Exception none) { }
+            String name = DisplaySheet.current(client);
+            Bitmap cover = picture;
+            ui.post(() -> {
+                if (!screenActive) return;
+                boolean news = (cover != null) != coverStored || !java.util.Objects.equals(name, displayName);
+                coverStored = cover != null;
+                coverPicture = cover;
+                displayName = name;
+                // Dropping the record makes the next refresh draw the page again with what was just read.
+                if (news && "pi".equals(idleShown)) idleShown = null;
+            });
+        }, "media-idle-facts").start();
+    }
+
+    /** Offer each folder at the top of a connected drive; the Pi says so when one has no photos. */
+    private void chooseSlideshow() {
+        new Thread(() -> {
+            java.util.List<Kit.Action> folders = new java.util.ArrayList<>();
+            String problem = null;
+            try {
+                JSONArray drives = client.get("/v1/drives").getJSONArray("drives");
+                for (int i = 0; i < drives.length(); i++) {
+                    JSONObject drive = drives.getJSONObject(i);
+                    if (!drive.optBoolean("online")) continue;
+                    String source = drive.getString("id"), label = drive.optString("label", source);
+                    JSONArray items = client.get("/v1/items?driveId=" + MediaClient.enc(source) + "&path=&offset=0")
+                        .getJSONArray("items");
+                    for (int j = 0; j < items.length(); j++) {
+                        JSONObject item = items.getJSONObject(j);
+                        if (!item.optBoolean("directory")) continue;
+                        String name = item.optString("name");
+                        folders.add(new Kit.Action(Kit.Icon.FOLDER, name, label,
+                            () -> slideshow(source, item.optString("relativePath"), name)));
+                    }
+                }
+            } catch (Exception error) { problem = friendlyError(error); }
+            String failure = problem;
+            ui.post(() -> {
+                if (!screenActive) return;
+                if (failure != null) Kit.sheet(this, "Photos as a slideshow", failure);
+                else if (folders.isEmpty()) Kit.sheet(this, "Photos as a slideshow", "No connected drive has a folder to show.");
+                else Kit.sheet(this, "Photos as a slideshow", "Choose a folder. Its photos show in turn on the Pi screen.",
+                    folders.toArray(new Kit.Action[0]));
+            });
+        }, "media-slideshow-folders").start();
+    }
+
+    /** Offer the notes kept on the Pi, and put the chosen one up on its screen. */
+    private void chooseNote() {
+        new Thread(() -> {
+            java.util.List<Kit.Action> notes = new java.util.ArrayList<>();
+            String problem = null;
+            try {
+                JSONArray all = client.get("/v1/notes").getJSONArray("notes");
+                for (int i = 0; i < all.length(); i++) {
+                    JSONObject note = all.getJSONObject(i);
+                    notes.add(new Kit.Action(Kit.Icon.NOTES, note.optString("title", "Note"), null,
+                        () -> showNote(note.optString("id"))));
+                }
+            } catch (Exception error) { problem = friendlyError(error); }
+            String failure = problem;
+            ui.post(() -> {
+                if (!screenActive) return;
+                if (failure != null) Kit.sheet(this, "Show a note", failure);
+                else if (notes.isEmpty()) Kit.sheet(this, "Show a note", "There are no notes on the Pi yet.");
+                else Kit.sheet(this, "Show a note", "On the Pi screen", notes.toArray(new Kit.Action[0]));
+            });
+        }, "media-note-list").start();
+    }
+
+    private void showNote(String id) {
+        new Thread(() -> {
+            String problem = null;
+            boolean lit = false;
+            try {
+                JSONObject note = client.get("/v1/notes/" + MediaClient.enc(id)).getJSONObject("note");
+                String words = note.optString("body").trim();
+                lit = client.post("/v1/display/show", new JSONObject().put("title", note.optString("title"))
+                    .put("text", words.isEmpty() ? note.optString("title") : MediaClient.screenText(words)))
+                    .optBoolean("sentToDisplay");
+            } catch (Exception error) { problem = friendlyError(error); }
+            String failure = problem;
+            boolean shown = lit;
+            ui.post(() -> {
+                if (!screenActive) return;
+                if (failure != null) Kit.sheet(this, "It was not shown", failure);
+                else toast(shown ? "Showing on the Pi screen" : "Sent. The Pi screen is off");
+            });
+        }, "media-note-show").start();
+    }
+
+    /** The cover as it is now, with the way to choose another. */
+    private void coverSheet() {
+        Kit.pictureSheet(this, "Cover image",
+            coverStored ? "Shown when nothing is playing" : "No cover is saved. The screen is blank when nothing is playing.",
+            coverPicture, R.drawable.csi_plus, "Choose an image", () -> wallpaperPicker.launch("image/*"));
+    }
+
+    private void toast(String words) {
+        android.widget.Toast.makeText(this, words, android.widget.Toast.LENGTH_SHORT).show();
+    }
+
     private void clearRows(String title) {
         rows.removeAllViews();
         itemGroup = null;
-        setStatus(title);
+        heading(title);
     }
 
     /** A row in the current list card: drives, empty states and "load more". A null click means it only informs. */
@@ -669,25 +886,52 @@ public final class MediaActivity extends AppCompatActivity {
     private void renderTop() {
         View top = findViewById(R.id.media_top);
         if (fullPlayer || videoMode) {
-            Kit.pageTop(top, () -> { if (videoMode) exitVideoMode(); else closeFullPlayer(); },
-                new Kit.Crumb(Kit.Icon.MEDIA, "Media", this::closeFullPlayer),
-                new Kit.Crumb(R.drawable.csi_play, "Player", null));
+            // The page is named for the output it shows, so the path reads Media, then Pi screen or This phone.
+            Kit.pageTop(top, "pi".equals(target) ? "pi-screen" : "phone-player",
+                id -> { if (videoMode) exitVideoMode(); else closeFullPlayer(); });
             return;
         }
         Kit.pageTop(top, "media", id -> { });
-        if (activeTab != R.id.media_files) return;
+        if (activeTab != FILES) return;
         Kit.topAction(top, Kit.Icon.SEARCH, "Search this source", v -> {
-            findViewById(R.id.media_search_line).setVisibility(View.VISIBLE);
-            search.requestFocus();
+            // The box appears when asked for, so the list starts higher; a second tap puts it away.
+            View line = findViewById(R.id.media_search_line);
+            boolean opening = line.getVisibility() != View.VISIBLE;
+            line.setVisibility(opening ? View.VISIBLE : View.GONE);
+            android.view.inputmethod.InputMethodManager keys =
+                (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            if (opening) { search.requestFocus(); keys.showSoftInput(search, 0); }
+            else keys.hideSoftInputFromWindow(search.getWindowToken(), 0);
         });
-        Kit.topAction(top, Kit.Icon.SOURCE, "Switch source", v -> Kit.sheet(this, "Choose a source", null,
-            new Kit.Action(Kit.Icon.FILES, "Pi drives", "Browse storage connected to the Pi",
-                () -> { driveId = ""; path = ""; drives(); }),
-            new Kit.Action(Kit.Icon.DEVICE, "A file on this phone", "Play it on the Pi screen",
-                () -> mediaPicker.launch("*/*")),
-            new Kit.Action(Kit.Icon.VIDEO, "A YouTube link", "Play it on the Pi screen", this::castYoutube),
-            new Kit.Action(Kit.Icon.PHOTO, "Pi screen image", "Choose the picture the Pi shows when idle",
-                () -> wallpaperPicker.launch("image/*"))));
+        Kit.topAction(top, Kit.Icon.SOURCE, "Switch source", v -> chooseSource());
+    }
+
+    /** The drives to browse, each with whether it is connected. Picking one opens it. */
+    private void chooseSource() {
+        new Thread(() -> {
+            JSONArray found = null;
+            try { found = client.get("/v1/drives").getJSONArray("drives"); }
+            catch (Exception unreachable) { }
+            JSONArray drives = found;
+            ui.post(() -> {
+                if (!screenActive) return;
+                if (drives == null) { Kit.sheet(this, "Choose a source", "The Pi cannot be reached, so its drives are not known."); return; }
+                java.util.List<Kit.Action> choices = new java.util.ArrayList<>();
+                for (int i = 0; i < drives.length(); i++) {
+                    JSONObject drive = drives.optJSONObject(i);
+                    if (drive == null) continue;
+                    String id = drive.optString("id"), label = drive.optString("label", id);
+                    boolean online = drive.optBoolean("online");
+                    choices.add(new Kit.Action(id.equals(driveId) ? R.drawable.csi_check : Kit.Icon.FILES, label, null, () -> {
+                        if (!online) { toast(label + " is disconnected"); return; }
+                        driveId = id; driveLabel = label; path = "";
+                        selectTab(FILES);
+                        browse();
+                    }).value(online ? "Connected" : "Disconnected"));
+                }
+                Kit.sheet(this, "Choose a source", null, choices.toArray(new Kit.Action[0]));
+            });
+        }, "media-sources").start();
     }
 
     private void drives() {
@@ -696,15 +940,12 @@ public final class MediaActivity extends AppCompatActivity {
         driveId = "";
         driveLabel = "";
         path = "";
-        selectTab(R.id.media_files);
+        selectTab(FILES);
         search.setHint("Search a connected drive");
-        ((TextView) findViewById(R.id.media_subtitle)).setText("Search connected media, then choose where a file plays.");
-        long startingIntent = outputIntent;
+        showScope();
         clearRows("Checking drives");
         listingRequest(listing, () -> client.get("/v1/drives"), result -> {
-            String activeStatus = status.getText().toString();
-            clearRows("Choose a drive");
-            if (outputIntent != startingIntent) setStatus(activeStatus);
+            clearRows("Drives");
             syncPendingProgress();
             JSONArray values = result.getJSONArray("drives");
             JSONObject firstOnline = null;
@@ -716,8 +957,12 @@ public final class MediaActivity extends AppCompatActivity {
                 if (online && firstOnline == null) firstOnline = drive;
                 String label = drive.getString("label");
                 driveLabels.put(id, label);
-                row(Kit.Icon.FILES, label, online ? "Available · read-only" : "Disconnected · connect this drive",
-                    online ? v -> { driveId = id; driveLabel = label; path = ""; browse(); } : null);
+                if (itemGroup == null) itemGroup = Kit.group(rows);
+                View row = Kit.addRow(itemGroup);
+                Kit.bindRow(row, Kit.Icon.FILES, label, null, null, online);
+                Kit.rowStatus(row, online ? Kit.Status.GOOD : Kit.Status.IDLE, online ? "Connected" : "Disconnected");
+                if (online) row.setOnClickListener(v -> { driveId = id; driveLabel = label; path = ""; browse(); });
+                else row.setClickable(false);
             }
             if (firstDriveLoad) {
                 firstDriveLoad = false;
@@ -725,7 +970,7 @@ public final class MediaActivity extends AppCompatActivity {
                     driveId = firstOnline.getString("id");
                     driveLabel = firstOnline.getString("label");
                     path = "";
-                    selectTab(R.id.media_files);
+                    selectTab(FILES);
                     browse();
                 }
             }
@@ -737,29 +982,33 @@ public final class MediaActivity extends AppCompatActivity {
     private void browse(int offset, boolean append) {
         long listing = ++listingIntent;
         showingVideos = false;
-        search.setHint("Search " + driveLabel);
         search.setHint("Search connected media");
-        ((TextView) findViewById(R.id.media_subtitle)).setText("Browsing " + driveLabel + (path.isEmpty() ? "" : " · " + path));
+        showScope();
         String requestedDrive = driveId, requestedPath = path;
         if (!append) clearRows("Opening " + path);
         listingRequest(listing, () -> client.get("/v1/items?driveId=" + MediaClient.enc(requestedDrive) +
             "&path=" + MediaClient.enc(requestedPath) + "&offset=" + offset), result -> {
             if (!requestedDrive.equals(driveId) || !requestedPath.equals(path)) return;
             JSONArray items = result.getJSONArray("items");
+            int slash = path.lastIndexOf('/');
+            String parent = slash < 0 ? "" : path.substring(0, slash);
+            String above = parent.isEmpty() ? driveLabel : parent.substring(parent.lastIndexOf('/') + 1);
+            Runnable up = () -> { path = parent; browse(); };
             if (!append) {
-                boolean foldersOnly = items.length() > 0;
-                for (int i = 0; i < items.length(); i++)
-                    foldersOnly &= items.getJSONObject(i).optBoolean("directory");
-                clearRows(path.isEmpty() && foldersOnly ? "Folders" : path.isEmpty() ? "Files" : path);
+                listedFolder = listedFile = false;
+                // The Pi lists folders first, so the first thing decides which heading the list opens under.
+                clearRows(items.length() == 0 ? "" : items.getJSONObject(0).optBoolean("directory") ? "Folders" : "Files");
+                if (items.length() == 0) Kit.empty(rows, Kit.Icon.FOLDER, "This folder is empty", null,
+                    path.isEmpty() ? null : Kit.button(this, R.drawable.csi_back, "Up to " + above, R.color.text, up));
+                else if (!path.isEmpty()) row(R.drawable.csi_back, "Up", above, v -> up.run());
             }
-            if (!append && !path.isEmpty()) {
-                int slash = path.lastIndexOf('/');
-                String parent = slash < 0 ? "" : path.substring(0, slash);
-                row(R.drawable.csi_back, "Up", parent.isEmpty() ? driveLabel : parent,
-                    v -> { path = parent; browse(); });
+            for (int i = 0; i < items.length(); i++) {
+                JSONObject item = items.getJSONObject(i);
+                boolean folder = item.optBoolean("directory");
+                if (!folder && listedFolder && !listedFile) { itemGroup = null; Kit.label(rows, "Files"); }
+                if (folder) listedFolder = true; else listedFile = true;
+                showItem(item, false);
             }
-            if (!append && items.length() == 0) row(R.drawable.csi_info, "No files here", "Choose another folder or search", null);
-            for (int i = 0; i < items.length(); i++) showItem(items.getJSONObject(i));
             if (!result.isNull("nextOffset")) {
                 int next = result.getInt("nextOffset");
                 row(R.drawable.csi_expand, "Load more", "Continue browsing this folder", v -> {
@@ -778,10 +1027,12 @@ public final class MediaActivity extends AppCompatActivity {
         if (!append) clearRows("Finding videos on connected drives");
         listingRequest(listing, () -> client.get("/v1/videos?offset=" + offset), result -> {
             if (!showingVideos) return;
-            if (!append) clearRows("Videos · " + result.getInt("total") + " files");
+            int total = result.getInt("total");
+            if (!append) clearRows(total == 0 ? "" : (total == 1 ? "1 video" : total + " videos") + " on every connected drive");
             JSONArray items = result.getJSONArray("items");
             if (!append && items.length() == 0)
-                row(R.drawable.csi_info, "No videos found", "Connect a drive or browse its folders", null);
+                Kit.empty(rows, Kit.Icon.VIDEO, "No videos on the connected drives", "Videos in any folder of a drive are listed here.",
+                    Kit.button(this, Kit.Icon.FILES, "Browse Files", R.color.text, () -> openTab(FILES)));
             for (int i = 0; i < items.length(); i++) {
                 JSONObject item = items.getJSONObject(i);
                 mediaItemRow(item, false, placeWords(item));
@@ -799,28 +1050,37 @@ public final class MediaActivity extends AppCompatActivity {
     private void find() {
         long listing = ++listingIntent;
         String term = search.getText().toString().trim();
-        if (term.isEmpty()) { setStatus("Enter a file name"); return; }
+        if (term.isEmpty()) { say("Enter a file name"); return; }
         clearRows("Searching");
         listingRequest(listing, () -> client.get("/v1/search?q=" + MediaClient.enc(term)),
             result -> showItems(result.getJSONArray("items"), result.optBoolean("truncated") ? "First results; narrow your search" : "Search results"));
     }
 
     private void showItems(JSONArray items, String title) throws Exception {
-        clearRows(title);
-        if (items.length() == 0) row(R.drawable.csi_info, "No matches", "Try another file name or connect a drive", null);
+        clearRows(items.length() == 0 ? "" : title);
+        if (items.length() == 0) Kit.empty(rows, Kit.Icon.SEARCH, "Nothing matches \"" + search.getText().toString().trim() + "\"",
+            "Every connected drive was searched.", null);
         for (int i = 0; i < items.length(); i++) {
-            showItem(items.getJSONObject(i));
+            showItem(items.getJSONObject(i), true);
         }
     }
 
-    private void showItem(JSONObject item) {
+    /**
+     * One file or folder in a list. While browsing, the line under the name says how much is in
+     * it; among search results it says where the thing lives, since they come from anywhere.
+     */
+    private void showItem(JSONObject item, boolean found) {
         boolean folder = item.optBoolean("directory");
-        String sourceId = item.optString("driveId");
-        String mime = item.optString("mime");
-        String kind = folder ? "Folder" : mime.startsWith("video/") ? "Video" :
-            mime.startsWith("image/") ? "Photo" : mime.startsWith("audio/") ? "Audio" : "File";
-        mediaItemRow(item, folder, kind + " · " + driveLabels.getOrDefault(sourceId, sourceId));
+        String detail;
+        if (found) detail = folder ? "Folder in " + placeWords(item) : placeWords(item);
+        else if (!folder) detail = sizeWords(item.optLong("size"));
+        else if (item.has("count")) detail = item.optInt("count") == 1 ? "1 item" : item.optInt("count") + " items";
+        else detail = null;
+        mediaItemRow(item, folder, detail);
     }
+
+    // Whether the list being filled has shown a folder or a file yet, which decides when the Files heading goes in.
+    private boolean listedFolder, listedFile;
 
     private void mediaItemRow(JSONObject item, boolean folder, String detail) {
         if (itemGroup == null) itemGroup = Kit.group(rows);
@@ -828,7 +1088,7 @@ public final class MediaActivity extends AppCompatActivity {
         String mime = item.optString("mime");
         String name = folder ? item.optString("name") : displayMediaName(item.optString("name"));
         Kit.bindRow(row, folder ? Kit.Icon.FOLDER : mime.startsWith("image/") ? Kit.Icon.PHOTO
-            : mime.startsWith("video/") ? Kit.Icon.VIDEO : Kit.Icon.FILE, name, detail, null, false);
+            : mime.startsWith("video/") ? Kit.Icon.VIDEO : Kit.Icon.FILE, name, detail, null, true);
         Runnable open = () -> {
             if (folder) {
                 driveId = item.optString("driveId");
@@ -838,20 +1098,18 @@ public final class MediaActivity extends AppCompatActivity {
             } else chooseTarget(item);
         };
         row.setOnClickListener(v -> open.run());
-        Kit.rowAction(row, R.drawable.csi_menu, "Actions for " + name, v -> {
-            if (folder) Kit.sheet(this, name, "Folder",
+        // A file's row already opens its choices. A folder's row opens the folder, so its choices get their own button.
+        if (folder) Kit.rowAction(row, R.drawable.csi_menu, "What to do with the folder " + name, v ->
+            Kit.sheet(this, name, detail == null ? "Folder" : "Folder, " + detail,
                 new Kit.Action(Kit.Icon.FOLDER, "Open", null, open),
                 new Kit.Action(Kit.Icon.DISPLAY, "Photos as a slideshow", "Every image in this folder, in turn, on the Pi screen",
                     () -> slideshow(item.optString("driveId"), item.optString("relativePath"), name)),
                 new Kit.Action(R.drawable.csi_copy, "Copy path", item.optString("relativePath"),
-                    () -> copy(item.optString("relativePath"))));
-            else chooseTarget(item);
-        });
+                    () -> copy(item.optString("relativePath")))));
     }
 
     /** Show a folder's photos on the Pi screen one after another. The Pi says so when the folder has none. */
     private void slideshow(String drive, String folder, String name) {
-        setStatus("Starting the slideshow on the Pi screen");
         new Thread(() -> {
             String problem = null;
             boolean lit = false;
@@ -862,10 +1120,9 @@ public final class MediaActivity extends AppCompatActivity {
             String failure = problem;
             boolean shown = lit;
             runOnUiThread(() -> {
-                if (failure != null) {
-                    setStatus("The slideshow did not start");
-                    Kit.sheet(this, "The slideshow did not start", failure);
-                } else setStatus(shown ? "Showing the photos in " + name + " on the Pi screen" : "Sent. The Pi screen is off");
+                // The line above the list names the list, so what happened is said in a toast instead.
+                if (failure != null) Kit.sheet(this, "The slideshow did not start", failure);
+                else toast(shown ? "Showing the photos in " + name + " on the Pi screen" : "Sent. The Pi screen is off");
             });
         }, "media-slideshow").start();
     }
@@ -878,7 +1135,7 @@ public final class MediaActivity extends AppCompatActivity {
         file.sub = placeWords(item);
         file.file = got -> {
             try { got.file(mediaUri(item), mime); }
-            catch (org.json.JSONException incomplete) { setStatus("This file cannot be read from the Pi"); }
+            catch (org.json.JSONException incomplete) { say("This file cannot be read from the Pi"); }
         };
         file.own.put(ItemActions.Act.PLAY_PI, () -> playPi(item));
         file.own.put(ItemActions.Act.PLAY_PHONE, () -> playPhone(item, 0));
@@ -916,8 +1173,7 @@ public final class MediaActivity extends AppCompatActivity {
             selected = item;
             nowPlaying.setText("VLC: " + item.optString("name"));
             output.setText("VLC owns playback; use its pause, seek, and volume controls");
-            setStatus("Streaming Pi file through csync to VLC");
-        } catch (Exception error) { setStatus("VLC could not open this file: " + error.getMessage()); }
+        } catch (Exception error) { say("VLC could not open this file: " + error.getMessage()); }
     }
 
     private void playPi(JSONObject item) {
@@ -958,14 +1214,13 @@ public final class MediaActivity extends AppCompatActivity {
             return result;
         }, result -> { nowPlaying.setText(displayMediaName(item.optString("name")));
             showFullPlayer();
-            setStatus("Playing on Pi projector; starts muted. Choose Volume for sound."); });
+            say("It starts muted. Use Volume for sound."); });
     }
 
     private void playPhone(JSONObject item, int resumeMs) {
         final long intent = ++outputIntent;
         target = "phone";
         selected = item;
-        setStatus("Switching playback to phone");
         new Thread(() -> {
             try {
                 JSONObject state = client.get("/v1/player/pi");
@@ -989,7 +1244,6 @@ public final class MediaActivity extends AppCompatActivity {
         updateFullPlayer("This phone", "loading", phoneTitle, 0, 0, 0, 1);
         nowPlaying.setText(displayMediaName(item.optString("name")));
         output.setText(externalDisplayText());
-        setStatus("Opening stream");
         PhonePlaybackService.ensure(this);
         ui.postDelayed(new Runnable() {
             int attempts;
@@ -998,7 +1252,7 @@ public final class MediaActivity extends AppCompatActivity {
                 PhonePlaybackService playback = PhonePlaybackService.current;
                 if (playback == null) {
                     if (++attempts < 20) ui.postDelayed(this, 100);
-                    else setStatus("Phone playback service did not start");
+                    else say("Playback on this phone did not start. Try again.");
                     return;
                 }
                 playback.attach(phoneObserver, audioOnly ? null : video.getHolder());
@@ -1022,7 +1276,7 @@ public final class MediaActivity extends AppCompatActivity {
     }
 
     private void control(String action) {
-        if ("vlc".equals(target)) { setStatus("Use VLC controls for this playback"); return; }
+        if ("vlc".equals(target)) { say("Use VLC controls for this playback"); return; }
         if (action.equals("stop")) {
             // A Rotate or Loop tap still waiting to apply must not reach a stopped player.
             ui.removeCallbacks(commitRotation);
@@ -1034,44 +1288,45 @@ public final class MediaActivity extends AppCompatActivity {
         }
         if ("phone".equals(target)) {
             PhonePlaybackService playback = PhonePlaybackService.current;
-            if (action.equals("stop")) { setStatus("Phone playback stopped"); return; }
-            if (playback == null) { setStatus("Phone player is stopped"); return; }
+            if (action.equals("stop") || playback == null) return;
             playback.control(action);
             return;
         }
         if (action.equals("pause") || action.equals("stop")) {
             request(() -> client.post("/v1/player/pi/immediate", new JSONObject().put("action", action)),
-                result -> {
-                    JSONObject state = result.getJSONObject("player");
-                    nowPlaying.setText("Pi: " + state.optString("state"));
-                    setStatus(action.equals("stop") ? "Pi playback stopped" : "Pi playback paused");
-                });
+                result -> { });
             return;
         }
         request(() -> {
             JSONObject state = client.get("/v1/player/pi");
             return client.post("/v1/player/pi/commands", new JSONObject().put("action", action)
                 .put("expectedRevision", state.getInt("revision")));
-        }, result -> setStatus("Pi " + result.optString("status")));
+        }, this::sayIfRefused);
+    }
+
+    /** A command the Pi takes shows in the player by itself; only one it turns down needs saying. */
+    private void sayIfRefused(JSONObject result) {
+        if (result.has("status") && !"applied".equals(result.optString("status")))
+            say("The Pi did not take that, so nothing changed.");
     }
 
     private void mute() {
-        if ("vlc".equals(target)) { setStatus("Use VLC to mute this playback"); return; }
+        if ("vlc".equals(target)) { say("Use VLC to mute this playback"); return; }
         if ("phone".equals(target)) {
             PhonePlaybackService playback = PhonePlaybackService.current;
-            if (playback == null) { setStatus("Phone player is stopped"); return; }
+            if (playback == null) return;
             playback.setting("volume", 0);
             return;
         }
         request(() -> client.post("/v1/player/pi/immediate", new JSONObject().put("action", "mute")),
-            result -> setStatus("Pi muted"));
+            result -> say("Muted on the Pi screen"));
     }
 
     private void controlSeek(int positionMs) {
-        if ("vlc".equals(target)) { setStatus("Use VLC to seek this file"); return; }
+        if ("vlc".equals(target)) { say("Use VLC to seek this file"); return; }
         if ("phone".equals(target)) {
             PhonePlaybackService playback = PhonePlaybackService.current;
-            if (playback == null) { setStatus("Phone player is stopped"); return; }
+            if (playback == null) return;
             playback.seek(positionMs);
             return;
         }
@@ -1079,7 +1334,7 @@ public final class MediaActivity extends AppCompatActivity {
             JSONObject state = client.get("/v1/player/pi");
             return client.post("/v1/player/pi/commands", new JSONObject().put("action", "seek")
                 .put("positionMs", positionMs).put("expectedRevision", state.getInt("revision")));
-        }, result -> setStatus("Pi seek " + result.optString("status")));
+        }, this::sayIfRefused);
     }
 
     private void chooseSetting() {
@@ -1157,7 +1412,7 @@ public final class MediaActivity extends AppCompatActivity {
                 .put("value", value).put("expectedRevision", state.getInt("revision")));
         }, result -> {
             if (!"applied".equals(result.optString("status"))) {
-                setStatus("Pi did not apply " + action);
+                say("The Pi did not take that, so nothing changed.");
                 return;
             }
             JSONObject state = result.optJSONObject("player");
@@ -1183,24 +1438,24 @@ public final class MediaActivity extends AppCompatActivity {
     }
 
     private void changeSetting(String action, double value) {
-        if ("vlc".equals(target)) { setStatus("Use VLC playback settings"); return; }
+        if ("vlc".equals(target)) { say("Use VLC playback settings"); return; }
         if ("phone".equals(target)) {
             PhonePlaybackService playback = PhonePlaybackService.current;
-            if (playback == null) { setStatus("Phone player is stopped"); return; }
+            if (playback == null) return;
             playback.setting(action, value);
             return;
         }
         if (action.equals("volume")) {
             request(() -> client.post("/v1/player/pi/immediate", new JSONObject()
                     .put("action", "volume").put("value", value)),
-                result -> setStatus("Pi volume " + Math.round(value) + "%"));
+                result -> { });
             return;
         }
         request(() -> {
             JSONObject state = client.get("/v1/player/pi");
             return client.post("/v1/player/pi/commands", new JSONObject().put("action", action)
                 .put("value", value).put("expectedRevision", state.getInt("revision")));
-        }, result -> setStatus("Pi " + action + " " + value));
+        }, this::sayIfRefused);
     }
 
     private void enterVideoMode() {
@@ -1208,7 +1463,7 @@ public final class MediaActivity extends AppCompatActivity {
         findViewById(R.id.media_full_player).setVisibility(View.GONE);
         videoMode = true;
         renderTop();
-        for (int id : new int[]{R.id.media_sections, R.id.media_search_line, R.id.media_status, R.id.media_list})
+        for (int id : new int[]{R.id.media_search_line, R.id.media_list})
             findViewById(id).setVisibility(View.GONE);
         findViewById(R.id.media_actions_toggle).setVisibility(View.GONE);
         findViewById(R.id.media_actions).setVisibility(View.GONE);
@@ -1239,8 +1494,7 @@ public final class MediaActivity extends AppCompatActivity {
         findViewById(R.id.media_actions_toggle).setVisibility(View.GONE);
         findViewById(R.id.media_bottom_nav).setVisibility(View.VISIBLE);
         Appearance.applySystemBars(this);
-        for (int id : new int[]{R.id.media_sections, R.id.media_search_line, R.id.media_status, R.id.media_list})
-            findViewById(id).setVisibility(View.VISIBLE);
+        findViewById(R.id.media_list).setVisibility(View.VISIBLE);
         selectTab(activeTab);
         video.setVisibility(View.GONE);
         video.setLayoutParams(new LinearLayout.LayoutParams(
@@ -1322,7 +1576,8 @@ public final class MediaActivity extends AppCompatActivity {
             } catch (Exception ignored) {}
         }
         if (entries.isEmpty()) {
-            row(Kit.Icon.HISTORY, "No playback yet", "Play a file to save its position", null);
+            Kit.empty(rows, Kit.Icon.HISTORY, "Nothing played yet", "Your place in everything you play is kept here.",
+                Kit.button(this, Kit.Icon.FILES, "Browse Files", R.color.text, () -> openTab(FILES)));
             return;
         }
         java.util.List<JSONObject> sorted = new java.util.ArrayList<>(entries.values());
@@ -1359,23 +1614,29 @@ public final class MediaActivity extends AppCompatActivity {
         if (source.isEmpty()) source = "Saved media";
         String destination = "phone".equals(entry.optString("target")) ? "This phone" : "Pi screen";
         int seconds = Math.max(0, entry.optInt("positionMs")) / 1000;
-        String progress = canResume ? String.format(java.util.Locale.US, "Resume at %d:%02d", seconds / 60, seconds % 60)
-            : entry.optBoolean("completed") ? "Finished" : "Saved at start";
+        String clock = String.format(java.util.Locale.US, "%d:%02d", seconds / 60, seconds % 60);
+        String progress = canResume ? "stopped at " + clock : entry.optBoolean("completed") ? "finished" : "not started";
         Kit.bindRow(row, favorites().contains(name) ? R.drawable.csi_favorite : Kit.Icon.HISTORY, name,
-            source + " · " + destination + " · " + progress,
-            canResume ? "Resume" : null, true);
+            destination + " · " + progress, null, true);
+        String from = source;
         row.setOnClickListener(v -> {
             JSONObject item = new JSONObject();
             try { item.put("id", entry.getString("itemId")); item.put("name", entry.optString("name", "Saved media"));
                 item.put("mime", entry.optString("mime")); }
-            catch (Exception error) { setStatus(error.getMessage()); return; }
-            String playbackTarget = entry.optString("target", "pi");
+            catch (Exception error) { say("This item can no longer be played."); return; }
+            boolean onPhone = "phone".equals(entry.optString("target", "pi"));
             int resumeAt = entry.optBoolean("completed") ? 0 : entry.optInt("positionMs");
-            Runnable resume = () -> { if (playbackTarget.equals("phone")) playPhone(item, resumeAt); else playPi(item, resumeAt); };
-            Runnable restart = () -> { if (playbackTarget.equals("phone")) playPhone(item, 0); else playPi(item, 0); };
-            Kit.sheet(this, name, destination,
-                new Kit.Action(R.drawable.csi_play, "Resume", progress, resume),
-                new Kit.Action(R.drawable.csi_rewind, "Start over", null, restart));
+            // Each choice names where it plays, so resuming never lands on an output nobody chose.
+            String here = onPhone ? "this phone" : "Pi screen", other = onPhone ? "Pi screen" : "this phone";
+            int hereIcon = onPhone ? Kit.Icon.DEVICE : Kit.Icon.DISPLAY, otherIcon = onPhone ? Kit.Icon.DISPLAY : Kit.Icon.DEVICE;
+            java.util.List<Kit.Action> choices = new java.util.ArrayList<>();
+            if (canResume) choices.add(new Kit.Action(R.drawable.csi_play, "Resume on " + here, "From " + clock,
+                () -> { if (onPhone) playPhone(item, resumeAt); else playPi(item, resumeAt); }));
+            choices.add(new Kit.Action(R.drawable.csi_rewind, (canResume ? "Start over on " : "Play on ") + here, null,
+                () -> { if (onPhone) playPhone(item, 0); else playPi(item, 0); }));
+            choices.add(new Kit.Action(otherIcon, (canResume ? "Resume on " : "Play on ") + other, canResume ? "From " + clock : null,
+                () -> { if (onPhone) playPi(item, resumeAt); else playPhone(item, resumeAt); }));
+            Kit.sheet(this, name, from + " · " + progress, choices.toArray(new Kit.Action[0]));
         });
     }
 
@@ -1383,26 +1644,24 @@ public final class MediaActivity extends AppCompatActivity {
         long listing = ++listingIntent;
         String host = Prefs.assistIp(this);
         clearRows("");
-        accessSection("Pi USB access");
+        // The Pi shares each drive under its own name, which is not the name the drive is shown by.
+        accessSection("Open the drives from a computer");
         LinearLayout primary = accessGroup();
-        accessAddress(primary, "SMB address", "smb://" + host + "/sandisk");
-        accessAddress(primary, "FTP address", "ftp://" + host + "/Media");
-        accessSection("Sources");
+        accessAddress(primary, "Pi USB over SMB", "smb://" + host + "/sandisk");
+        accessAddress(primary, "Pi USB over FTP", "ftp://" + host + "/Media");
+        accessAddress(primary, "Elements over SMB", "smb://" + host + "/seagate-elements");
+        accessAddress(primary, "Elements over FTP", "ftp://" + host + "/Elements");
+        accessSection("Drives");
         LinearLayout sources = accessGroup();
-        accessRow(sources, "Checking Pi drives", "Reading mounted storage", Kit.Icon.FILES,
-            R.drawable.csi_forward, "Check Pi drives", v -> connections());
-        accessSection("Connection");
-        LinearLayout connection = accessGroup();
-        accessRow(connection, "Check Pi media service", "Checking reachability and drive mounts",
-            Kit.Icon.ACCESS, R.drawable.csi_forward, "Recheck Pi media service",
-            v -> connections());
-        accessSection("Other Pi addresses");
+        View checking = Kit.addRow(sources);
+        Kit.bindRow(checking, Kit.Icon.FILES, "Pi drives", null, null, false);
+        Kit.rowStatus(checking, Kit.Status.WARN, "Checking");
+        checking.setClickable(false);
+        accessSection("Other folders the Pi shares");
         LinearLayout extra = accessGroup();
-        accessAddress(extra, "SMB media", "smb://" + host + "/media");
-        accessAddress(extra, "SMB files", "smb://" + host + "/files");
-        accessAddress(extra, "SMB Elements", "smb://" + host + "/seagate-elements");
-        accessAddress(extra, "FTP Elements", "ftp://" + host + "/Elements");
-        accessAddress(extra, "SFTP", "sftp://" + host);
+        accessAddress(extra, "Media folder over SMB", "smb://" + host + "/media");
+        accessAddress(extra, "Files folder over SMB", "smb://" + host + "/files");
+        accessAddress(extra, "The whole Pi over SFTP", "sftp://" + host);
         listingRequest(listing, () -> {
             try { return client.get("/v1/drives"); }
             catch (Exception error) { return new JSONObject().put("error", friendlyError(error)); }
@@ -1410,31 +1669,30 @@ public final class MediaActivity extends AppCompatActivity {
             sources.removeAllViews();
             JSONArray drives = result.optJSONArray("drives");
             if (drives == null || drives.length() == 0) {
-                accessRow(sources, "Pi drives unavailable", result.optString("error", "No drive status reported"),
-                    Kit.Icon.FILES, R.drawable.csi_forward, "Retry drive status",
-                    v -> connections());
-            } else {
-                for (int i = 0; i < drives.length(); i++) {
-                    JSONObject drive = drives.optJSONObject(i);
-                    if (drive == null) continue;
-                    String label = drive.optString("label", drive.optString("id", "Drive"));
-                    String detail = drive.optBoolean("online") ? "Attached · available to browse" :
-                        "Disconnected · saved history remains";
-                    accessRow(sources, label, detail, Kit.Icon.FILES,
-                        R.drawable.csi_forward, "Browse " + label, v -> {
-                            driveId = drive.optString("id");
-                            driveLabel = label;
-                            path = "";
-                            selectTab(R.id.media_files);
-                            browse();
-                        });
-                }
+                View row = Kit.addRow(sources);
+                Kit.bindRow(row, Kit.Icon.FILES, "The Pi's drives are not known",
+                    result.optString("error", "The Pi did not list any drive."), null, false);
+                Kit.rowAction(row, R.drawable.csi_refresh, "Check the drives again", v -> connections());
+                row.setOnClickListener(v -> connections());
+                return;
             }
-            connection.removeAllViews();
-            String detail = result.has("error") ? result.optString("error") :
-                "Pi media reachable · SMB and FTP sign-in not checked";
-            accessRow(connection, "Check Pi media service", detail, Kit.Icon.ACCESS,
-                R.drawable.csi_forward, "Recheck Pi media service", v -> connections());
+            for (int i = 0; i < drives.length(); i++) {
+                JSONObject drive = drives.optJSONObject(i);
+                if (drive == null) continue;
+                String label = drive.optString("label", drive.optString("id", "Drive"));
+                boolean online = drive.optBoolean("online");
+                View row = Kit.addRow(sources);
+                Kit.bindRow(row, Kit.Icon.FILES, label, null, null, online);
+                Kit.rowStatus(row, online ? Kit.Status.GOOD : Kit.Status.IDLE, online ? "Connected" : "Disconnected");
+                if (!online) { row.setClickable(false); continue; }
+                row.setOnClickListener(v -> {
+                    driveId = drive.optString("id");
+                    driveLabel = label;
+                    path = "";
+                    selectTab(FILES);
+                    browse();
+                });
+            }
         });
     }
 
@@ -1446,26 +1704,19 @@ public final class MediaActivity extends AppCompatActivity {
         return Kit.group(rows);
     }
 
+    /** An address to open a drive from a computer. Tapping the row or its button copies it. */
     private void accessAddress(LinearLayout group, String title, String address) {
-        accessRow(group, title, address, Kit.Icon.ACCESS, R.drawable.csi_copy, "Copy " + title + ": " + address,
-            v -> { copy(address); android.widget.Toast.makeText(this, "Copied address",
-                android.widget.Toast.LENGTH_SHORT).show(); });
-    }
-
-    /** An Access row. A copy action shows as a bordered button; anything else opens, so it gets a chevron. */
-    private void accessRow(LinearLayout group, String title, String detail, int iconId,
-                           int actionId, String description, View.OnClickListener click) {
         View row = Kit.addRow(group);
-        boolean copies = actionId == R.drawable.csi_copy;
-        Kit.bindRow(row, iconId, title, detail, null, !copies);
-        if (copies) Kit.rowAction(row, actionId, description, click);
-        row.setOnClickListener(click);
+        Kit.bindRow(row, Kit.Icon.ACCESS, title, address, null, false);
+        Kit.rowAction(row, R.drawable.csi_copy, "Copy the address of " + title, v -> copy(address));
+        row.setOnClickListener(v -> copy(address));
     }
 
-    private void copy(String address) {
+    private void copy(String words) {
         android.content.ClipboardManager clipboard = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Media address", address));
-        setStatus("Copied " + address);
+        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("csync", words));
+        // Android 13 and later show their own note when something is copied, so a second one is left out there.
+        if (android.os.Build.VERSION.SDK_INT < 33) toast("Copied");
     }
 
     private void refreshState() {
@@ -1504,12 +1755,20 @@ public final class MediaActivity extends AppCompatActivity {
                         boolean active = playerState.equals("playing") || playerState.equals("paused") ||
                             playerState.equals("loading") || playerState.equals("buffering") ||
                             playerState.equals("showing");
-                        findViewById(R.id.media_player_controls).setVisibility(active ? View.VISIBLE : View.GONE);
+                        // On Media the Pi screen's row stays when it is idle: it is the way in to that page.
+                        // The row is the way in to the Pi screen's page, so it stays while idle and leaves on that page.
+                        findViewById(R.id.media_player_controls).setVisibility(fullPlayer || videoMode ? View.GONE : View.VISIBLE);
+                        boolean plays = active && !playerState.equals("showing");
                         findViewById(R.id.media_pause).setVisibility(playerState.equals("playing") ? View.VISIBLE : View.GONE);
                         findViewById(R.id.media_resume).setVisibility(playerState.equals("paused") ? View.VISIBLE : View.GONE);
-                        nowPlaying.setText(displayMediaName(state.optString("name", "Pi media")));
+                        findViewById(R.id.media_stop).setVisibility(active ? View.VISIBLE : View.GONE);
+                        // Sound and speed belong to something that plays, not to a picture or words held on the screen.
+                        findViewById(R.id.media_mute).setVisibility(plays ? View.VISIBLE : View.GONE);
+                        findViewById(R.id.media_settings).setVisibility(plays ? View.VISIBLE : View.GONE);
                         String problem = state.optString("error").isEmpty() ? null : state.optString("error");
-                        output.setText(stateWords("Pi screen", playerState, problem) + " · volume " + state.optInt("volume", 0) + "%");
+                        nowPlaying.setText(active ? displayMediaName(state.optString("name", "Pi media")) : "Pi screen");
+                        output.setText(plays ? stateWords("Pi screen", playerState, problem) + " · volume " + state.optInt("volume", 0) + "%"
+                            : stateWords("Pi screen", playerState, problem));
                         updateFullPlayer("Pi screen", playerState, state.optString("name", ""),
                             state.optInt("positionMs"), state.optInt("durationMs"),
                             state.optInt("volume", 0), state.optDouble("speed", 1), problem);
