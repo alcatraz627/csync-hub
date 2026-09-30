@@ -627,7 +627,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     }
 
     @Override public void onBackPressed() {
-        if (current == 2 && chatConvoMode) openPlace("chat");
+        if (current == 2 && chatConvoMode && chatFind.isOpen()) chatFind.close();
+        else if (current == 2 && chatConvoMode) openPlace("chat");
         else if (current == 1 && shareInboxMode) setShareMode(false);
         else if (current == 6 && moreDetail != 0) showMoreDetail(0);
         else if (current == 4 && settingsDetail != 0) closeSettingsDetail();
@@ -1945,6 +1946,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         chatToggleFav = pageChat.findViewById(R.id.chat_toggle_fav);
         chatToggleArchived = pageChat.findViewById(R.id.chat_toggle_archived);
         markwon = buildMarkwon();
+        chatFind = new ChatFind(pageChat, chatList, chatScroll);
 
         final View expand = pageChat.findViewById(R.id.chat_expand);
         expand.setContentDescription("Drag to resize the message editor");
@@ -2175,9 +2177,11 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         View top = pageChat.findViewById(R.id.chat_top);
         if (chatConvoMode) {
             Kit.pageTop(top, "conversation", this::openPlace);
+            Kit.topAction(top, R.drawable.csi_search, "Find in this conversation", v -> chatFind.open());
             Kit.topAction(top, R.drawable.csi_download, "Save this conversation", v -> exportConversation());
             return;
         }
+        chatFind.close();
         Kit.pageTop(top, "chat", this::openPlace);
         Kit.topAction(top, R.drawable.csi_sliders, "Model for new conversations", v -> openModelSheet("default"));
         Kit.topAction(top, R.drawable.csi_plus, "New chat", v -> newConversation());
@@ -2477,6 +2481,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     }
 
     private void openConversation(String id, String title) {
+        chatFind.close();
         chatSession = id;
         chatConvoMode = true;
         chatHistory.setVisibility(View.GONE);
@@ -2497,6 +2502,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     }
 
     private void newConversation() {
+        chatFind.close();
         chatSession = Prefs.deviceName(this) + "-" + System.currentTimeMillis();
         chatConvoMode = true;
         chatHistory.setVisibility(View.GONE);
@@ -2526,6 +2532,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             if ("user".equals(o.optString("role"))) addUserBubble(o.optString("text"), i);
             else renderSingleTurn(o, i);
         }
+        chatFind.refresh();
     }
 
     private void refreshAgentStatus() {
@@ -2831,6 +2838,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     // Reading back through a long reply: the view stops following once you scroll up, and a row offers the way back.
     private boolean chatFollowing = true;
     private TextView chatJump;
+    private ChatFind chatFind;
 
     private void setupChatFollowing() {
         chatJump = new TextView(this);
@@ -2846,7 +2854,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         chatJump.setOnClickListener(v -> { chatFollowing = true; chatJump.setVisibility(View.GONE); scrollDown(); });
         LinearLayout.LayoutParams at = new LinearLayout.LayoutParams(-2, -2);
         at.gravity = android.view.Gravity.CENTER_HORIZONTAL;
-        chatConvo.addView(chatJump, 1, at);
+        chatConvo.addView(chatJump, chatConvo.indexOfChild(pageChat.findViewById(R.id.chat_composer)), at);
         chatScroll.setOnScrollChangeListener((v, x, y, oldX, oldY) -> {
             boolean atEnd = chatList.getBottom() - (y + chatScroll.getHeight()) < dp(96);
             if (atEnd) { chatFollowing = true; chatJump.setVisibility(View.GONE); }
@@ -2860,6 +2868,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         chatFollowing = true;
         if (chatJump != null) chatJump.setVisibility(View.GONE);
         TextView tv = new TextView(this); markwon.setMarkdown(tv, text);
+        ChatFind.mark(tv);
         tv.setTextColor(col(R.color.onAccent)); tv.setTextIsSelectable(true);
         tv.setLinkTextColor(col(R.color.onAccent));
         tv.setMovementMethod(android.text.method.LinkMovementMethod.getInstance());
@@ -2889,6 +2898,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             if (piece.trim().isEmpty()) continue;
             if (code) { box.addView(codeBlock(piece)); continue; }
             TextView tv = new TextView(this); markwon.setMarkdown(tv, piece.trim());
+            ChatFind.mark(tv);
             tv.setTextColor(col(R.color.text)); tv.setTextSize(14); tv.setLineSpacing(0, 1.2f);
             tv.setTextIsSelectable(true);
             tv.setMovementMethod(android.text.method.LinkMovementMethod.getInstance());
@@ -2938,6 +2948,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         body.setPadding(dp(12), 0, dp(12), dp(12));
         // Set as plain text: the block is its own card, and the markdown renderer would draw a second box inside it.
         body.setText(code);
+        ChatFind.mark(body);
         across.addView(body);
         block.addView(across);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
