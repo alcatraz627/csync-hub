@@ -158,6 +158,65 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             chatInput.setText(b.getString("chat_draft", ""));
         }
         acceptSearchDestination(getIntent());
+        takeShareAction(getIntent());
+    }
+
+    // ---- quick sends asked for from a Quick Settings tile ----
+
+    private String pendingShareAction;
+
+    private void takeShareAction(Intent intent) {
+        if (intent == null || intent.getStringExtra("share_action") == null) return;
+        pendingShareAction = intent.getStringExtra("share_action");
+        intent.removeExtra("share_action");
+        if (hasWindowFocus()) runShareAction();
+    }
+
+    /** Android hands over the clipboard only once this window has focus, so the send waits for that. */
+    @Override public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus && pendingShareAction != null) runShareAction();
+    }
+
+    private void runShareAction() {
+        String action = pendingShareAction;
+        pendingShareAction = null;
+        if ("clipboard".equals(action)) sendToSelected(clipboardText(), false);
+        else if ("photo".equals(action)) sendLastPhoto();
+    }
+
+    private static String photoPermission() {
+        return Build.VERSION.SDK_INT >= 33 ? "android.permission.READ_MEDIA_IMAGES"
+            : "android.permission.READ_EXTERNAL_STORAGE";
+    }
+
+    /** Attach the newest photo on this phone and send it to the chosen device. Asks to see photos the first time. */
+    private void sendLastPhoto() {
+        if (checkSelfPermission(photoPermission()) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{photoPermission()}, 2003);
+            return;
+        }
+        android.net.Uri photos = android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
+        try (android.database.Cursor newest = getContentResolver().query(photos,
+                new String[]{android.provider.MediaStore.Images.Media._ID, android.provider.MediaStore.Images.Media.DISPLAY_NAME},
+                null, null, android.provider.MediaStore.Images.Media.DATE_ADDED + " DESC")) {
+            if (newest == null || !newest.moveToFirst()) { toast("There are no photos on this phone"); return; }
+            shareFileUri = android.content.ContentUris.withAppendedId(photos, newest.getLong(0));
+            shareFileName = newest.getString(1) == null ? "Photo" : newest.getString(1);
+        } catch (Exception error) {
+            toast("The newest photo could not be read");
+            return;
+        }
+        bindShareFile();
+        sendSelectedFile();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int code, String[] permissions, int[] results) {
+        super.onRequestPermissionsResult(code, permissions, results);
+        if (code != 2003) return;
+        if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) sendLastPhoto();
+        else toast("csync needs to see your photos to send the newest one");
     }
 
     @Override protected void onNewIntent(Intent intent) {
@@ -170,6 +229,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         show(tab);
         acceptChatDraft(intent);
         acceptSearchDestination(intent);
+        takeShareAction(intent);
     }
 
     private int tabFromIntent(Intent intent) {
@@ -367,18 +427,75 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             showToolsStatus("Pi power", R.id.tools_power_status));
         pageTools.findViewById(R.id.tools_performance_row).setOnClickListener(v ->
             Kit.sheet(this, "App performance", "Trace capture during lag is planned."));
-        pageTools.findViewById(R.id.tools_widget_xkcd).setOnClickListener(v ->
-            showWidgetInfo("xkcd widget", "The xkcd widget is available on the launcher."));
-        pageTools.findViewById(R.id.tools_widget_media).setOnClickListener(v ->
-            showWidgetInfo("Media remote widget", "A widget with target, title, Pause or Resume, and Stop is planned."));
-        pageTools.findViewById(R.id.tools_widget_quick).setOnClickListener(v ->
-            showWidgetInfo("Quick Settings actions", "Camera and Share actions are planned. Lifecycle and permissions still need testing."));
-        pageTools.findViewById(R.id.tools_widget_shortcuts).setOnClickListener(v ->
-            showWidgetInfo("App shortcuts", "Media, Share, and Chat launcher shortcuts are planned."));
     }
 
-    private void showWidgetInfo(String title, String detail) {
-        Kit.sheet(this, title, detail);
+    /**
+     * The Widgets page: every widget, tile, shortcut and share entry the app offers.
+     * A widget or tile that is not on the phone yet is added from its row; Android asks before it places one.
+     */
+    private void renderWidgetsPage() {
+        LinearLayout page = pageTools.findViewById(R.id.tools_widget_section);
+        page.removeAllViews();
+        android.appwidget.AppWidgetManager widgets = android.appwidget.AppWidgetManager.getInstance(this);
+
+        Kit.label(page, "Launcher widgets");
+        LinearLayout group = Kit.group(page);
+        Object[][] launcher = {
+            {Kit.Icon.DISPLAY, "Media remote", "What the Pi screen is playing, with Pause and Stop", HubWidgets.MediaRemote.class},
+            {Kit.Icon.TOOLS, "Pi status", "Whether the Pi is online, its power and its drives", HubWidgets.PiStatus.class},
+            {Kit.Icon.CAMERA, "Camera glance", "The latest photo from the Pi camera", HubWidgets.CameraGlance.class},
+            {Kit.Icon.CHAT, "Ask the Pi", "Opens a new conversation", HubWidgets.Ask.class},
+            {Kit.Icon.PHOTO, "xkcd", "A comic, changed every hour", XkcdWidgetProvider.class}};
+        for (Object[] w : launcher) {
+            android.content.ComponentName provider = new android.content.ComponentName(this, (Class<?>) w[3]);
+            boolean added = widgets.getAppWidgetIds(provider).length > 0;
+            View row = Kit.addRow(group);
+            Kit.bindRow(row, (Integer) w[0], (String) w[1], (String) w[2], null, false);
+            Kit.rowStatus(row, added ? Kit.Status.GOOD : Kit.Status.IDLE, added ? "Added" : "Not added");
+            row.setOnClickListener(v -> {
+                if (widgets.isRequestPinAppWidgetSupported()) widgets.requestPinAppWidget(provider, null, null);
+                else Kit.sheet(this, (String) w[1], "Press and hold an empty part of the home screen, choose Widgets, then csync.");
+            });
+        }
+
+        Kit.label(page, "Quick Settings tiles");
+        group = Kit.group(page);
+        Object[][] tiles = {
+            {Kit.Icon.DISPLAY, "Pi screen", "Stops what is playing, or opens Media", HubTiles.Screen.class, R.drawable.ti_screen},
+            {Kit.Icon.CAMERA, "Pi camera", "Opens the live picture", HubTiles.Camera.class, R.drawable.ti_camera},
+            {R.drawable.csi_clipboard, "Clipboard", "Sends the clipboard to your last device", HubTiles.Clipboard.class, R.drawable.ti_clipboard},
+            {Kit.Icon.PHOTO, "Last photo", "Sends your newest photo to your last device", HubTiles.Photo.class, R.drawable.ti_photo}};
+        for (Object[] t : tiles) {
+            View row = Kit.addRow(group);
+            Kit.bindRow(row, (Integer) t[0], (String) t[1], (String) t[2], null, false);
+            row.setOnClickListener(v -> {
+                if (Build.VERSION.SDK_INT >= 33) {
+                    getSystemService(android.app.StatusBarManager.class).requestAddTileService(
+                        new android.content.ComponentName(this, (Class<?>) t[3]), (String) t[1],
+                        android.graphics.drawable.Icon.createWithResource(this, (Integer) t[4]), getMainExecutor(), result -> { });
+                } else {
+                    Kit.sheet(this, (String) t[1], "Pull down Quick Settings, tap the pencil, and drag this tile into place.");
+                }
+            });
+        }
+
+        Kit.label(page, "App shortcuts");
+        group = Kit.group(page);
+        String[][] shortcuts = {{"New chat", "A new conversation with the Pi assistant"},
+            {"Send to a device", "Opens Share with your last device chosen"}, {"Pi camera, live", "Opens the live picture"}};
+        int[] shortcutIcons = {Kit.Icon.CHAT, Kit.Icon.SHARE, Kit.Icon.CAMERA};
+        for (int i = 0; i < shortcuts.length; i++)
+            Kit.bindRow(Kit.addRow(group), shortcutIcons[i], shortcuts[i][0], shortcuts[i][1], null, false);
+        TextView how = new TextView(this);
+        how.setText("Press and hold the csync icon on the home screen.");
+        how.setTextColor(col(R.color.dim));
+        how.setTextSize(12);
+        how.setPadding(dp(4), dp(8), 0, 0);
+        page.addView(how);
+
+        Kit.label(page, "In the share menu of other apps");
+        group = Kit.group(page);
+        Kit.bindRow(Kit.addRow(group), Kit.Icon.SHARE, "csync", "Asks where the item goes", null, false);
     }
 
     private void showToolsStatus(String title, int statusId) {
@@ -415,13 +532,14 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             "Observe before acting" : detail == 2 ? "Useful shortcuts" : "Tools");
         ((TextView) pageTools.findViewById(R.id.tools_subtitle)).setText(detail == 1 ?
             "Live phone samples need Shizuku. Pi process actions are planned." : detail == 2 ?
-            "xkcd is ready. More shortcuts are planned." :
+            "Widgets, tiles, shortcuts and the share menu." :
             "Pi service health and phone utilities.");
         View top = pageTools.findViewById(R.id.tools_back);
         Kit.pageTop(top, overview ? "tools" : detail == 1 ? "process" : "widgets", this::openPlace);
         if (overview) Kit.topAction(top, R.drawable.csi_refresh, "Check again", v -> refreshToolsHealth());
         ((android.widget.ScrollView) pageTools.findViewById(R.id.tools_scroll)).scrollTo(0, 0);
         if (detail == 1 && resumed) ensureShizuku();
+        if (detail == 2) renderWidgetsPage();
     }
 
     private void revealSettingsDetail(int id) {

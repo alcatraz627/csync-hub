@@ -6,4 +6,17 @@
     <string name="sc_send_long">Send to a device</string>
     <string name="sc_camera_short">Pi camera</string>
     <string name="sc_camera_long">Pi camera, live</string>
+    <string name="ti_camera">Pi camera</string>
+    <!-- Tile names are short on purpose: the system cuts anything longer than the tile. -->
+    <string name="ti_clipboard">Clipboard</string>
+    <string name="ti_screen">Pi screen</string>
+    <string name="ti_photo">Last photo</string>
+    <string name="wg_status_name">Pi status</string>
+    <string name="wg_status_about">Whether the Raspberry Pi is online, its power and its drives.</string>
+    <string name="wg_media_name">Media remote</string>
+    <string name="wg_media_about">What the Pi screen is playing, with Pause and Stop.</string>
+    <string name="wg_camera_name">Camera glance</string>
+    <string name="wg_camera_about">The latest photo from the Pi camera.</string>
+    <string name="wg_ask_name">Ask the Pi</string>
+    <string name="wg_ask_about">Opens a new conversation with the Pi assistant.</string>
 </resources>

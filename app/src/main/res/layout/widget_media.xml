@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/wg_root" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="horizontal" android:gravity="center_vertical" android:padding="14dp" android:background="@drawable/wg_bg">
+    <LinearLayout android:id="@+id/wg_open" android:layout_width="0dp" android:layout_height="wrap_content"
+        android:layout_weight="1" android:orientation="vertical">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical">
+            <ImageView android:id="@+id/wg_dot" android:layout_width="9dp" android:layout_height="9dp"
+                android:src="@drawable/wg_dot" android:contentDescription="@null"/>
+            <TextView android:id="@+id/wg_state" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginStart="7dp" android:text="Checking the Pi screen" android:textSize="12sp"
+                android:textColor="@color/dim" android:maxLines="1"/>
+        </LinearLayout>
+        <TextView android:id="@+id/wg_title" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="4dp" android:textSize="15sp" android:textStyle="bold" android:textColor="@color/text"
+            android:maxLines="2"/>
+    </LinearLayout>
+    <ImageButton android:id="@+id/wg_toggle" android:layout_width="48dp" android:layout_height="48dp"
+        android:layout_marginStart="10dp" android:padding="12dp" android:scaleType="fitCenter"
+        android:src="@drawable/wg_pause" android:background="@drawable/wg_btn_go" android:contentDescription="Pause or resume"/>
+    <ImageButton android:id="@+id/wg_stop" android:layout_width="48dp" android:layout_height="48dp"
+        android:layout_marginStart="8dp" android:padding="13dp" android:scaleType="fitCenter" android:tint="@color/text"
+        android:src="@drawable/wg_stop" android:background="@drawable/wg_btn" android:contentDescription="Stop"/>
+</LinearLayout>

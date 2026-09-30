@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/wg_root" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:padding="8dp" android:background="@drawable/wg_bg">
+    <LinearLayout android:id="@+id/wg_bar" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true" android:orientation="horizontal" android:gravity="center_vertical"
+        android:paddingStart="8dp">
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:orientation="vertical">
+            <TextView android:id="@+id/wg_state" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="Pi camera" android:textSize="13sp" android:textStyle="bold" android:textColor="@color/text"
+                android:maxLines="1"/>
+            <TextView android:id="@+id/wg_when" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:textSize="11sp" android:textColor="@color/dim" android:maxLines="1"/>
+        </LinearLayout>
+        <ImageButton android:id="@+id/wg_refresh" android:layout_width="48dp" android:layout_height="48dp"
+            android:padding="13dp" android:scaleType="fitCenter" android:tint="@color/text"
+            android:src="@drawable/wg_refresh" android:background="@android:color/transparent"
+            android:contentDescription="Check for a newer photo"/>
+    </LinearLayout>
+    <ImageView android:id="@+id/wg_image" android:layout_width="match_parent" android:layout_height="match_parent"
+        android:layout_above="@id/wg_bar" android:scaleType="centerCrop" android:contentDescription="The latest photo from the Pi camera"/>
+</RelativeLayout>

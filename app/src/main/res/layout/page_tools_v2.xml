@@ -92,8 +92,8 @@
                 <LinearLayout android:id="@+id/tools_widgets_route" style="@style/CsyncMoreNavRow">
                     <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_launcher"/>
                     <LinearLayout style="@style/CsyncMoreText">
-                        <TextView style="@style/CsyncMoreTitle" android:text="Widgets &amp; quick actions"/>
-                        <TextView style="@style/CsyncMoreSub" android:text="xkcd built; other shortcuts planned"/>
+                        <TextView style="@style/CsyncMoreTitle" android:text="Widgets"/>
+                        <TextView style="@style/CsyncMoreSub" android:text="Widgets, tiles, shortcuts and the share menu"/>
                     </LinearLayout>
                     <ImageView style="@style/CsyncMoreChevron"/>
                 </LinearLayout>
@@ -108,61 +108,10 @@
                         android:text="Update csync from Pi"/>
                 </LinearLayout>
             </LinearLayout>
+            <!-- Filled in code from what the app really offers: widgets, tiles, shortcuts and the share entry. -->
             <LinearLayout android:id="@+id/tools_widget_section" android:visibility="gone"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="14dp" android:orientation="vertical">
-                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:text="Current" style="@style/Kit.Text.Section"/>
-                <LinearLayout android:id="@+id/tools_widget_xkcd" style="@style/CsyncMoreNavRow" android:layout_marginTop="8dp"
-                    android:background="@drawable/card_bg">
-                    <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_image"/>
-                    <LinearLayout style="@style/CsyncMoreText">
-                        <TextView style="@style/CsyncMoreTitle" android:text="xkcd widget"/>
-                        <TextView style="@style/CsyncMoreSub" android:text="Companion widget on the launcher"/>
-                    </LinearLayout>
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="Built" android:textSize="12sp" android:textColor="@color/dim"/>
-                    <ImageView style="@style/CsyncMoreChevron" android:layout_marginStart="6dp"/>
-                </LinearLayout>
-                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:layout_marginTop="20dp" android:text="Ideas to test"
-                    style="@style/Kit.Text.Section"/>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp" android:orientation="vertical" android:background="@drawable/card_bg">
-                    <LinearLayout android:id="@+id/tools_widget_media" style="@style/CsyncMoreNavRow">
-                        <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_play"/>
-                        <LinearLayout style="@style/CsyncMoreText">
-                            <TextView style="@style/CsyncMoreTitle" android:text="Media remote widget"/>
-                            <TextView style="@style/CsyncMoreSub" android:text="Play, pause, stop"/>
-                        </LinearLayout>
-                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                            android:text="Planned" android:textSize="12sp" android:textColor="@color/dim"/>
-                        <ImageView style="@style/CsyncMoreChevron" android:layout_marginStart="6dp"/>
-                    </LinearLayout>
-                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/border"/>
-                    <LinearLayout android:id="@+id/tools_widget_quick" style="@style/CsyncMoreNavRow">
-                        <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_sliders"/>
-                        <LinearLayout style="@style/CsyncMoreText">
-                            <TextView style="@style/CsyncMoreTitle" android:text="Quick Settings actions"/>
-                            <TextView style="@style/CsyncMoreSub" android:text="Camera or Share"/>
-                        </LinearLayout>
-                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                            android:text="Planned" android:textSize="12sp" android:textColor="@color/dim"/>
-                        <ImageView style="@style/CsyncMoreChevron" android:layout_marginStart="6dp"/>
-                    </LinearLayout>
-                    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/border"/>
-                    <LinearLayout android:id="@+id/tools_widget_shortcuts" style="@style/CsyncMoreNavRow">
-                        <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_link"/>
-                        <LinearLayout style="@style/CsyncMoreText">
-                            <TextView style="@style/CsyncMoreTitle" android:text="App shortcuts"/>
-                            <TextView style="@style/CsyncMoreSub" android:text="Media, Share, Chat"/>
-                        </LinearLayout>
-                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                            android:text="Planned" android:textSize="12sp" android:textColor="@color/dim"/>
-                        <ImageView style="@style/CsyncMoreChevron" android:layout_marginStart="6dp"/>
-                    </LinearLayout>
-                </LinearLayout>
-            </LinearLayout>
+                android:orientation="vertical"/>
             <LinearLayout android:id="@+id/tools_process_section" android:visibility="gone"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:layout_marginTop="14dp" android:orientation="vertical">

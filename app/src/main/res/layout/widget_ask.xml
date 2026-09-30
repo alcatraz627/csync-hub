@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/wg_root" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="horizontal" android:gravity="center_vertical" android:paddingStart="16dp" android:paddingEnd="10dp"
+    android:background="@drawable/wg_bg">
+    <ImageView android:layout_width="22dp" android:layout_height="22dp" android:src="@drawable/wg_chat"
+        android:tint="@color/coral" android:contentDescription="@null"/>
+    <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+        android:layout_marginStart="12dp" android:text="Ask the Pi" android:textSize="15sp" android:textColor="@color/dim"/>
+</LinearLayout>
