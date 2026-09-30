@@ -84,6 +84,8 @@ public final class NotesActivity extends AppCompatActivity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(getColor(R.color.bg));
         setContentView(root);
+        getOnBackPressedDispatcher().addCallback(this, backInApp);
+        root.getViewTreeObserver().addOnPreDrawListener(() -> { backInApp.setEnabled(page != Page.LIST); return true; });
         topBar = (LinearLayout) getLayoutInflater().inflate(R.layout.kit_page_top, root, false);
         root.addView(topBar);
         heading = new TextView(this);
@@ -1014,6 +1016,7 @@ public final class NotesActivity extends AppCompatActivity {
         String id = noteId;
         int expected = revision;
         noteSaving = true;
+        Kit.tick(root);
         say("Saving on the Pi");
         new Thread(() -> {
             try {
@@ -1117,11 +1120,21 @@ public final class NotesActivity extends AppCompatActivity {
         startActivity(intent);
     }
 
-    @Override public void onBackPressed() {
-        if (page == Page.EDIT && noteId != null) loadNote(noteId);
-        else if (page == Page.EDIT) { dropShared(); showingPins = false; showList(); }
-        else if (page == Page.PIN) { showingPins = true; showList(); }
-        else if (page == Page.NOTE) { showingPins = false; showList(); }
-        else super.onBackPressed();
-    }
+    // Back goes up one page inside Notes; from the list the callback is off, so the system's own
+    // back preview runs and leaves Notes.
+    private View pageView() { return root; }
+
+    private final androidx.activity.OnBackPressedCallback backInApp = new androidx.activity.OnBackPressedCallback(false) {
+        @Override public void handleOnBackProgressed(androidx.activity.BackEventCompat event) {
+            Kit.peekBack(pageView(), event.getProgress());
+        }
+        @Override public void handleOnBackCancelled() { Kit.peekBack(pageView(), 0f); }
+        @Override public void handleOnBackPressed() {
+            Kit.peekBack(pageView(), 0f);
+            if (page == Page.EDIT && noteId != null) loadNote(noteId);
+            else if (page == Page.EDIT) { dropShared(); showingPins = false; showList(); }
+            else if (page == Page.PIN) { showingPins = true; showList(); }
+            else if (page == Page.NOTE) { showingPins = false; showList(); }
+        }
+    };
 }

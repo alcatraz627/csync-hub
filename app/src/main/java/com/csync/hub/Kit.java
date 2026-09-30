@@ -111,6 +111,7 @@ final class Kit {
         row.setOnClickListener(v -> {
             toggle.setChecked(!toggle.isChecked());
             row.setContentDescription(title + (toggle.isChecked() ? ", on" : ", off"));
+            tick(row);
             flip.to(toggle.isChecked());
         });
     }
@@ -781,6 +782,40 @@ final class Kit {
     private static void setOptional(TextView view, CharSequence text) {
         view.setVisibility(text == null || text.length() == 0 ? View.GONE : View.VISIBLE);
         view.setText(text);
+    }
+
+    // ---- motion and touch ----
+
+    /** The 150 ms fade-through a page makes when it takes another's place; nothing else moves. */
+    static void fadeThrough(View page) {
+        if (page == null) return;
+        page.animate().cancel();
+        page.setAlpha(0f);
+        page.setScaleX(0.98f);
+        page.setScaleY(0.98f);
+        page.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(150)
+            .setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
+    }
+
+    /** Draw a page the way Android's back preview does: it shrinks a little as the gesture goes on, and springs back at 0. */
+    static void peekBack(View page, float progress) {
+        if (page == null) return;
+        page.animate().cancel();
+        float scale = 1f - 0.08f * progress;
+        if (progress == 0f) {
+            page.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(120).start();
+            return;
+        }
+        page.setScaleX(scale);
+        page.setScaleY(scale);
+        page.setAlpha(1f - 0.25f * progress);
+    }
+
+    /** A light tick on a commit: Send, Save, a toggle, a transport button. */
+    static void tick(View view) {
+        if (view == null) return;
+        view.performHapticFeedback(android.os.Build.VERSION.SDK_INT >= 30
+            ? android.view.HapticFeedbackConstants.CONFIRM : android.view.HapticFeedbackConstants.CONTEXT_CLICK);
     }
 
     static int dp(Context c, int value) {

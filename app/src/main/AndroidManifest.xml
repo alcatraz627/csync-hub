@@ -21,6 +21,7 @@
         android:roundIcon="@mipmap/ic_launcher_orbit"
         android:label="csync"
         android:usesCleartextTraffic="true"
+        android:enableOnBackInvokedCallback="true"
         android:theme="@style/Theme.Csync">
 
         <activity

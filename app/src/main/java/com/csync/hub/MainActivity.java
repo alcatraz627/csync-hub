@@ -107,6 +107,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         content.addView(pageMore);
         cameraController = new CameraController(this, pageCamera);
         miniPlayer = new MediaMiniPlayer(this);
+        getOnBackPressedDispatcher().addCallback(this, backInApp);
+        // Whether Back has somewhere to go changes with many small state flips; reading it before each draw keeps it right.
+        content.getViewTreeObserver().addOnPreDrawListener(() -> { backInApp.setEnabled(hasLevelAbove()); return true; });
 
         com.google.android.material.bottomnavigation.BottomNavigationView nav = findViewById(R.id.nav);
         nav.setBackgroundColor(col(R.color.surface));
@@ -287,6 +290,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     private void show(int page) {
         if (current == 5 && page != 5) cameraController.hide();
+        boolean moved = current != page && resumed;
         current = page;
         pageHome.setVisibility(page == 0 ? View.VISIBLE : View.GONE);
         pageShare.setVisibility(page == 1 ? View.VISIBLE : View.GONE);
@@ -295,6 +299,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageSettings.setVisibility(page == 4 ? View.VISIBLE : View.GONE);
         pageCamera.setVisibility(page == 5 ? View.VISIBLE : View.GONE);
         pageMore.setVisibility(page == 6 ? View.VISIBLE : View.GONE);
+        if (moved) Kit.fadeThrough(currentPage());
         if (page == 6) showMoreDetail(0);
         if (page == 0) refreshHome();
         if (page == 1) refreshShare();
@@ -751,7 +756,39 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         }, "csync-tools-health").start();
     }
 
-    @Override public void onBackPressed() {
+    // ---------------- back ----------------
+    //
+    // Back inside this activity goes one level up. The callback is enabled only while there is a
+    // level to go up to, so at Home the system's own back preview runs and leaves the app.
+
+    private final androidx.activity.OnBackPressedCallback backInApp = new androidx.activity.OnBackPressedCallback(false) {
+        @Override public void handleOnBackProgressed(androidx.activity.BackEventCompat event) {
+            Kit.peekBack(currentPage(), event.getProgress());
+        }
+        @Override public void handleOnBackCancelled() { Kit.peekBack(currentPage(), 0f); }
+        @Override public void handleOnBackPressed() {
+            Kit.peekBack(currentPage(), 0f);
+            goUp();
+        }
+    };
+
+    private View currentPage() {
+        switch (current) {
+            case 1: return pageShare;
+            case 2: return pageChat;
+            case 3: return pageTools;
+            case 4: return pageSettings;
+            case 5: return pageCamera;
+            case 6: return pageMore;
+            default: return pageHome;
+        }
+    }
+
+    private boolean hasLevelAbove() {
+        return current != 0;
+    }
+
+    private void goUp() {
         if (current == 2 && chatConvoMode && chatSuggest.isOpen()) chatSuggest.close();
         else if (current == 2 && chatConvoMode && chatFind.isOpen()) chatFind.close();
         else if (current == 2 && chatConvoMode) openPlace("chat");
@@ -764,7 +801,6 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         }
         else if (current == 3 || current == 4) show(6);
         else if (current != 0) openPlace("home");
-        else super.onBackPressed();
     }
 
     // Probe reachability and pull the assistant's tool list, off the UI thread.
@@ -1258,6 +1294,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private void sendComposed() {
         String words = shareText.getText().toString();
         if (shareFileUri == null && words.trim().isEmpty()) { toast("Write a message or attach a file first"); return; }
+        Kit.tick(shareSend);
         if (shareFileUri != null) sendSelectedFile();
         if (!words.trim().isEmpty()) sendToSelected(words, true);
     }
@@ -2863,6 +2900,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             if (chatSession != null && ChatService.running.contains(chatSession)) stopReply();
             return;
         }
+        Kit.tick(pageChat.findViewById(R.id.chat_send));
         StringBuilder names = new StringBuilder();
         for (JSONObject item : chatAttachments) names.append(names.length() == 0 ? "" : ", ").append(item.optString("name"));
         final String msg = names.length() == 0 ? typed : (typed.isEmpty() ? "" : typed + "\n\n") + "Attached: " + names;

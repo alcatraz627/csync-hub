@@ -103,6 +103,11 @@ public final class MediaActivity extends AppCompatActivity {
         client = new MediaClient(Prefs.assistIp(this), Prefs.token(this));
         setContentView(R.layout.activity_media);
         Appearance.applySystemBars(this);
+        getOnBackPressedDispatcher().addCallback(this, backInApp);
+        findViewById(R.id.media_full_player).getViewTreeObserver().addOnPreDrawListener(() -> {
+            backInApp.setEnabled(videoMode || fullPlayer);
+            return true;
+        });
         String requestedTarget = getIntent().getStringExtra("player_target");
         openedFromSearch = getIntent().hasExtra("search_item_id");
         if ("phone".equals(requestedTarget) || "pi".equals(requestedTarget)) target = requestedTarget;
@@ -1445,6 +1450,7 @@ public final class MediaActivity extends AppCompatActivity {
 
     private void control(String action) {
         if ("vlc".equals(target)) { say("Use VLC controls for this playback"); return; }
+        Kit.tick(findViewById(R.id.media_full_player));
         if (action.equals("stop")) {
             // A Rotate or Loop tap still waiting to apply must not reach a stopped player.
             ui.removeCallbacks(commitRotation);
@@ -1672,12 +1678,19 @@ public final class MediaActivity extends AppCompatActivity {
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
     }
 
-    @Override public void onBackPressed() {
-        // Full screen is a mode of the player page, so Back returns to that page, not past it.
-        if (videoMode) { exitVideoMode(); showFullPlayer(); }
-        else if (fullPlayer) closeFullPlayer();
-        else super.onBackPressed();
-    }
+    // Full screen is a mode of the player page, so Back returns to that page, not past it. With
+    // nothing above the list, the callback is off and the system's back preview leaves the page.
+    private final androidx.activity.OnBackPressedCallback backInApp = new androidx.activity.OnBackPressedCallback(false) {
+        @Override public void handleOnBackProgressed(androidx.activity.BackEventCompat event) {
+            if (!videoMode) Kit.peekBack(findViewById(R.id.media_full_player), event.getProgress());
+        }
+        @Override public void handleOnBackCancelled() { Kit.peekBack(findViewById(R.id.media_full_player), 0f); }
+        @Override public void handleOnBackPressed() {
+            Kit.peekBack(findViewById(R.id.media_full_player), 0f);
+            if (videoMode) { exitVideoMode(); showFullPlayer(); }
+            else if (fullPlayer) closeFullPlayer();
+        }
+    };
 
 
 

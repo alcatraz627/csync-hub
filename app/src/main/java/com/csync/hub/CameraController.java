@@ -154,7 +154,7 @@ final class CameraController {
         Kit.Open open = id -> {
             boolean wasCaptures = showingCaptures;
             if (wasCaptures) closeCaptures();
-            if (!"camera".equals(id)) activity.onBackPressed();
+            if (!"camera".equals(id)) activity.getOnBackPressedDispatcher().onBackPressed();
         };
         Kit.pageTop(top, showingCaptures ? "captures" : "camera", open);
         if (!showingCaptures) Kit.topAction(top, Kit.Icon.PHOTO, "Captures", v -> openCaptures());
