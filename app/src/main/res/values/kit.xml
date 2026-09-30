@@ -9,7 +9,7 @@
     <color name="warn">#B7791F</color>
 
     <dimen name="kit_gutter">20dp</dimen>
-    <dimen name="kit_top_height">44dp</dimen>
+    <dimen name="kit_top_height">52dp</dimen>
     <dimen name="kit_row_min">59dp</dimen>
     <dimen name="kit_row_pad_v">10dp</dimen>
     <dimen name="kit_row_pad_h">12dp</dimen>

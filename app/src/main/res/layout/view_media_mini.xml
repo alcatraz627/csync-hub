@@ -21,17 +21,17 @@
                 android:layout_marginTop="2dp" android:singleLine="true" android:ellipsize="none"
                 android:textSize="13sp" android:text="Media"/>
         </LinearLayout>
-        <ImageView android:id="@+id/mini_pause" android:layout_width="40dp" android:layout_height="40dp"
-            android:padding="10dp" android:src="@drawable/csi_pause" app:tint="@color/text"
+        <ImageView android:id="@+id/mini_pause" android:layout_width="48dp" android:layout_height="48dp"
+            android:padding="14dp" android:src="@drawable/csi_pause" app:tint="@color/text"
             android:contentDescription="Pause" android:background="?attr/selectableItemBackgroundBorderless"/>
-        <ImageView android:id="@+id/mini_stop" android:layout_width="40dp" android:layout_height="40dp"
-            android:padding="10dp" android:src="@drawable/csi_stop" app:tint="@color/text"
+        <ImageView android:id="@+id/mini_stop" android:layout_width="48dp" android:layout_height="48dp"
+            android:padding="14dp" android:src="@drawable/csi_stop" app:tint="@color/text"
             android:contentDescription="Stop" android:background="?attr/selectableItemBackgroundBorderless"/>
-        <ImageView android:id="@+id/mini_volume" android:layout_width="40dp" android:layout_height="40dp"
-            android:padding="10dp" android:src="@drawable/csi_volume" app:tint="@color/text"
+        <ImageView android:id="@+id/mini_volume" android:layout_width="48dp" android:layout_height="48dp"
+            android:padding="14dp" android:src="@drawable/csi_volume" app:tint="@color/text"
             android:contentDescription="Volume" android:background="?attr/selectableItemBackgroundBorderless"/>
-        <ImageView android:id="@+id/mini_speed" android:layout_width="40dp" android:layout_height="40dp"
-            android:padding="10dp" android:src="@drawable/csi_speed" app:tint="@color/text"
+        <ImageView android:id="@+id/mini_speed" android:layout_width="48dp" android:layout_height="48dp"
+            android:padding="14dp" android:src="@drawable/csi_speed" app:tint="@color/text"
             android:contentDescription="Speed" android:background="?attr/selectableItemBackgroundBorderless"/>
     </LinearLayout>
     <ProgressBar android:id="@+id/mini_progress" style="?android:attr/progressBarStyleHorizontal"

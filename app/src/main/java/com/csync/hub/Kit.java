@@ -69,7 +69,7 @@ final class Kit {
         return row;
     }
 
-    /** Show a bordered icon button at the row's end, for a row that has its own actions menu. */
+    /** Show a quiet icon button at the row's end, for a row that has a second action of its own. */
     static void rowAction(View row, int icon, String label, View.OnClickListener click) {
         ImageView action = row.findViewById(R.id.kit_action);
         action.setImageResource(icon);
@@ -259,6 +259,8 @@ final class Kit {
             step.setOrientation(LinearLayout.HORIZONTAL);
             step.setGravity(android.view.Gravity.CENTER_VERTICAL);
             step.setPadding(dp(c, 2), dp(c, 6), dp(c, 2), dp(c, 6));
+            step.setMinimumHeight(dp(c, 48));
+            step.setMinimumWidth(dp(c, 48));
             ImageView symbol = new ImageView(c);
             symbol.setImageResource(crumb.icon);
             symbol.setImageTintList(ColorStateList.valueOf(ContextCompat.getColor(c,
@@ -286,12 +288,12 @@ final class Kit {
         ImageView action = new ImageView(c);
         action.setImageResource(icon);
         action.setImageTintList(ColorStateList.valueOf(ContextCompat.getColor(c, R.color.text)));
-        action.setPadding(dp(c, 10), dp(c, 10), dp(c, 10), dp(c, 10));
+        action.setPadding(dp(c, 14), dp(c, 14), dp(c, 14), dp(c, 14));
         action.setBackgroundResource(outValueBorderless(c));
         action.setContentDescription(label);
         action.setOnClickListener(click);
         ((LinearLayout) top.findViewById(R.id.kit_actions)).addView(action,
-            new LinearLayout.LayoutParams(dp(c, 40), dp(c, 40)));
+            new LinearLayout.LayoutParams(dp(c, 48), dp(c, 48)));
         return action;
     }
 
