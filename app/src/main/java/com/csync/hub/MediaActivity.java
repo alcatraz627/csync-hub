@@ -863,13 +863,30 @@ public final class MediaActivity extends AppCompatActivity {
             new Kit.Action(R.drawable.csi_link, "A link", "YouTube, or share a video from another app",
                 this::castYoutube, true),
             new Kit.Action(Kit.Icon.NOTES, "A note", "Shown large, easy to read across a room",
-                this::chooseNote, true))));
+                this::chooseNote, true),
+            new Kit.Action(R.drawable.csi_screen, "This phone's screen", "Everything on it, or one app; Android asks which",
+                this::shareScreen, true))));
         sections.add(new Kit.Section("This screen", java.util.Arrays.asList(
             new Kit.Action(R.drawable.csi_image, "Cover image", "Shown when nothing is playing", this::coverSheet, true),
             new Kit.Action(Kit.Icon.DISPLAY, "Display", null, () -> DisplaySheet.open(this), true).value(displayName))));
         Kit.sections(host, sections, null);
         loadIdleFacts();
     }
+
+    /** Ask Android for the screen, then hand what it grants to the sharing service; the page follows the Pi's state. */
+    private void shareScreen() {
+        if (Prefs.assistIp(this).isEmpty() || Prefs.token(this).isEmpty()) { say("Connect the Pi first, in Settings"); return; }
+        android.media.projection.MediaProjectionManager manager =
+            (android.media.projection.MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
+        screenPermission.launch(manager.createScreenCaptureIntent());
+    }
+
+    private final ActivityResultLauncher<Intent> screenPermission = registerForActivityResult(
+        new ActivityResultContracts.StartActivityForResult(), result -> {
+            if (result.getResultCode() != RESULT_OK || result.getData() == null) { say("The screen was not shared"); return; }
+            ScreenShareService.start(this, result.getResultCode(), result.getData());
+            say("Sharing this screen with the Pi");
+        });
 
     /** Read the cover and the screen's name from the Pi, and redraw the idle page when either is news. */
     private void loadIdleFacts() {
