@@ -294,6 +294,7 @@ final class Kit {
         button.addView(symbol, new LinearLayout.LayoutParams(dp(c, 18), dp(c, 18)));
         TextView label = new TextView(c);
         label.setText(words);
+        label.setSingleLine();
         label.setTextColor(color);
         label.setTextSize(14.5f);
         label.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));

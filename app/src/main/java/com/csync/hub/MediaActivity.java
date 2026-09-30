@@ -106,7 +106,8 @@ public final class MediaActivity extends AppCompatActivity {
         getOnBackPressedDispatcher().addCallback(this, backInApp);
         Kit.pullToRefresh(findViewById(R.id.media_list), () -> openTab(activeTab));
         // The list stays one column on a wide screen; the player page beside it uses the width.
-        Appearance.column(this, findViewById(R.id.media_list));
+        Appearance.column(this, findViewById(R.id.media_list), findViewById(R.id.player_idle));
+        layoutPlayerForWidth();
         findViewById(R.id.media_full_player).getViewTreeObserver().addOnPreDrawListener(() -> {
             backInApp.setEnabled(videoMode || fullPlayer);
             return true;
@@ -240,6 +241,53 @@ public final class MediaActivity extends AppCompatActivity {
         else if (tab == ACCESS) connections();
         else if (driveId.isEmpty()) drives();
         else browse();
+    }
+
+    // Whether the player page is laid out as two panes; Media keeps its instance across rotation.
+    private boolean twoPane;
+
+    @Override public void onConfigurationChanged(android.content.res.Configuration config) {
+        super.onConfigurationChanged(config);
+        layoutPlayerForWidth();
+    }
+
+    /**
+     * In landscape the player page uses the width: the picture on the left, the controls on the
+     * right. In portrait they stack again. Called at start and on every rotation.
+     */
+    private void layoutPlayerForWidth() {
+        boolean wide = getResources().getConfiguration().orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE;
+        if (wide == twoPane) return;
+        twoPane = wide;
+        LinearLayout live = findViewById(R.id.player_live);
+        View art = findViewById(R.id.player_art);
+        if (wide) {
+            LinearLayout controls = new LinearLayout(this);
+            controls.setOrientation(LinearLayout.VERTICAL);
+            while (live.getChildCount() > 1) {
+                View child = live.getChildAt(1);
+                live.removeViewAt(1);
+                controls.addView(child);
+            }
+            live.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams left = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1);
+            left.topMargin = Kit.dp(this, 10);
+            left.rightMargin = Kit.dp(this, 16);
+            art.setLayoutParams(left);
+            live.addView(controls, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        } else {
+            LinearLayout controls = (LinearLayout) live.getChildAt(1);
+            live.removeViewAt(1);
+            while (controls.getChildCount() > 0) {
+                View child = controls.getChildAt(0);
+                controls.removeViewAt(0);
+                live.addView(child);
+            }
+            live.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams top = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Kit.dp(this, 150));
+            top.topMargin = Kit.dp(this, 10);
+            art.setLayoutParams(top);
+        }
     }
 
     /** Say which drive, and which folder in it, the list below is showing. */
@@ -670,9 +718,9 @@ public final class MediaActivity extends AppCompatActivity {
             where.setTextColor(getColor(R.color.dim));
             where.setTextSize(13f);
             where.setGravity(android.view.Gravity.CENTER);
-            turn.addView(previous, new android.widget.LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+            turn.addView(previous, new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
             turn.addView(where, new android.widget.LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-            turn.addView(next, new android.widget.LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+            turn.addView(next, new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
             android.widget.LinearLayout.LayoutParams gap = new android.widget.LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             gap.bottomMargin = Kit.dp(this, 12);
