@@ -79,7 +79,6 @@ public final class MediaActivity extends AppCompatActivity {
     // A video takes the whole screen only once it has a picture to show; until then the player page says Loading.
     private boolean phoneWantsVideo;
     private final PhonePlaybackService.Observer phoneObserver = message -> {
-        setStatus(message);
         PhonePlaybackService playback = PhonePlaybackService.current;
         if (playback == null) return;
         if (playback.item() != null) {
@@ -501,8 +500,33 @@ public final class MediaActivity extends AppCompatActivity {
         return String.format(java.util.Locale.ROOT, "%d:%02d", seconds / 60, seconds % 60);
     }
 
+    /** The readable name: no upload prefix, spaces for underscores and dots, and no file ending. The raw name is in File details. */
     private static String displayMediaName(String name) {
-        return name.replaceFirst("^cast-[0-9a-f]{8,32}-", "").replace('_', ' ');
+        String readable = name.replaceFirst("^cast-[0-9a-f]{8,32}-", "");
+        int ending = readable.lastIndexOf('.');
+        if (ending > 0 && readable.length() - ending <= 5) readable = readable.substring(0, ending);
+        return readable.replace('_', ' ').replace('.', ' ').trim();
+    }
+
+    /** Where a file lives, said shortly: the drive and the folder it sits in. */
+    private String placeWords(JSONObject item) {
+        String drive = driveLabels.getOrDefault(item.optString("driveId"), item.optString("driveId"));
+        String[] steps = item.optString("relativePath").split("/");
+        return steps.length < 2 ? drive : drive + " · " + steps[steps.length - 2].replace('_', ' ');
+    }
+
+    private static String sizeWords(long bytes) {
+        if (bytes >= 1L << 30) return String.format(java.util.Locale.US, "%.1f GB", bytes / (double) (1L << 30));
+        if (bytes >= 1L << 20) return String.format(java.util.Locale.US, "%.0f MB", bytes / (double) (1L << 20));
+        return Math.max(1, bytes >> 10) + " KB";
+    }
+
+    /** The facts about one file on a drive, including the raw name and path that the lists leave out. */
+    private void fileDetails(JSONObject item) {
+        Kit.sheet(this, displayMediaName(item.optString("name")), placeWords(item),
+            new Kit.Action(Kit.Icon.FILE, "File name", item.optString("name"), () -> copy(item.optString("name"))),
+            new Kit.Action(Kit.Icon.FOLDER, "Path", item.optString("relativePath"), () -> copy(item.optString("relativePath"))),
+            new Kit.Action(R.drawable.csi_info, "Size", sizeWords(item.optLong("size")), () -> { }));
     }
 
     private void renderSkip() {
@@ -515,8 +539,11 @@ public final class MediaActivity extends AppCompatActivity {
     private String playerTitle = "";
 
     private java.util.Set<String> favorites() {
-        return new java.util.HashSet<>(getSharedPreferences("media_favorites", MODE_PRIVATE)
-            .getStringSet("titles", new java.util.HashSet<>()));
+        // Favourites saved under the older names, which kept the file ending, still count.
+        java.util.Set<String> titles = new java.util.HashSet<>();
+        for (String saved : getSharedPreferences("media_favorites", MODE_PRIVATE)
+                .getStringSet("titles", new java.util.HashSet<>())) titles.add(displayMediaName(saved));
+        return titles;
     }
 
     private void toggleFavorite() {
@@ -745,9 +772,7 @@ public final class MediaActivity extends AppCompatActivity {
                 row(R.drawable.csi_info, "No videos found", "Connect a drive or browse its folders", null);
             for (int i = 0; i < items.length(); i++) {
                 JSONObject item = items.getJSONObject(i);
-                String sourceId = item.optString("driveId");
-                mediaItemRow(item, false,
-                    driveLabels.getOrDefault(sourceId, sourceId) + " · " + item.optString("relativePath"));
+                mediaItemRow(item, false, placeWords(item));
             }
             if (!result.isNull("nextOffset")) {
                 int next = result.getInt("nextOffset");
@@ -811,11 +836,18 @@ public final class MediaActivity extends AppCompatActivity {
     }
 
     private void chooseTarget(JSONObject item) {
-        Kit.sheet(this, displayMediaName(item.optString("name")), "Choose where it plays",
-            new Kit.Action(Kit.Icon.DISPLAY, "Pi screen", "Play on the connected display", () -> playPi(item)),
-            new Kit.Action(Kit.Icon.DEVICE, "This phone", "Play here", () -> playPhone(item, 0)),
-            new Kit.Action(R.drawable.csi_play, "VLC on this phone", "Open in the VLC app", () -> playVlc(item)),
-            new Kit.Action(Kit.Icon.SHARE, "Share", "Send the file to another app", () -> shareFile(item)));
+        // The same actions under the same names as every other place an item appears, and each one names its output.
+        String mime = item.optString("mime");
+        boolean plays = mime.startsWith("video/") || mime.startsWith("audio/");
+        String verb = plays ? "Play" : "Show";
+        java.util.List<Kit.Action> actions = new java.util.ArrayList<>();
+        actions.add(new Kit.Action(Kit.Icon.DISPLAY, verb + " on Pi screen", "Starts muted", () -> playPi(item)));
+        actions.add(new Kit.Action(Kit.Icon.DEVICE, verb + " on this phone", null, () -> playPhone(item, 0)));
+        if (mime.startsWith("video/"))
+            actions.add(new Kit.Action(R.drawable.csi_play, "Open in VLC", "Hands the file to VLC on this phone", () -> playVlc(item)));
+        actions.add(new Kit.Action(Kit.Icon.SHARE, "Share with another app", null, () -> shareFile(item)));
+        actions.add(new Kit.Action(R.drawable.csi_info, "File details", null, () -> fileDetails(item)));
+        Kit.sheet(this, displayMediaName(item.optString("name")), placeWords(item), actions.toArray(new Kit.Action[0]));
     }
 
     private Uri mediaUri(JSONObject item) throws org.json.JSONException {
@@ -1469,7 +1501,6 @@ public final class MediaActivity extends AppCompatActivity {
                         showPiDisplayState(new JSONObject());
                         ((TextView) findViewById(R.id.player_feedback)).setText(
                             "The Pi stopped answering, so what it is playing is not known. Check it before using the controls.");
-                        setStatus(friendlyError(error));
                     });
                 } finally { stateInFlight.set(false); }
             }, "pi-player-state").start();
