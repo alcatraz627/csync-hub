@@ -4,8 +4,10 @@
     android:layout_width="match_parent" android:layout_height="match_parent"
     android:orientation="vertical" android:background="@color/bg">
     <include android:id="@+id/media_top" layout="@layout/kit_page_top"/>
-    <ScrollView android:id="@+id/media_list" android:layout_width="match_parent"
-        android:layout_height="0dp" android:layout_weight="1">
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout android:id="@+id/media_list"
+        android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+    <ScrollView android:id="@+id/media_scroll" android:layout_width="match_parent"
+        android:layout_height="match_parent">
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
             android:orientation="vertical">
         <!-- The search box stays away until the search button in the top bar asks for it, so the list starts higher. -->
@@ -86,6 +88,7 @@
             </LinearLayout>
         </LinearLayout>
     </ScrollView>
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
     <ScrollView android:id="@+id/media_full_player" android:layout_width="match_parent"
         android:layout_height="0dp" android:layout_weight="1" android:visibility="gone"
         android:fillViewport="true" android:scrollbars="none">

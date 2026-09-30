@@ -811,6 +811,14 @@ final class Kit {
         page.setAlpha(1f - 0.25f * progress);
     }
 
+    /** Pull down on a page whose list is the page to read it again; the caller ends the spinner when the list is back. */
+    static void pullToRefresh(androidx.swiperefreshlayout.widget.SwipeRefreshLayout host, Runnable refresh) {
+        Context c = host.getContext();
+        host.setColorSchemeColors(accentText(c));
+        host.setProgressBackgroundColorSchemeColor(ContextCompat.getColor(c, R.color.surface));
+        host.setOnRefreshListener(refresh::run);
+    }
+
     /** A light tick on a commit: Send, Save, a toggle, a transport button. */
     static void tick(View view) {
         if (view == null) return;

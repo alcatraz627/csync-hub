@@ -104,6 +104,7 @@ public final class MediaActivity extends AppCompatActivity {
         setContentView(R.layout.activity_media);
         Appearance.applySystemBars(this);
         getOnBackPressedDispatcher().addCallback(this, backInApp);
+        Kit.pullToRefresh(findViewById(R.id.media_list), () -> openTab(activeTab));
         findViewById(R.id.media_full_player).getViewTreeObserver().addOnPreDrawListener(() -> {
             backInApp.setEnabled(videoMode || fullPlayer);
             return true;
@@ -226,7 +227,7 @@ public final class MediaActivity extends AppCompatActivity {
         findViewById(R.id.media_actions_toggle).setVisibility(View.GONE);
         findViewById(R.id.media_actions).setVisibility(View.GONE);
         findViewById(R.id.media_status).setVisibility(tab == HISTORY || tab == ACCESS ? View.GONE : View.VISIBLE);
-        android.widget.ScrollView browser = findViewById(R.id.media_list);
+        android.widget.ScrollView browser = findViewById(R.id.media_scroll);
         browser.post(() -> browser.smoothScrollTo(0, 0));
     }
 
@@ -457,15 +458,22 @@ public final class MediaActivity extends AppCompatActivity {
             try {
                 JSONObject result = work.run();
                 ui.post(() -> {
+                    if (listing >= 0) listDone();
                     if (!screenActive || (intent >= 0 && intent != outputIntent) ||
                             (listing >= 0 && listing != listingIntent)) return;
                     try { show.accept(result); } catch (Exception error) { say(error.getMessage()); }
                 });
             } catch (Exception error) { ui.post(() -> {
+                if (listing >= 0) listDone();
                 if (screenActive && (intent < 0 || intent == outputIntent) &&
                         (listing < 0 || listing == listingIntent)) say(friendlyError(error));
             }); }
         }, "media-request").start();
+    }
+
+    /** A listing has answered, so a pull to refresh that asked for it is over. */
+    private void listDone() {
+        ((androidx.swiperefreshlayout.widget.SwipeRefreshLayout) findViewById(R.id.media_list)).setRefreshing(false);
     }
 
     private void stopStalePiStart(JSONObject result) {

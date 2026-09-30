@@ -6,8 +6,9 @@
     android:orientation="vertical" android:background="@color/bg">
     <include android:id="@+id/share_top" layout="@layout/kit_page_top"/>
 
-    <ScrollView android:layout_width="match_parent" android:layout_height="0dp"
-        android:layout_weight="1">
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout android:id="@+id/share_refresh"
+        android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+    <ScrollView android:layout_width="match_parent" android:layout_height="match_parent">
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
             android:orientation="vertical"
             android:paddingStart="@dimen/kit_gutter" android:paddingEnd="@dimen/kit_gutter"
@@ -54,4 +55,5 @@
             </LinearLayout>
         </LinearLayout>
     </ScrollView>
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 </LinearLayout>

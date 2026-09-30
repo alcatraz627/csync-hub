@@ -108,6 +108,12 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         cameraController = new CameraController(this, pageCamera);
         miniPlayer = new MediaMiniPlayer(this);
         getOnBackPressedDispatcher().addCallback(this, backInApp);
+        Kit.pullToRefresh(pageHome.findViewById(R.id.home_refresh), this::refreshHome);
+        Kit.pullToRefresh(pageShare.findViewById(R.id.share_refresh), this::refreshShare);
+        Kit.pullToRefresh(pageTools.findViewById(R.id.tools_refresh), () -> {
+            refreshToolsHealth();
+            AppUpdater.refreshStatus(this, toolsUpdateStatus);
+        });
         // Whether Back has somewhere to go changes with many small state flips; reading it before each draw keeps it right.
         content.getViewTreeObserver().addOnPreDrawListener(() -> { backInApp.setEnabled(hasLevelAbove()); return true; });
 
@@ -645,8 +651,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageTools.findViewById(R.id.tools_process_section).setVisibility(detail == 1 ? View.VISIBLE : View.GONE);
         pageTools.findViewById(R.id.tools_widget_section).setVisibility(detail == 2 ? View.VISIBLE : View.GONE);
         View top = pageTools.findViewById(R.id.tools_back);
+        // Pulling the page down checks again, so the top bar carries no refresh icon.
         Kit.pageTop(top, overview ? "tools" : detail == 1 ? "process" : "widgets", this::openPlace);
-        if (overview) Kit.topAction(top, R.drawable.csi_refresh, "Check again", v -> refreshToolsHealth());
         ((android.widget.ScrollView) pageTools.findViewById(R.id.tools_scroll)).scrollTo(0, 0);
         if (detail == 1 && resumed) ensureShizuku();
         if (detail == 2) renderWidgetsPage();
@@ -699,10 +705,12 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     private void refreshToolsHealth() {
         String host = Prefs.assistIp(this), token = Prefs.token(this);
+        androidx.swiperefreshlayout.widget.SwipeRefreshLayout pulled = pageTools.findViewById(R.id.tools_refresh);
         if (host.isEmpty() || token.isEmpty()) {
             setToolsLead(Kit.Status.IDLE, "The Pi is not connected");
             for (int i = 0; i < TOOL_PARTS.length; i++)
                 setToolPart(i, Kit.Status.IDLE, "Not set", "Set the Pi's address and the token in Settings, under Connection.");
+            pulled.setRefreshing(false);
             return;
         }
         setToolsLead(Kit.Status.WARN, "Checking the Pi");
@@ -752,6 +760,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                 boolean allGood = mediaUp && assistantUp && !lowNow && listed != null && connected == known;
                 setToolsLead(!reached ? Kit.Status.BAD : lowNow ? Kit.Status.BAD : allGood ? Kit.Status.GOOD : Kit.Status.WARN,
                     !reached ? "The Pi cannot be reached" : lowNow ? "Power is low" : allGood ? "Everything is ready" : "One thing needs a look");
+                pulled.setRefreshing(false);
             });
         }, "csync-tools-health").start();
     }
@@ -824,7 +833,12 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             }
             final boolean media = mediaReady;
             final JSONObject lastPlayed = played;
-            ui.post(() -> { bindHomeStatus(pi, media, mac); renderPickUp(lastPlayed); renderMore(pi || media); });
+            ui.post(() -> {
+                bindHomeStatus(pi, media, mac);
+                renderPickUp(lastPlayed);
+                renderMore(pi || media);
+                ((androidx.swiperefreshlayout.widget.SwipeRefreshLayout) pageHome.findViewById(R.id.home_refresh)).setRefreshing(false);
+            });
         }).start();
     }
 
@@ -1361,6 +1375,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         renderSentHistory();
         refreshShareHeading();
         if (!Prefs.token(this).isEmpty()) scanPeers();
+        ((androidx.swiperefreshlayout.widget.SwipeRefreshLayout) pageShare.findViewById(R.id.share_refresh)).setRefreshing(false);
     }
 
     /** Draw the row that says who receives and whether they are online. */
