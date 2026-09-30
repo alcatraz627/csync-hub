@@ -59,17 +59,27 @@ final class MediaClient {
         return sendImage("/v1/display/show" + (name == null || name.isEmpty() ? "" : "?name=" + enc(name)), jpeg);
     }
 
+    /** Show a PDF on the Pi screen a page at a time; the Pi draws the pages, which takes a moment. */
+    JSONObject showDocument(byte[] pdf, String name) throws Exception {
+        return sendBytes("/v1/display/show" + (name == null || name.isEmpty() ? "" : "?name=" + enc(name)),
+            "application/pdf", pdf, 90000);
+    }
+
     private JSONObject sendImage(String path, byte[] jpeg) throws Exception {
+        return sendBytes(path, "image/jpeg", jpeg, 15000);
+    }
+
+    private JSONObject sendBytes(String path, String contentType, byte[] body, int readTimeout) throws Exception {
         HttpURLConnection connection = (HttpURLConnection) new URL(url(path)).openConnection();
         connection.setRequestMethod("POST");
         connection.setConnectTimeout(5000);
-        connection.setReadTimeout(15000);
+        connection.setReadTimeout(readTimeout);
         connection.setRequestProperty("X-Csync-Token", token);
-        connection.setRequestProperty("Content-Type", "image/jpeg");
+        connection.setRequestProperty("Content-Type", contentType);
         connection.setDoOutput(true);
-        connection.setFixedLengthStreamingMode(jpeg.length);
+        connection.setFixedLengthStreamingMode(body.length);
         try {
-            try (OutputStream out = connection.getOutputStream()) { out.write(jpeg); }
+            try (OutputStream out = connection.getOutputStream()) { out.write(body); }
             int status = connection.getResponseCode();
             InputStream in = status < 400 ? connection.getInputStream() : connection.getErrorStream();
             ByteArrayOutputStream output = new ByteArrayOutputStream();
@@ -81,7 +91,7 @@ final class MediaClient {
             }
             JSONObject result = new JSONObject(output.toString("UTF-8"));
             if (status >= 400) throw new MediaException(result.optString("code", "MEDIA_ERROR"),
-                result.optString("message", "The image could not be sent to the Pi"));
+                result.optString("message", "It could not be sent to the Pi"));
             return result;
         } finally { connection.disconnect(); }
     }

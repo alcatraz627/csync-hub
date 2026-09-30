@@ -107,6 +107,14 @@ public class ShareActivity extends AppCompatActivity {
         }
     }
 
+    /** The file's type as its provider says, else as the sharing app said, else unknown. */
+    private String fileType(Uri file) {
+        String type;
+        try { type = getContentResolver().getType(file); } catch (RuntimeException unreadable) { type = null; }
+        if (type == null || type.isEmpty() || type.endsWith("/*")) type = getIntent().getType();
+        return type == null || type.endsWith("/*") ? null : type;
+    }
+
     private ItemActions.Kind kindOf() {
         if (files.size() > 1) return ItemActions.Kind.FILES;
         if (files.size() == 1) {
@@ -140,7 +148,10 @@ public class ShareActivity extends AppCompatActivity {
         ItemActions.Item shared = new ItemActions.Item(kind, itemTitle());
         shared.incoming = true;
         shared.text = text;
-        if (!files.isEmpty()) shared.file = got -> got.file(files.get(0), getContentResolver().getType(files.get(0)));
+        if (!files.isEmpty()) {
+            shared.mime = fileType(files.get(0));
+            shared.file = got -> got.file(files.get(0), shared.mime);
+        }
         shared.own.put(ItemActions.Act.PLAY_PI, this::toPiScreen);
         shared.own.put(ItemActions.Act.SHOW_PI, this::toPiScreen);
         shared.own.put(ItemActions.Act.COVER, this::confirmPiCover);
@@ -156,8 +167,47 @@ public class ShareActivity extends AppCompatActivity {
     private void toPiScreen() {
         if (playOnPi()) return;
         if (kind == ItemActions.Kind.IMAGE) sendImageToPi(files.get(0), false);
+        else if (kind == ItemActions.Kind.DOCUMENT && ItemActions.isPdf(displayName(files.get(0)), fileType(files.get(0))))
+            sendDocumentToPi(files.get(0));
         else if (text != null && files.isEmpty()) showTextOnPi();
-        else Kit.sheet(this, "It cannot be shown on the Pi screen", "The Pi screen shows video, audio, pictures and words.");
+        else Kit.sheet(this, "It cannot be shown on the Pi screen", "The Pi screen shows video, audio, pictures, PDFs and words.");
+    }
+
+    /** Send a PDF to the Pi, which draws its pages and shows the first; the pages are turned from the player. */
+    private void sendDocumentToPi(Uri document) {
+        String host = Prefs.assistIp(this), token = Prefs.token(this);
+        if (host.isEmpty() || token.isEmpty()) { connectFirst(); return; }
+        say("Sending the document to the Pi");
+        new Thread(() -> {
+            String failure = null;
+            JSONObject result = null;
+            try {
+                ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+                try (InputStream input = getContentResolver().openInputStream(document)) {
+                    if (input == null) throw new Exception("The document could not be read");
+                    byte[] chunk = new byte[65536];
+                    int count;
+                    while ((count = input.read(chunk)) != -1) {
+                        if (bytes.size() + count > 25 * 1024 * 1024) throw new Exception("Choose a PDF under 25 MB");
+                        bytes.write(chunk, 0, count);
+                    }
+                }
+                result = new MediaClient(host, token).showDocument(bytes.toByteArray(), displayName(document));
+            } catch (Exception error) { failure = error.getMessage() == null ? "The Pi did not answer." : error.getMessage(); }
+            String error = failure;
+            JSONObject applied = result;
+            main.post(() -> {
+                say(null);
+                if (error == null) {
+                    int pages = applied.optJSONObject("player") == null ? 0 : applied.optJSONObject("player").optInt("count");
+                    toast(applied.optBoolean("sentToDisplay")
+                        ? (pages > 1 ? "Showing page 1 of " + pages + " on the Pi screen" : "Showing on the Pi screen")
+                        : "Sent. The Pi screen is off");
+                    finish();
+                } else Kit.sheet(this, "It was not shown", error,
+                    new Kit.Action(R.drawable.csi_refresh, "Try again", null, () -> sendDocumentToPi(document)));
+            });
+        }, "share-pi-document").start();
     }
 
     /** The readable name: the file's own name, or the first line of the text cut at a word. */
@@ -538,7 +588,7 @@ public class ShareActivity extends AppCompatActivity {
     }
 
     private String displayName(Uri u) {
-        try (Cursor c = getContentResolver().query(u, null, null, null, null)) {
+        try (Cursor c = getContentResolver().query(u, new String[]{OpenableColumns.DISPLAY_NAME}, null, null, null)) {
             if (c != null && c.moveToFirst()) {
                 int i = c.getColumnIndex(OpenableColumns.DISPLAY_NAME);
                 if (i >= 0) {
@@ -548,8 +598,11 @@ public class ShareActivity extends AppCompatActivity {
             }
         } catch (Throwable ignore) {
         }
+        // A provider that will not say the name leaves its document id, such as primary:Download/x.pdf; the name is its tail.
         String last = u.getLastPathSegment();
-        return last != null ? last : "shared-" + System.currentTimeMillis();
+        if (last == null || last.isEmpty()) return "shared-" + System.currentTimeMillis();
+        last = last.substring(Math.max(last.lastIndexOf('/'), last.lastIndexOf(':')) + 1);
+        return last.isEmpty() ? "shared-" + System.currentTimeMillis() : last;
     }
 
     private boolean isImage(String name, String mime) {

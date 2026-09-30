@@ -1625,6 +1625,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         if (mime == null) mime = "application/octet-stream";
         boolean textFile = mime.startsWith("text/") || mime.equals("application/json");
         ItemActions.Item item = new ItemActions.Item(ItemActions.kindOf(mime), file.getName());
+        item.mime = mime;
         java.io.File sender = file.getParentFile();
         item.sub = (sender == null ? "Received" : "From " + sender.getName()) + " · "
             + android.text.format.Formatter.formatShortFileSize(this, file.length());

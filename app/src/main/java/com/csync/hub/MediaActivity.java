@@ -18,6 +18,7 @@ import android.provider.OpenableColumns;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
@@ -376,6 +377,18 @@ public final class MediaActivity extends AppCompatActivity {
             say("That file cannot be read from this phone. Choose another.");
             return;
         }
+        // A picture or a PDF is shown, not played: the share page already knows how to put either on the screen.
+        String type;
+        try { type = getContentResolver().getType(uri); } catch (RuntimeException unreadable) { type = null; }
+        ItemActions.Kind kind = ItemActions.kindOf(type);
+        if (kind == ItemActions.Kind.IMAGE || (kind == ItemActions.Kind.DOCUMENT && ItemActions.isPdf(name, type))) {
+            Intent show = new Intent(this, ShareActivity.class).setAction(Intent.ACTION_SEND)
+                .setType(type == null ? "*/*" : type).putExtra(Intent.EXTRA_STREAM, uri)
+                .putExtra(ShareActivity.PLACE, "pi").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            show.setClipData(android.content.ClipData.newUri(getContentResolver(), "File for the Pi screen", uri));
+            startActivity(show);
+            return;
+        }
         final String fileName = name;
         final long fileSize = size;
         final long intent = ++outputIntent;
@@ -616,6 +629,44 @@ public final class MediaActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * The controls for something shown: Stop, and for a document the page it is on with a way to
+     * turn it. Redrawn only when the page or the kind changes, so a poll does not flicker them.
+     */
+    private void drawShownControls(android.widget.FrameLayout frame, int[] pages) {
+        String signature = pages == null ? "plain" : pages[0] + "/" + pages[1];
+        if (signature.equals(frame.getTag())) return;
+        frame.setTag(signature);
+        frame.removeAllViews();
+        android.widget.LinearLayout column = new android.widget.LinearLayout(this);
+        column.setOrientation(android.widget.LinearLayout.VERTICAL);
+        if (pages != null) {
+            android.widget.LinearLayout turn = new android.widget.LinearLayout(this);
+            turn.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+            turn.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            View previous = Kit.button(this, R.drawable.csi_back, "Previous", R.color.text, () -> control("previous"));
+            View next = Kit.button(this, R.drawable.csi_forward, "Next", R.color.text, () -> control("next"));
+            previous.setEnabled(pages[0] > 1);
+            previous.setAlpha(pages[0] > 1 ? 1f : 0.45f);
+            next.setEnabled(pages[0] < pages[1]);
+            next.setAlpha(pages[0] < pages[1] ? 1f : 0.45f);
+            TextView where = new TextView(this);
+            where.setText("Page " + pages[0] + " of " + pages[1]);
+            where.setTextColor(getColor(R.color.dim));
+            where.setTextSize(13f);
+            where.setGravity(android.view.Gravity.CENTER);
+            turn.addView(previous, new android.widget.LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+            turn.addView(where, new android.widget.LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+            turn.addView(next, new android.widget.LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+            android.widget.LinearLayout.LayoutParams gap = new android.widget.LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            gap.bottomMargin = Kit.dp(this, 12);
+            column.addView(turn, gap);
+        }
+        column.addView(Kit.button(this, R.drawable.csi_stop, "Stop showing", R.color.danger, () -> control("stop")));
+        frame.addView(column);
+    }
+
     private void updateFullPlayer(String outputName, String state, String title,
                                   int position, int duration, int volume, double speed) {
         updateFullPlayer(outputName, state, title, position, duration, volume, speed, null);
@@ -652,8 +703,7 @@ public final class MediaActivity extends AppCompatActivity {
             findViewById(id).setVisibility(shownOnly ? View.GONE : View.VISIBLE);
         android.widget.FrameLayout stop = findViewById(R.id.player_shown_stop);
         stop.setVisibility(shownOnly ? View.VISIBLE : View.GONE);
-        if (shownOnly && stop.getChildCount() == 0)
-            stop.addView(Kit.button(this, R.drawable.csi_stop, "Stop showing", R.color.danger, () -> control("stop")));
+        if (shownOnly) drawShownControls(stop, onPi ? shownPages : null);
         boolean showing = state.equals("playing") || state.equals("paused");
         ((TextView) findViewById(R.id.player_art)).setText(
             showing && onPi ? "The picture is on the Pi screen" :
@@ -691,6 +741,8 @@ public final class MediaActivity extends AppCompatActivity {
     // What the idle page last drew, so the two-second refresh does not rebuild it each time.
     private String idleShown;
     private boolean coverStored;
+    // The page a document on the Pi screen is on and how many it has, or null when nothing paged is shown.
+    private int[] shownPages;
     private Bitmap coverPicture;
     private String displayName;
 
@@ -743,7 +795,7 @@ public final class MediaActivity extends AppCompatActivity {
                 this::chooseSlideshow, true),
             new Kit.Action(Kit.Icon.CAMERA, "The Pi camera", "Live picture", this::showCamera))));
         sections.add(new Kit.Section("From this phone", java.util.Arrays.asList(
-            new Kit.Action(Kit.Icon.FILE, "A file", "A video, a song or a photo kept on this phone",
+            new Kit.Action(Kit.Icon.FILE, "A file", "A video, a song, a photo or a PDF kept on this phone",
                 () -> mediaPicker.launch("*/*"), true),
             new Kit.Action(R.drawable.csi_link, "A link", "YouTube, or share a video from another app",
                 this::castYoutube, true),
@@ -1893,6 +1945,8 @@ public final class MediaActivity extends AppCompatActivity {
                         nowPlaying.setText(active ? displayMediaName(state.optString("name", "Pi media")) : "Pi screen");
                         output.setText(plays ? stateWords("Pi screen", playerState, problem) + " · volume " + state.optInt("volume", 0) + "%"
                             : stateWords("Pi screen", playerState, problem));
+                        shownPages = "document".equals(state.optString("kind")) && state.optInt("count") > 0
+                            ? new int[]{state.optInt("page", 1), state.optInt("count")} : null;
                         updateFullPlayer("Pi screen", playerState, state.optString("name", ""),
                             state.optInt("positionMs"), state.optInt("durationMs"),
                             state.optInt("volume", 0), state.optDouble("speed", 1), problem);

@@ -57,6 +57,8 @@ final class ItemActions {
         // The file name the words travel under when they are sent to a device.
         String textName;
         Source file;
+        // The file's type when the place knows it, so a PDF is known as one even under an odd name.
+        String mime;
         // From another app: it is already on this phone, so keeping or opening it here is not offered.
         boolean incoming;
         boolean inNote, isPin;
@@ -75,6 +77,12 @@ final class ItemActions {
         String type = mime == null ? "" : mime;
         return type.startsWith("video/") ? Kind.VIDEO : type.startsWith("audio/") ? Kind.AUDIO
             : type.startsWith("image/") ? Kind.IMAGE : Kind.DOCUMENT;
+    }
+
+    /** The one kind of document the Pi screen can draw, told by the file's type or its name. */
+    static boolean isPdf(String name, String mime) {
+        return "application/pdf".equalsIgnoreCase(mime) ||
+            (name != null && name.toLowerCase(java.util.Locale.ROOT).endsWith(".pdf"));
     }
 
     static int icon(Kind kind) {
@@ -101,7 +109,7 @@ final class ItemActions {
     static List<Kit.Section> sections(Activity a, Item item) {
         Kind kind = item.kind;
         boolean plays = kind == Kind.VIDEO || kind == Kind.AUDIO || kind == Kind.VIDEO_LINK;
-        boolean shows = kind == Kind.IMAGE || kind == Kind.TEXT;
+        boolean shows = kind == Kind.IMAGE || kind == Kind.TEXT || (kind == Kind.DOCUMENT && isPdf(item.title, item.mime));
         boolean words = item.file == null;
         boolean here = !item.incoming;
 

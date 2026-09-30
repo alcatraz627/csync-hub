@@ -731,6 +731,7 @@ public final class NotesActivity extends AppCompatActivity {
             String name = held.optString("name", "file"), mime = held.optString("mime", "application/octet-stream");
             String pinId = pin.optString("id");
             item = new ItemActions.Item(ItemActions.kindOf(mime), shown);
+            item.mime = mime;
             item.sub = android.text.format.Formatter.formatShortFileSize(this, held.optLong("size")) + ", pinned";
             item.file = got -> fetch("/v1/pins/" + MediaClient.enc(pinId) + "/file",
                 pinId + "-" + name.replaceAll("[^A-Za-z0-9._-]", "_"), mime, got);
@@ -855,6 +856,7 @@ public final class NotesActivity extends AppCompatActivity {
         Kit.bindRow(Kit.addRow(group), ItemActions.icon(kind), name, kindWords(kind) + " · " + size, null, true)
             .setOnClickListener(v -> {
                 ItemActions.Item item = new ItemActions.Item(kind, name);
+                item.mime = mime;
                 item.sub = kindWords(kind) + ", in this note";
                 item.inNote = true;
                 item.file = got -> fetch("/v1/notes/" + MediaClient.enc(id) + "/files/" + MediaClient.enc(fileId),
