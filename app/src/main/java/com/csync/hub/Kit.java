@@ -754,6 +754,9 @@ final class Kit {
             }
             row.addView(step);
         }
+        // A long path rests at its end, so the current page's name is the part that stays in view.
+        android.widget.HorizontalScrollView strip = top.findViewById(R.id.kit_crumbs_scroll);
+        strip.post(() -> strip.fullScroll(View.FOCUS_RIGHT));
         ((LinearLayout) top.findViewById(R.id.kit_actions)).removeAllViews();
     }
 
