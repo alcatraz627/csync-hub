@@ -1905,6 +1905,14 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                     android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT), 250);
             return;
         }
+        // A reply notification asked for the conversation it belongs to.
+        String wanted = intent.getStringExtra("open_conversation");
+        if (wanted != null) {
+            intent.removeExtra("open_conversation");
+            org.json.JSONObject saved = convEntry(wanted);
+            if (saved != null) openConversation(wanted, saved.optString("title"));
+            return;
+        }
         String draft = intent.getStringExtra("chat_prefill");
         if (draft == null || draft.isEmpty()) return;
         String id = intent.getStringExtra("chat_session");
@@ -2358,6 +2366,10 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         chatSubtitle.setCompoundDrawablesWithIntrinsicBounds(0, 0, 0, 0);
         selectChatFilter(chatFilter);
         refreshAgentStatus();
+        // The Pi holds the conversations, so ones started on another device show up here too.
+        new Thread(() -> {
+            if (ChatStore.pull(this)) ui.post(() -> { if (!chatConvoMode) renderHistoryList(); });
+        }, "chat-pull").start();
     }
 
     private LinearLayout historyGroup;
@@ -2580,16 +2592,151 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         String type = t.optString("type");
         if ("thinking".equals(type)) {
             String txt = t.optString("text");
-            addCollapsible("Thinking", firstLine(txt), txt);
+            workStep(false);
+            addCollapsible(workBody, "Thinking", firstLine(txt), txt);
         } else if ("tool_call".equals(type)) {
             org.json.JSONObject res = t.optJSONObject("result");
             String toolName = t.optString("name");
-            addCollapsible("list_skills".equals(toolName) ? "Available skills" :
-                toolName.replace('_', ' '), toolPreview(t), toolBody(t));
+            workStep(true);
+            addCollapsible(workBody, chatToolTitle(toolName), toolPreview(t), toolBody(t));
             if (res != null && !res.optString("media_url").isEmpty())
                 addImage(res.optString("media_url"), res.optString("media_type"));
-        } else if ("text".equals(type)) addMarkdown(t.optString("text"), transcriptIndex);
+            else addResultCard(toolName, res);
+        } else if ("text".equals(type)) {
+            closeWork();
+            addMarkdown(t.optString("text"), transcriptIndex);
+        }
         scrollDown();
+    }
+
+    // ---- the work strip: everything the assistant did before it answered, folded into one line ----
+
+    private LinearLayout workBody;
+    private TextView workHead;
+    private int workTools, workSteps;
+
+    /** Count one more step under the current reply's strip, starting the strip if this is the first. */
+    private void workStep(boolean tool) {
+        if (workBody == null) {
+            LinearLayout strip = new LinearLayout(this);
+            strip.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout head = new LinearLayout(this);
+            head.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            head.setMinimumHeight(dp(48));
+            final android.widget.ImageView caret = new android.widget.ImageView(this);
+            caret.setImageResource(R.drawable.csi_forward);
+            caret.setColorFilter(col(R.color.dim));
+            caret.setPadding(dp(8), dp(16), dp(8), dp(16));
+            head.addView(caret, new LinearLayout.LayoutParams(dp(32), dp(48)));
+            workHead = new TextView(this);
+            workHead.setTextColor(col(R.color.dim));
+            workHead.setTextSize(13);
+            head.addView(workHead);
+            final LinearLayout body = new LinearLayout(this);
+            body.setOrientation(LinearLayout.VERTICAL);
+            body.setVisibility(View.GONE);
+            head.setOnClickListener(v -> {
+                boolean open = body.getVisibility() != View.VISIBLE;
+                body.setVisibility(open ? View.VISIBLE : View.GONE);
+                caret.setRotation(open ? 90f : 0f);
+            });
+            strip.addView(head);
+            strip.addView(body);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+            lp.topMargin = dp(6);
+            chatList.addView(strip, lp);
+            workBody = body;
+            workTools = 0;
+            workSteps = 0;
+        }
+        workSteps++;
+        if (tool) workTools++;
+        workHead.setText("Working, " + workSummary());
+    }
+
+    private String workSummary() {
+        return workTools == 0 ? "thinking" : workTools == 1 ? "1 tool" : workTools + " tools";
+    }
+
+    /** The answer has arrived: the strip stops saying Working and the next reply starts a new one. */
+    private void closeWork() {
+        if (workBody != null) workHead.setText(workTools == 0 ? "Thought it through" : "Used " + workSummary());
+        workBody = null;
+    }
+
+    /**
+     * What a tool gave back, drawn so it can be read: devices and drives as a list with a status,
+     * anything else as a few labelled facts. A result with nothing readable adds no card; the raw
+     * reply stays available inside the work strip.
+     */
+    private void addResultCard(String tool, org.json.JSONObject result) {
+        if (result == null) return;
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(bg(col(R.color.surface2), 14));
+        card.setPadding(dp(14), dp(10), dp(14), dp(12));
+        TextView top = new TextView(this);
+        top.setText(chatToolTitle(tool));
+        top.setTextColor(col(R.color.dim));
+        top.setTextSize(12);
+        card.addView(top);
+        int rows = 0;
+        java.util.Iterator<String> keys = result.keys();
+        while (keys.hasNext() && rows < 8) {
+            String key = keys.next();
+            Object value = result.opt(key);
+            if (value instanceof org.json.JSONArray) {
+                org.json.JSONArray list = (org.json.JSONArray) value;
+                for (int i = 0; i < list.length() && rows < 8; i++) {
+                    org.json.JSONObject item = list.optJSONObject(i);
+                    if (item == null) continue;
+                    String name = item.optString("label", item.optString("name"));
+                    if (name.isEmpty() || !item.has("online")) continue;
+                    boolean up = item.optBoolean("online");
+                    // A drive is connected or not; a device is online or not. Same dot, the right word.
+                    boolean drive = "media_drives".equals(tool);
+                    card.addView(resultLine(name, up ? (drive ? "Connected" : "Online") : (drive ? "Disconnected" : "Offline"),
+                        up ? Kit.Status.GOOD : Kit.Status.IDLE));
+                    rows++;
+                }
+            } else if (value instanceof String || value instanceof Number || value instanceof Boolean) {
+                String words = String.valueOf(value);
+                if (words.isEmpty() || words.length() > 60 || "ok".equals(key)) continue;
+                card.addView(resultLine(prettyName(key), value instanceof Boolean ? ((Boolean) value ? "Yes" : "No") : words, null));
+                rows++;
+            }
+        }
+        if (rows == 0) return;
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.topMargin = dp(6);
+        chatList.addView(card, lp);
+    }
+
+    private View resultLine(String name, String value, Kit.Status status) {
+        LinearLayout line = new LinearLayout(this);
+        line.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        line.setPadding(0, dp(6), 0, 0);
+        TextView label = new TextView(this);
+        label.setText(name);
+        label.setTextColor(col(R.color.text));
+        label.setTextSize(14);
+        line.addView(label, new LinearLayout.LayoutParams(0, -2, 1f));
+        if (status != null) {
+            View dot = new View(this);
+            android.graphics.drawable.GradientDrawable round = new android.graphics.drawable.GradientDrawable();
+            round.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+            round.setColor(Kit.statusColor(this, status));
+            dot.setBackground(round);
+            LinearLayout.LayoutParams dotAt = new LinearLayout.LayoutParams(dp(8), dp(8));
+            dotAt.rightMargin = dp(6);
+            line.addView(dot, dotAt);
+        }
+        TextView words = new TextView(this);
+        words.setText(value);
+        words.setTextColor(col(R.color.dim));
+        words.setTextSize(13);
+        line.addView(words);
+        return line;
     }
 
     private void resetChat() {
@@ -2632,6 +2779,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private void scrollDown() { chatScroll.post(() -> chatScroll.smoothScrollTo(0, chatList.getBottom())); }
 
     private void addUserBubble(String text, int transcriptIndex) {
+        workBody = null;
         TextView tv = new TextView(this); markwon.setMarkdown(tv, text);
         tv.setTextColor(col(R.color.onAccent)); tv.setTextIsSelectable(true);
         tv.setLinkTextColor(col(R.color.onAccent));
@@ -2710,6 +2858,14 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         fork.setBackgroundResource(android.R.drawable.list_selector_background);
         actions.addView(fork, new LinearLayout.LayoutParams(dp(48), dp(48)));
         fork.setOnClickListener(v -> previewFork(transcriptIndex));
+        // Your own message can be edited and sent again; an answer can be asked for again.
+        android.widget.ImageView again = new android.widget.ImageView(this);
+        again.setImageResource(mine ? R.drawable.csi_edit : R.drawable.csi_refresh);
+        again.setContentDescription(mine ? "Edit and send again" : "Regenerate this answer");
+        again.setColorFilter(col(R.color.dim)); again.setPadding(dp(13), dp(13), dp(13), dp(13));
+        again.setBackgroundResource(android.R.drawable.list_selector_background);
+        actions.addView(again, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        again.setOnClickListener(v -> rewindTo(transcriptIndex, !mine));
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         params.gravity = mine ? android.view.Gravity.END : android.view.Gravity.START;
@@ -2717,6 +2873,39 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         chatList.addView(actions, chatList.indexOfChild(bubble) + 1);
         selectedMessageActions = actions;
         selectedMessageBubble = bubble;
+    }
+
+    /**
+     * Cut the conversation back to the message at or before this entry that you wrote, on the Pi
+     * and on this phone, and put that message in the box. With resend it goes straight out again,
+     * which is Regenerate; without, it waits to be edited.
+     */
+    private void rewindTo(int transcriptIndex, boolean resend) {
+        if (chatSession == null) return;
+        final String session = chatSession;
+        JSONArray transcript = ChatStore.transcript(this, session);
+        int at = Math.min(transcriptIndex, transcript.length() - 1);
+        while (at >= 0 && !"user".equals(transcript.optJSONObject(at).optString("role"))) at--;
+        if (at < 0) return;
+        final int keep = at;
+        final String text = transcript.optJSONObject(at).optString("text");
+        final String ip = Prefs.assistIp(this), token = Prefs.token(this);
+        new Thread(() -> {
+            String failed = null;
+            try { MeshClient.conversations(ip, token, "POST", "/conversations/" + session + "/rewind", new JSONObject().put("keep", keep)); }
+            catch (Throwable e) { failed = e.getMessage(); }
+            final String problem = failed;
+            ui.post(() -> {
+                if (problem != null) { Kit.sheet(this, "The conversation could not be rewound", "The Pi assistant did not answer. Nothing was changed."); return; }
+                if (!session.equals(chatSession)) return;
+                ChatStore.truncate(this, session, keep);
+                renderTranscript(ChatStore.transcript(this, session));
+                chatInput.setText(text);
+                chatInput.setSelection(chatInput.length());
+                if (resend) sendChat();
+                else chatInput.requestFocus();
+            });
+        }, "chat-rewind").start();
     }
 
     private void previewFork(int transcriptIndex) {
@@ -2933,7 +3122,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     // A collapsible block: a dim header that toggles a body. Used for thinking and tool calls.
     // A collapsed step shows two lines: the label, and a dim preview of the first
     // line of the command or thought. Tapping expands the full body.
-    private void addCollapsible(String label, String preview, String body) {
+    private void addCollapsible(LinearLayout parent, String label, String preview, String body) {
         boolean thinking = "Thinking".equals(label);
         LinearLayout box = new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL);
         box.setBackground(bg(col(R.color.surface2), 12));
@@ -2965,7 +3154,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         if (!thinking && preview != null && !preview.isEmpty()) box.addView(prev);
         box.addView(bodyV);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.gravity = android.view.Gravity.START; lp.topMargin = dp(7); box.setLayoutParams(lp); chatList.addView(box);
+        lp.gravity = android.view.Gravity.START; lp.topMargin = dp(7); box.setLayoutParams(lp); parent.addView(box);
     }
 
     private String firstLine(String s) {

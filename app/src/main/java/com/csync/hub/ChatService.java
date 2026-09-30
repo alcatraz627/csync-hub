@@ -84,7 +84,7 @@ public class ChatService extends Service {
             });
 
             if (!uiForeground) {
-                if (acc.length() > 0) { stashedTurns = acc.toString(); stashedSession = session; notifyReply(lastText(acc.toString())); }
+                if (acc.length() > 0) { stashedTurns = acc.toString(); stashedSession = session; notifyReply(session, lastText(acc.toString())); }
                 if (err[0] != null) stashedError = err[0];
             }
             try { wl.release(); } catch (Throwable ignore) {}
@@ -102,14 +102,17 @@ public class ChatService extends Service {
                 .setOngoing(true).build();
     }
 
-    private void notifyReply(String text) {
+    private void notifyReply(String session, String text) {
         if (text == null || text.isEmpty()) return;
         ensureChannel();
         String preview = text.length() > 160 ? text.substring(0, 160) : text;
         int piFlags = PendingIntent.FLAG_UPDATE_CURRENT
                 | (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0);
-        PendingIntent pi = PendingIntent.getActivity(this, 0,
-                new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), piFlags);
+        // Tapping the notification lands in the conversation that replied, not just in the app.
+        PendingIntent pi = PendingIntent.getActivity(this, session.hashCode(),
+                new Intent(this, MainActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    .putExtra("destination", "chat").putExtra("open_conversation", session), piFlags);
         Notification.Builder b = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 ? new Notification.Builder(this, CHANNEL) : new Notification.Builder(this);
         Notification note = b.setContentTitle("Assistant replied")

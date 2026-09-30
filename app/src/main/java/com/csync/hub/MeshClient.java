@@ -321,6 +321,32 @@ public final class MeshClient {
         });
     }
 
+    /**
+     * One call to the Pi assistant's saved conversations. The path starts with
+     * /conversations; the body is sent as JSON when there is one.
+     */
+    static JSONObject conversations(String assistIp, String token, String method, String path, JSONObject body) throws Exception {
+        URL url = new URL("http://" + assistIp + ":" + ASSIST_PORT + path);
+        HttpURLConnection c = (HttpURLConnection) url.openConnection();
+        c.setConnectTimeout(5000);
+        c.setReadTimeout(10000);
+        c.setRequestMethod(method);
+        c.setRequestProperty("X-Csync-Token", token);
+        if (body != null) {
+            byte[] data = body.toString().getBytes("UTF-8");
+            c.setDoOutput(true);
+            c.setRequestProperty("Content-Type", "application/json");
+            c.setFixedLengthStreamingMode(data.length);
+            try (OutputStream out = c.getOutputStream()) { out.write(data); }
+        }
+        try {
+            int code = c.getResponseCode();
+            String resp = readAll(code < 400 ? c.getInputStream() : c.getErrorStream());
+            if (code >= 400) throw new Exception(resp.trim());
+            return new JSONObject(resp);
+        } finally { c.disconnect(); }
+    }
+
     /** Set the active provider, model, and effort. Returns {ok, active}. */
     static JSONObject setConfig(String assistIp, String token, String provider, String model, String effort) throws Exception {
         return withRetry(assistIp, () -> {
