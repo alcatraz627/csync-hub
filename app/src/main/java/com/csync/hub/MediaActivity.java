@@ -64,6 +64,9 @@ public final class MediaActivity extends AppCompatActivity {
     private boolean screenActive = true;
     // Opened from an item on another page, so Back returns there until the Media crumb is tapped.
     private boolean visiting;
+    // Polls of the Pi that went unanswered in a row, and what it was playing at the last answer.
+    private int piMisses;
+    private String piLastActive;
     private boolean showingVideos;
     private static final int FILES = 0, VIDEOS = 1, HISTORY = 2, ACCESS = 3;
     private int activeTab = FILES;
@@ -813,7 +816,8 @@ public final class MediaActivity extends AppCompatActivity {
         for (int id : new int[]{R.id.player_pause, R.id.player_stop, R.id.player_back10,
                 R.id.player_forward10, R.id.player_volume, R.id.player_speed}) {
             View control = findViewById(id);
-            boolean enabled = id == R.id.player_stop ? active :
+            // Stop is also how a failure is dismissed, so it stays live when nothing else does.
+            boolean enabled = id == R.id.player_stop ? active || problem != null :
                 (id == R.id.player_back10 || id == R.id.player_forward10)
                     ? ready && duration > 0 : ready;
             control.setEnabled(enabled);
@@ -846,11 +850,13 @@ public final class MediaActivity extends AppCompatActivity {
         host.removeAllViews();
         if (kind == null) return;
         if (kind.equals("phone")) {
-            Kit.empty(host, Kit.Icon.DEVICE, "Nothing is playing on this phone", null,
-                Kit.button(this, Kit.Icon.MEDIA, "Browse Media", R.color.text, this::closeFullPlayer));
+            // Media is one step up the path, so the page says how to fill it rather than linking there.
+            Kit.empty(host, Kit.Icon.DEVICE, "Nothing is playing on this phone",
+                "Choose something in Media and pick Play on this phone. The last thing played is under Pick up on Home.", null);
         } else if (kind.equals("offline")) {
             Kit.empty(host, Kit.Icon.DISPLAY, "The Pi cannot be reached",
-                "What it is showing is not known until it answers again.",
+                (piLastActive == null ? "" : "It was playing " + piLastActive + " when it stopped answering. ") +
+                    "What it is showing is not known until it answers again.",
                 Kit.button(this, R.drawable.csi_wifi, "Open Connection", R.color.text, () ->
                     startActivity(new Intent(this, MainActivity.class)
                         .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP)
@@ -1557,6 +1563,8 @@ public final class MediaActivity extends AppCompatActivity {
             pendingLoop = null;
             loopWhenPlaying = false;
             ++outputIntent;
+            // Stop also dismisses a failure on this phone, so the page goes back to its empty state.
+            phoneProblem = null;
             stopPhoneForNewPlayback();
         }
         if ("phone".equals(target)) {
@@ -2053,6 +2061,8 @@ public final class MediaActivity extends AppCompatActivity {
                         findViewById(R.id.media_mute).setVisibility(plays ? View.VISIBLE : View.GONE);
                         findViewById(R.id.media_settings).setVisibility(plays ? View.VISIBLE : View.GONE);
                         String problem = state.optString("error").isEmpty() ? null : state.optString("error");
+                        piMisses = 0;
+                        piLastActive = active ? displayMediaName(state.optString("name", "Pi media")) : null;
                         nowPlaying.setText(active ? displayMediaName(state.optString("name", "Pi media")) : "Pi screen");
                         output.setText(plays ? stateWords("Pi screen", playerState, problem) + " · volume " + state.optInt("volume", 0) + "%"
                             : stateWords("Pi screen", playerState, problem));
@@ -2074,6 +2084,8 @@ public final class MediaActivity extends AppCompatActivity {
                 } catch (Exception error) {
                     ui.post(() -> {
                         if (!screenActive || !"pi".equals(target)) return;
+                        // One missed answer is the network hiccuping; the page changes on the second.
+                        if (++piMisses < 2) return;
                         nowPlaying.setText("The Pi cannot be reached");
                         output.setText("Check the Pi before using the controls");
                         updateFullPlayer("Pi screen", "offline", "", 0, 0, 0, 1);
