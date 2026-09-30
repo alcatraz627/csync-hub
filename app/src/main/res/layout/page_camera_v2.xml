@@ -21,9 +21,6 @@
                 android:layout_height="wrap_content" android:layout_marginTop="10dp"
                 android:text="Connecting to Pi camera" android:textSize="13sp"
                 android:textColor="@color/dim" android:accessibilityLiveRegion="polite"/>
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="3dp" android:text="Closes when leaving Camera"
-                android:textSize="12sp" android:textColor="@color/dim"/>
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:layout_marginTop="16dp" android:gravity="center" android:orientation="horizontal">
                 <ImageButton android:id="@+id/camera_captures" android:layout_width="56dp"
@@ -44,10 +41,8 @@
                     android:foreground="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="Start recording"/>
             </LinearLayout>
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="24dp" android:layout_marginBottom="10dp"
-                style="@style/Kit.Text.Section" android:text="After Capture"/>
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
                 android:orientation="vertical" android:background="@drawable/card_bg"
                 android:clipToOutline="true">
                 <include android:id="@+id/camera_captures_row" layout="@layout/kit_row"/>

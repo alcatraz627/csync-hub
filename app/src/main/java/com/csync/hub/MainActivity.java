@@ -368,10 +368,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     // ---------------- home page (status + capabilities) ----------------
 
-    private LinearLayout homeCaps;
-
     private void setupHomePage() {
-        homeCaps = pageMore.findViewById(R.id.home_caps);
         com.google.android.material.bottomnavigation.BottomNavigationView nav = findViewById(R.id.nav);
         View top = pageHome.findViewById(R.id.home_top);
         Kit.pageTop(top, "home", this::openPlace);
@@ -388,18 +385,12 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             v -> { nav.setSelectedItemId(R.id.nav_more); show(5); });
         pageHome.findViewById(R.id.home_status).setOnClickListener(v -> { nav.setSelectedItemId(R.id.nav_more); show(3); });
         bindHomeStatus(null, false, null);
-        pageMore.findViewById(R.id.more_camera).setOnClickListener(v -> show(5));
-        pageMore.findViewById(R.id.more_tools).setOnClickListener(v -> show(3));
-        pageMore.findViewById(R.id.more_notes).setOnClickListener(v ->
-            startActivity(new Intent(this, NotesActivity.class)));
-        pageMore.findViewById(R.id.more_settings).setOnClickListener(v -> show(4));
-        pageMore.findViewById(R.id.more_about).setOnClickListener(v -> showMoreDetail(2));
+        renderMore(null);
         pageCamera.findViewById(R.id.camera_show_display).setOnClickListener(v ->
             startActivity(new Intent(this, MediaActivity.class).putExtra("player_target", "pi")));
         showMoreDetail(0);
         showToolsDetail(0);
         closeSettingsDetail();
-        pageMore.findViewById(R.id.more_assistant_tools).setOnClickListener(v -> showMoreDetail(1));
         pageTools.findViewById(R.id.tools_media).setOnClickListener(v -> startActivity(new Intent(this, MediaActivity.class)));
         pageTools.findViewById(R.id.tools_process_route).setOnClickListener(v -> showToolsDetail(1));
         pageTools.findViewById(R.id.tools_widgets_route).setOnClickListener(v -> showToolsDetail(2));
@@ -495,13 +486,107 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageMore.findViewById(R.id.more_guide).setVisibility(detail == 1 ? View.VISIBLE : View.GONE);
         pageMore.findViewById(R.id.more_help).setVisibility(detail == 2 ? View.VISIBLE : View.GONE);
         Kit.pageTop(pageMore.findViewById(R.id.more_crumb), detail == 0 ? "more" : detail == 1 ? "guide" : "help", this::openPlace);
-        if (detail == 2) {
-            String version;
-            try { version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; }
-            catch (Exception error) { version = "unknown"; }
-            ((TextView) pageMore.findViewById(R.id.more_version)).setText("csync " + version);
+        if (detail == 1) renderGuide();
+        if (detail == 2) renderHelp();
+    }
+
+    /**
+     * More: what lives on the Pi, what looks after things, and what to read.
+     * {@code piUp} is null until the Pi has been checked, which leaves Tools without a status.
+     */
+    private void renderMore(Boolean piUp) {
+        LinearLayout page = pageMore.findViewById(R.id.more_rows);
+        page.removeAllViews();
+        Kit.label(page, "On the Pi");
+        LinearLayout group = Kit.group(page);
+        Kit.bindRow(Kit.addRow(group), Kit.Icon.CAMERA, "Pi camera", "Live picture, photos and recordings", null, true)
+            .setOnClickListener(v -> show(5));
+        Kit.bindRow(Kit.addRow(group), Kit.Icon.NOTES, "Notes", "Notes and pins, kept on the Pi", null, true)
+            .setOnClickListener(v -> startActivity(new Intent(this, NotesActivity.class)));
+
+        Kit.label(page, "Looking after things");
+        group = Kit.group(page);
+        View tools = Kit.addRow(group);
+        Kit.bindRow(tools, Kit.Icon.TOOLS, "Tools", "Pi health, this phone, updates", null, true);
+        if (piUp != null) Kit.rowStatus(tools, piUp ? Kit.Status.GOOD : Kit.Status.IDLE, piUp ? "Ready" : "Offline");
+        tools.setOnClickListener(v -> show(3));
+        Kit.bindRow(Kit.addRow(group), Kit.Icon.SETTINGS, "Settings", "How the app connects, plays and looks", null, true)
+            .setOnClickListener(v -> show(4));
+
+        Kit.label(page, "Reference");
+        group = Kit.group(page);
+        Kit.bindRow(Kit.addRow(group), R.drawable.csi_help, "Assistant guide", "What you can ask the Pi assistant", null, true)
+            .setOnClickListener(v -> showMoreDetail(1));
+        Kit.bindRow(Kit.addRow(group), R.drawable.csi_info, "Help and about", "Version " + appVersion(), null, true)
+            .setOnClickListener(v -> showMoreDetail(2));
+    }
+
+    /** Start a new conversation with an ask already written, so an example can be tried with one tap. */
+    private void tryAsk(String ask) {
+        ((com.google.android.material.bottomnavigation.BottomNavigationView) findViewById(R.id.nav))
+            .setSelectedItemId(R.id.nav_chat);
+        newConversation();
+        chatInput.setText(ask);
+        chatInput.setSelection(chatInput.length());
+    }
+
+    /** The guide: three things the assistant is for, each with asks that can be tried as they are. */
+    private void renderGuide() {
+        LinearLayout page = pageMore.findViewById(R.id.guide_rows);
+        page.removeAllViews();
+        String[][] parts = {
+            {"Ask", "Find a film, ask what is playing, or check how the Pi is doing.",
+                "What is on the Pi screen?", "Find the knot tutorials shorter than five minutes", "Is the Pi running hot?"},
+            {"Act", "The assistant names the output or the device before it acts, the same way the app does.",
+                "Play the newest video on the Pi screen", "Send my last note to my Mac", "Take a photo with the Pi camera"},
+            {"Keep", "It can read and write your notes on the Pi."}};
+        for (String[] part : parts) {
+            Kit.label(page, part[0]);
+            TextView words = new TextView(this);
+            words.setTextAppearance(R.style.Kit_Text_RowSub);
+            words.setText(part[1]);
+            words.setPadding(dp(2), 0, 0, dp(8));
+            page.addView(words);
+            if (part.length == 2) continue;
+            LinearLayout group = Kit.group(page);
+            for (int i = 2; i < part.length; i++) {
+                String ask = part[i];
+                Kit.bindRow(Kit.addRow(group), Kit.Icon.CHAT, ask, null, null, true).setOnClickListener(v -> tryAsk(ask));
+            }
         }
-        if (detail == 1) refreshCapabilities();
+        LinearLayout.LayoutParams below = new LinearLayout.LayoutParams(-2, -2);
+        below.topMargin = dp(18);
+        page.addView(Kit.button(this, Kit.Icon.TOOLS, "See what it can use", R.color.text, () -> {
+            ((com.google.android.material.bottomnavigation.BottomNavigationView) findViewById(R.id.nav))
+                .setSelectedItemId(R.id.nav_chat);
+            showChatList();
+            selectChatFilter("Tools");
+        }), below);
+    }
+
+    private void renderHelp() {
+        LinearLayout page = pageMore.findViewById(R.id.help_rows);
+        page.removeAllViews();
+        String[][] parts = {
+            {"Where things live", "Media browses the drives and plays on the Pi screen or this phone. Share sends to your devices. "
+                + "Chat talks to the Pi assistant. More holds the camera, notes, tools and settings."},
+            {"When something does not work", "Open More, then Tools. It shows how the Pi is doing right now. "
+                + "If the Pi cannot be reached at all, open Settings, then Connection."}};
+        for (String[] part : parts) {
+            Kit.label(page, part[0]);
+            TextView words = new TextView(this);
+            words.setTextColor(col(R.color.text));
+            words.setTextSize(14);
+            words.setLineSpacing(0, 1.25f);
+            words.setPadding(dp(2), 0, 0, 0);
+            words.setText(part[1]);
+            page.addView(words);
+        }
+        Kit.label(page, "About");
+        LinearLayout group = Kit.group(page);
+        String pi = Prefs.assistIp(this);
+        Kit.bindRow(Kit.addRow(group), R.drawable.csi_info, "csync", null, appVersion(), false).setClickable(false);
+        Kit.bindRow(Kit.addRow(group), Kit.Icon.TOOLS, "Raspberry Pi", null, pi.isEmpty() ? "Not set" : pi, false).setClickable(false);
     }
 
     private void showToolsDetail(int detail) {
@@ -658,9 +743,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             }
             final boolean media = mediaReady;
             final JSONObject lastPlayed = played;
-            ui.post(() -> { bindHomeStatus(pi, media, mac); renderPickUp(lastPlayed); });
+            ui.post(() -> { bindHomeStatus(pi, media, mac); renderPickUp(lastPlayed); renderMore(pi || media); });
         }).start();
-        refreshCapabilities();
     }
 
     /**
@@ -728,17 +812,6 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         catch (Exception error) { return ""; }
     }
 
-    private void refreshCapabilities() {
-        final String assist = Prefs.assistIp(this), token = Prefs.token(this);
-        if (assist.isEmpty() || token.isEmpty()) { renderCaps(null); return; }
-        new Thread(() -> {
-            JSONArray caps = null;
-            try { caps = MeshClient.capabilities(assist, token); } catch (Throwable ignore) {}
-            final JSONArray result = caps;
-            ui.post(() -> renderCaps(result));
-        }, "assistant-capabilities").start();
-    }
-
     private void openHomeSearch() {
         startActivity(new Intent(this, SearchActivity.class));
     }
@@ -801,38 +874,6 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private void setDot(View dot, boolean up) {
         dot.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
                 col(up ? R.color.online : R.color.offline)));
-    }
-
-    private void renderCaps(JSONArray caps) {
-        homeCaps.removeAllViews();
-        if (caps == null) { addCapRow("Assistant unreachable", ""); return; }
-        if (caps.length() == 0) { addCapRow("No tools advertised", ""); return; }
-        for (int i = 0; i < caps.length(); i++) {
-            JSONObject t = caps.optJSONObject(i);
-            if (t == null) continue;
-            addCapRow(prettyName(t.optString("name")), t.optString("description"));
-        }
-    }
-
-    private void addCapRow(String title, String desc) {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.VERTICAL);
-        row.setPadding(dp(14), dp(12), dp(14), dp(12));
-        row.setBackgroundResource(R.drawable.card_bg);
-        TextView b = new TextView(this);
-        b.setText(title); b.setTextColor(col(R.color.text)); b.setTextSize(14);
-        b.setTypeface(null, android.graphics.Typeface.BOLD);
-        row.addView(b);
-        if (desc != null && !desc.isEmpty()) {
-            TextView s = new TextView(this);
-            s.setText(desc); s.setTextColor(col(R.color.dim)); s.setTextSize(13);
-            LinearLayout.LayoutParams copy = new LinearLayout.LayoutParams(-1, -2);
-            copy.topMargin = dp(4);
-            row.addView(s, copy);
-        }
-        LinearLayout.LayoutParams card = new LinearLayout.LayoutParams(-1, -2);
-        card.bottomMargin = dp(8);
-        homeCaps.addView(row, card);
     }
 
     // home_health -> "Home health"; list_devices -> "List devices".

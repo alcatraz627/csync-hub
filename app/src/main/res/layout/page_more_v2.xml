@@ -1,136 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- More, and its two reading pages. Each page is a column that MainActivity fills with Kit parts. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="match_parent"
     android:orientation="vertical" android:background="@color/bg">
     <include android:id="@+id/more_crumb" layout="@layout/kit_page_top"/>
     <ScrollView android:id="@+id/more_overview" android:layout_width="match_parent" android:layout_height="0dp"
         android:layout_weight="1" android:fillViewport="true">
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        <LinearLayout android:id="@+id/more_rows" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:orientation="vertical" android:paddingStart="@dimen/kit_gutter" android:paddingEnd="@dimen/kit_gutter"
-            android:paddingTop="6dp" android:paddingBottom="16dp">
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="4dp" android:text="More"
-                style="@style/Kit.Text.PageTitle" android:textColor="@color/text"/>
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="4dp" android:layout_marginBottom="8dp"
-                android:text="On the Pi and this phone" style="@style/Kit.Text.Section"/>
-            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:orientation="vertical" android:background="@drawable/card_bg">
-                <LinearLayout android:id="@+id/more_camera" style="@style/CsyncMoreNavRow">
-                    <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_camera"/>
-                    <LinearLayout style="@style/CsyncMoreText">
-                        <TextView style="@style/CsyncMoreTitle" android:text="Pi camera"/>
-                        <TextView style="@style/CsyncMoreSub" android:text="Live preview, photo, recording"/>
-                    </LinearLayout>
-                    <ImageView style="@style/CsyncMoreChevron"/>
-                </LinearLayout>
-                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/border"/>
-                <LinearLayout android:id="@+id/more_tools" style="@style/CsyncMoreNavRow">
-                    <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_tools"/>
-                    <LinearLayout style="@style/CsyncMoreText">
-                        <TextView style="@style/CsyncMoreTitle" android:text="Tools"/>
-                        <TextView style="@style/CsyncMoreSub" android:text="Pi health, this phone, app updates"/>
-                    </LinearLayout>
-                    <ImageView style="@style/CsyncMoreChevron"/>
-                </LinearLayout>
-                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/border"/>
-                <LinearLayout android:id="@+id/more_settings" style="@style/CsyncMoreNavRow">
-                    <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_settings"/>
-                    <LinearLayout style="@style/CsyncMoreText">
-                        <TextView style="@style/CsyncMoreTitle" android:text="Settings"/>
-                        <TextView style="@style/CsyncMoreSub" android:text="Devices, media, assistant, appearance"/>
-                    </LinearLayout>
-                    <ImageView style="@style/CsyncMoreChevron"/>
-                </LinearLayout>
-            </LinearLayout>
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="18dp" android:layout_marginBottom="8dp"
-                android:text="Reference" style="@style/Kit.Text.Section"/>
-            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:orientation="vertical" android:background="@drawable/card_bg">
-                <LinearLayout android:id="@+id/more_assistant_tools" style="@style/CsyncMoreNavRow">
-                    <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_chat"/>
-                    <LinearLayout style="@style/CsyncMoreText">
-                        <TextView style="@style/CsyncMoreTitle" android:text="Assistant guide"/>
-                        <TextView style="@style/CsyncMoreSub" android:text="What you can ask the Pi assistant"/>
-                    </LinearLayout>
-                    <ImageView style="@style/CsyncMoreChevron"/>
-                </LinearLayout>
-                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/border"/>
-                <LinearLayout android:id="@+id/more_notes" style="@style/CsyncMoreNavRow">
-                    <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_note"/>
-                    <LinearLayout style="@style/CsyncMoreText">
-                        <TextView style="@style/CsyncMoreTitle" android:text="Notes"/>
-                        <TextView style="@style/CsyncMoreSub" android:text="Notes and pins kept on the Pi"/>
-                    </LinearLayout>
-                    <ImageView style="@style/CsyncMoreChevron"/>
-                </LinearLayout>
-                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/border"/>
-                <LinearLayout android:id="@+id/more_about" style="@style/CsyncMoreNavRow">
-                    <ImageView style="@style/CsyncMoreIcon" android:src="@drawable/csi_help"/>
-                    <LinearLayout style="@style/CsyncMoreText">
-                        <TextView style="@style/CsyncMoreTitle" android:text="Help and about"/>
-                        <TextView style="@style/CsyncMoreSub" android:text="Version and connection help"/>
-                    </LinearLayout>
-                    <ImageView style="@style/CsyncMoreChevron"/>
-                </LinearLayout>
-            </LinearLayout>
-        </LinearLayout>
+            android:paddingBottom="16dp"/>
     </ScrollView>
     <ScrollView android:id="@+id/more_guide" android:layout_width="match_parent"
         android:layout_height="0dp" android:layout_weight="1" android:visibility="gone">
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        <LinearLayout android:id="@+id/guide_rows" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:orientation="vertical" android:paddingStart="@dimen/kit_gutter" android:paddingEnd="@dimen/kit_gutter"
-            android:paddingTop="6dp" android:paddingBottom="16dp">
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:text="Assistant capabilities" style="@style/Kit.Text.PageTitle"
-                android:textColor="@color/text"/>
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="4dp" android:text="What the Pi assistant can help with."
-                android:textSize="13sp" android:textColor="@color/dim"/>
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="20dp" android:text="Ask and inspect"
-                style="@style/Kit.Text.Section"/>
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="8dp" android:text="Search media, discuss results, and inspect device context."
-                android:textSize="14sp" android:textColor="@color/text"/>
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="20dp" android:text="Available Pi tools"
-                style="@style/Kit.Text.Section"/>
-            <LinearLayout android:id="@+id/home_caps" android:layout_width="match_parent"
-                android:layout_height="wrap_content" android:layout_marginTop="8dp"
-                android:orientation="vertical"/>
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="20dp" android:text="Model and tool availability comes from the Pi. Check Settings for supported choices."
-                android:textSize="13sp" android:textColor="@color/dim"/>
-        </LinearLayout>
+            android:paddingBottom="16dp"/>
     </ScrollView>
     <ScrollView android:id="@+id/more_help" android:layout_width="match_parent"
         android:layout_height="0dp" android:layout_weight="1" android:visibility="gone">
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        <LinearLayout android:id="@+id/help_rows" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:orientation="vertical" android:paddingStart="@dimen/kit_gutter" android:paddingEnd="@dimen/kit_gutter"
-            android:paddingTop="6dp" android:paddingBottom="16dp">
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:text="Help &amp; about" style="@style/Kit.Text.PageTitle"
-                android:textColor="@color/text"/>
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="4dp" android:text="csync across phone, Pi, and named peers."
-                android:textSize="13sp" android:textColor="@color/dim"/>
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="20dp" android:text="Where things live"
-                style="@style/Kit.Text.Section"/>
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="8dp" android:text="Media browses Pi storage. Share sends to named devices. Chat uses the Pi assistant. Tools checks service health and offers app updates from Pi."
-                android:textSize="14sp" android:textColor="@color/text"/>
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="20dp" android:text="Support"
-                style="@style/Kit.Text.Section"/>
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="8dp" android:text="Check Tools for service health, then inspect the named device and source in Settings."
-                android:textSize="14sp" android:textColor="@color/text"/>
-            <TextView android:id="@+id/more_version" android:layout_width="match_parent"
-                android:layout_height="wrap_content" android:layout_marginTop="20dp"
-                android:textSize="12sp" android:textColor="@color/dim"/>
-        </LinearLayout>
+            android:paddingBottom="16dp"/>
     </ScrollView>
 </LinearLayout>

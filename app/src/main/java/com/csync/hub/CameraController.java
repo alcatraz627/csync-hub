@@ -107,9 +107,9 @@ final class CameraController {
         record.setOnClickListener(v -> action(recording ? "/v1/camera/record/stop" : "/v1/camera/record/start"));
         root.findViewById(R.id.camera_captures).setOnClickListener(v -> openCaptures());
         Kit.bindRow(root.findViewById(R.id.camera_captures_row), Kit.Icon.PHOTO, "Captures",
-            "Photos and recordings from the Pi", null, true);
-        Kit.bindRow(root.findViewById(R.id.camera_show_display), Kit.Icon.DISPLAY, "Pi display",
-            "Open screen and playback controls", null, true);
+            "Photos and recordings", null, true);
+        Kit.bindRow(root.findViewById(R.id.camera_show_display), Kit.Icon.DISPLAY, "Pi screen",
+            "What it is showing, and its controls", null, true);
         root.findViewById(R.id.camera_captures_row).setOnClickListener(v -> openCaptures());
         capturesBack = new OnBackPressedCallback(false) {
             @Override public void handleOnBackPressed() { closeCaptures(); }
@@ -122,7 +122,7 @@ final class CameraController {
         visible = true;
         client = new MediaClient(Prefs.assistIp(activity), Prefs.token(activity));
         renderPage();
-        status.setText("Connecting to Pi camera");
+        status.setText("Connecting");
         statusAvailable = false;
         updateControls();
         if (!showingCaptures) startPreview();
@@ -136,7 +136,7 @@ final class CameraController {
         closePreview();
         ++listGeneration;
         ui.removeCallbacks(pollStatus);
-        status.setText("Camera stream closed");
+        status.setText("The live picture is closed");
         capturesBack.setEnabled(false);
         // The Pi finishes a recording when the stream's final listener unsubscribes.
     }
@@ -179,7 +179,7 @@ final class CameraController {
         int generation = ++streamGeneration;
         previewReady = false;
         updateControls();
-        status.setText("Connecting to Pi camera");
+        status.setText("Connecting");
         new Thread(() -> readStream(generation), "pi-camera-preview").start();
     }
 
@@ -226,7 +226,7 @@ final class CameraController {
                         previewReady = true;
                         updateControls();
                         if (!actionInFlight && statusAvailable)
-                            status.setText(recording ? "Recording on Pi" : "Preview live");
+                            status.setText(recording ? "Recording" : "Live");
                     }
                 });
             }
@@ -235,7 +235,7 @@ final class CameraController {
                 if (visible && !showingCaptures && generation == streamGeneration) {
                     previewReady = false;
                     updateControls();
-                    status.setText("Camera unavailable: " + error.getMessage());
+                    status.setText("The camera cannot be reached. " + error.getMessage());
                 }
             });
         } finally {
@@ -257,15 +257,15 @@ final class CameraController {
                     statusAvailable = true;
                     updateControls();
                     if (!actionInFlight && !error.isEmpty() && !"null".equals(error))
-                        status.setText("Camera: " + error);
-                    else if (!actionInFlight && recording) status.setText("Recording on Pi");
+                        status.setText("The recording stopped. " + error);
+                    else if (!actionInFlight && recording) status.setText("Recording");
                 });
             } catch (Exception error) {
                 ui.post(() -> {
                     if (visible) {
                         statusAvailable = false;
                         updateControls();
-                        status.setText("Camera status unavailable: " + error.getMessage());
+                        status.setText("The camera cannot be reached. " + error.getMessage());
                     }
                 });
             } finally { statusInFlight.set(false); }
@@ -284,8 +284,8 @@ final class CameraController {
         if (actionInFlight || client == null) return;
         actionInFlight = true;
         boolean stop = path.endsWith("stop");
-        status.setText(stop ? "Finishing recording on Pi" : path.endsWith("start") ?
-            "Starting recording on Pi" : "Taking photo on Pi");
+        status.setText(stop ? "Finishing the recording" : path.endsWith("start") ?
+            "Starting to record" : "Taking a photo");
         updateControls();
         MediaClient active = client;
         new Thread(() -> {
@@ -295,15 +295,15 @@ final class CameraController {
                     if (result.has("recording")) recording = result.optBoolean("recording");
                     actionInFlight = false;
                     updateControls();
-                    if (visible) status.setText(stop ? "Recording saved on Pi: " + result.optString("name") :
-                        path.endsWith("start") ? "Recording on Pi" : "Photo saved on Pi: " + result.optString("name"));
+                    if (visible) status.setText(stop ? "The recording is saved in Captures" :
+                        path.endsWith("start") ? "Recording" : "The photo is saved in Captures");
                     if (showingCaptures) loadCaptures();
                 });
             } catch (Exception error) {
                 ui.post(() -> {
                     actionInFlight = false;
                     updateControls();
-                    if (visible) status.setText("Camera: " + error.getMessage());
+                    if (visible) status.setText("It did not work. " + error.getMessage());
                     checkStatus();
                 });
             }
