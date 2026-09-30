@@ -74,11 +74,27 @@ public final class MediaActivity extends AppCompatActivity {
         new ActivityResultContracts.GetContent(), uri -> { if (uri != null) uploadWallpaper(uri); });
     private final ActivityResultLauncher<String> mediaPicker = registerForActivityResult(
         new ActivityResultContracts.GetContent(), uri -> { if (uri != null) castPhoneFile(uri); });
+    // Why playback on this phone failed and what it was, kept after the player has gone so the page can still say so.
+    private String phoneProblem, phoneTitle = "";
+    // A video takes the whole screen only once it has a picture to show; until then the player page says Loading.
+    private boolean phoneWantsVideo;
     private final PhonePlaybackService.Observer phoneObserver = message -> {
         setStatus(message);
         PhonePlaybackService playback = PhonePlaybackService.current;
-        if (playback != null && playback.item() != null)
-            nowPlaying.setText("Phone: " + playback.item().optString("name"));
+        if (playback == null) return;
+        if (playback.item() != null) {
+            phoneTitle = playback.item().optString("name");
+            nowPlaying.setText("Phone: " + phoneTitle);
+        }
+        String state = playback.playbackState();
+        phoneProblem = playback.problem();
+        if (state.equals("playing") && phoneWantsVideo && !videoMode) {
+            phoneWantsVideo = false;
+            enterVideoMode();
+        } else if ((state.equals("failed") || state.equals("finished")) && videoMode) {
+            exitVideoMode();
+            showFullPlayer();
+        }
     };
 
     @Override protected void onCreate(Bundle saved) {
@@ -468,9 +484,9 @@ public final class MediaActivity extends AppCompatActivity {
         findViewById(R.id.media_list).setVisibility(View.GONE);
         findViewById(R.id.media_full_player).setVisibility(View.VISIBLE);
         renderTop();
-        if ("phone".equals(target) && PhonePlaybackService.current == null)
+        if ("phone".equals(target) && PhonePlaybackService.current == null && phoneProblem == null)
             updateFullPlayer("This phone", "stopped", "", 0, 0, 0, 1);
-        ((TextView) findViewById(R.id.player_feedback)).setText("");
+        if (phoneProblem == null) ((TextView) findViewById(R.id.player_feedback)).setText("");
     }
 
     private void closeFullPlayer() {
@@ -523,18 +539,53 @@ public final class MediaActivity extends AppCompatActivity {
         favorite.setAlpha(playerTitle.isEmpty() ? 0.45f : 1f);
     }
 
+    /** What the player is doing, in the words a person would use, with where it is happening. */
+    private static String stateWords(String outputName, String state, String problem) {
+        String where = outputName.equals("Pi screen") ? "on the Pi screen" : "on this phone";
+        switch (state) {
+            case "playing": return "Playing " + where;
+            case "paused": return "Paused " + where;
+            case "loading": case "buffering": return "Loading " + where;
+            case "finished": return "Finished " + where;
+            case "offline": return "The Pi cannot be reached";
+            default: return problem == null ? "Nothing is playing " + where : "It could not be played " + where;
+        }
+    }
+
+    private static Kit.Status stateStatus(String state, String problem) {
+        switch (state) {
+            case "playing": return Kit.Status.GOOD;
+            case "loading": case "buffering": return Kit.Status.WARN;
+            case "offline": return Kit.Status.BAD;
+            case "paused": case "finished": return Kit.Status.IDLE;
+            default: return problem == null ? Kit.Status.IDLE : Kit.Status.BAD;
+        }
+    }
+
     private void updateFullPlayer(String outputName, String state, String title,
                                   int position, int duration, int volume, double speed) {
-        ((TextView) findViewById(R.id.player_target_state)).setText(outputName + " · " + state);
+        updateFullPlayer(outputName, state, title, position, duration, volume, speed, null);
+    }
+
+    /** Fill the player page. {@code problem} is why playback failed, when it did. */
+    private void updateFullPlayer(String outputName, String state, String title,
+                                  int position, int duration, int volume, double speed, String problem) {
+        boolean onPi = outputName.equals("Pi screen");
+        ((TextView) findViewById(R.id.player_target_state)).setText(stateWords(outputName, state, problem));
+        Kit.setStatus(findViewById(R.id.player_dot), stateStatus(state, problem));
         if (!state.equals("offline"))
-            ((TextView) findViewById(R.id.player_feedback)).setText("");
+            ((TextView) findViewById(R.id.player_feedback)).setText(problem == null ? "" : problem);
         ((TextView) findViewById(R.id.player_title)).setText(
-            title == null || title.isEmpty() ? "No media selected" : displayMediaName(title));
+            title == null || title.isEmpty() ? "Nothing chosen yet" : displayMediaName(title));
         playerTitle = title == null ? "" : displayMediaName(title);
         renderFavorite();
-        String poster = state.equals("idle") || state.equals("stopped") ? "Display idle" :
-            outputName + " · " + state + "\nPreview unavailable on this screen";
-        ((TextView) findViewById(R.id.player_art)).setText(poster);
+        boolean showing = state.equals("playing") || state.equals("paused");
+        ((TextView) findViewById(R.id.player_art)).setText(
+            showing && onPi ? "The picture is on the Pi screen" :
+            showing ? "The sound is on this phone" :
+            state.equals("loading") || state.equals("buffering") ? "Loading" :
+            state.equals("finished") ? "Finished" : "");
+        findViewById(R.id.player_display_row).setVisibility(onPi ? View.VISIBLE : View.GONE);
         android.widget.ImageView pause = findViewById(R.id.player_pause);
         pause.setImageResource(state.equals("paused") ? R.drawable.csi_play : R.drawable.csi_pause);
         pause.setContentDescription(state.equals("paused") ? "Resume" : "Pause");
@@ -544,7 +595,7 @@ public final class MediaActivity extends AppCompatActivity {
         playerSeek.setMax(Math.max(1, duration));
         if (!seeking) playerSeek.setProgress(Math.max(0, position));
         ((TextView) findViewById(R.id.player_position)).setText(playbackTime(position));
-        ((TextView) findViewById(R.id.player_duration)).setText(duration > 0 ? playbackTime(duration) : "--:--");
+        ((TextView) findViewById(R.id.player_duration)).setText(duration > 0 ? playbackTime(duration) : "");
         lastVolume = volume;
         lastSpeed = speed;
         ((TextView) findViewById(R.id.player_volume)).setText("Volume · " + volume + "%");
@@ -872,7 +923,12 @@ public final class MediaActivity extends AppCompatActivity {
 
     private void startPhone(JSONObject item, int resumeMs, long intent) {
         audioOnly = item.optString("mime").startsWith("audio/");
-        if (audioOnly) { exitVideoMode(); showFullPlayer(); } else enterVideoMode();
+        phoneProblem = null;
+        phoneTitle = item.optString("name");
+        phoneWantsVideo = !audioOnly;
+        exitVideoMode();
+        showFullPlayer();
+        updateFullPlayer("This phone", "loading", phoneTitle, 0, 0, 0, 1);
         nowPlaying.setText("Phone: " + item.optString("name"));
         output.setText(externalDisplayText());
         setStatus("Opening stream");
@@ -1059,9 +1115,9 @@ public final class MediaActivity extends AppCompatActivity {
         shownRotation = state.optInt("rotation", 0);
         shownLoop = state.optBoolean("loop");
         if (pendingRotation < 0)
-            rotate.setText(ready ? "Rotate · " + shownRotation + "°" : "Rotate · unavailable");
+            rotate.setText(ready ? "Rotate · " + shownRotation + "°" : "Rotate");
         if (pendingLoop == null)
-            loop.setText(ready ? "Loop · " + (shownLoop ? "On" : "Off") : "Loop · unavailable");
+            loop.setText(ready ? "Loop · " + (shownLoop ? "On" : "Off") : "Loop");
         rotate.setEnabled(ready);
         loop.setEnabled(ready);
         rotate.setAlpha(ready ? 1f : 0.45f);
@@ -1365,7 +1421,7 @@ public final class MediaActivity extends AppCompatActivity {
                 String phoneState = playback.playbackState();
                 findViewById(R.id.media_pause).setVisibility(phoneState.equals("playing") ? View.VISIBLE : View.GONE);
                 findViewById(R.id.media_resume).setVisibility(phoneState.equals("paused") ? View.VISIBLE : View.GONE);
-                output.setText("This phone · " + phoneState);
+                output.setText(stateWords("This phone", phoneState, null));
                 seek.setMax(Math.max(1, playback.duration()));
                 seek.setProgress(playback.position());
                 JSONObject item = playback.item();
@@ -1375,7 +1431,9 @@ public final class MediaActivity extends AppCompatActivity {
                 showPiDisplayState(new JSONObject());
             } else {
                 findViewById(R.id.media_player_controls).setVisibility(View.GONE);
-                updateFullPlayer("This phone", "stopped", "", 0, 0, 0, 1);
+                if (phoneProblem == null) updateFullPlayer("This phone", "stopped", "", 0, 0, 0, 1);
+                else updateFullPlayer("This phone", "failed", phoneTitle, 0, 0, 0, 1,
+                    phoneProblem + " Try VLC on this phone, or the Pi screen.");
                 showPiDisplayState(new JSONObject());
             }
         } else if (stateInFlight.compareAndSet(false, true)) {
@@ -1391,10 +1449,11 @@ public final class MediaActivity extends AppCompatActivity {
                         findViewById(R.id.media_pause).setVisibility(playerState.equals("playing") ? View.VISIBLE : View.GONE);
                         findViewById(R.id.media_resume).setVisibility(playerState.equals("paused") ? View.VISIBLE : View.GONE);
                         nowPlaying.setText(displayMediaName(state.optString("name", "Pi media")));
-                        output.setText("Pi screen · " + playerState + " · volume " + state.optInt("volume", 0) + "%");
+                        String problem = state.optString("error").isEmpty() ? null : state.optString("error");
+                        output.setText(stateWords("Pi screen", playerState, problem) + " · volume " + state.optInt("volume", 0) + "%");
                         updateFullPlayer("Pi screen", playerState, state.optString("name", ""),
                             state.optInt("positionMs"), state.optInt("durationMs"),
-                            state.optInt("volume", 0), state.optDouble("speed", 1));
+                            state.optInt("volume", 0), state.optDouble("speed", 1), problem);
                         showPiDisplayState(state);
                         if (!seeking) {
                             seek.setMax(Math.max(1, state.optInt("durationMs", 1)));
@@ -1404,12 +1463,12 @@ public final class MediaActivity extends AppCompatActivity {
                 } catch (Exception error) {
                     ui.post(() -> {
                         if (!screenActive || !"pi".equals(target)) return;
-                        nowPlaying.setText("Pi: connection lost");
-                        output.setText("Playback state unknown; check the Pi before reconnecting HDMI");
-                        updateFullPlayer("Pi screen", "offline", "Playback status unavailable", 0, 0, 0, 1);
+                        nowPlaying.setText("The Pi cannot be reached");
+                        output.setText("Check the Pi before using the controls");
+                        updateFullPlayer("Pi screen", "offline", "", 0, 0, 0, 1);
                         showPiDisplayState(new JSONObject());
                         ((TextView) findViewById(R.id.player_feedback)).setText(
-                            "Pi connection lost · check the Pi before using playback controls");
+                            "The Pi stopped answering, so what it is playing is not known. Check it before using the controls.");
                         setStatus(friendlyError(error));
                     });
                 } finally { stateInFlight.set(false); }

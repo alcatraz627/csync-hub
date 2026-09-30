@@ -209,7 +209,12 @@ public final class PhonePlaybackService extends Service {
 
     JSONObject item() { return item; }
     boolean hasPlayer() { return player != null; }
+    /** Why the last thing asked for could not be played, in plain words, or null when nothing went wrong. */
+    String problem() { return problem; }
+    private String problem;
+
     String playbackState() {
+        if (problem != null) return "failed";
         if (player == null) return "stopped";
         if (!prepared) return "loading";
         if (completed) return "finished";
@@ -227,6 +232,7 @@ public final class PhonePlaybackService extends Service {
         updateOutput();
         session = null;
         completed = false;
+        problem = null;
         volume = 100;
         speed = 1f;
         int version = ++requestVersion;
@@ -256,7 +262,12 @@ public final class PhonePlaybackService extends Service {
                         });
                         opened.setOnErrorListener((p, what, extra) -> {
                             if (version != requestVersion) return true;
-                            changed("Phone could not decode or stream this file (" + what + ")");
+                            problem = extra == MediaPlayer.MEDIA_ERROR_UNSUPPORTED || extra == MediaPlayer.MEDIA_ERROR_MALFORMED
+                                    ? "This phone cannot play this kind of file."
+                                : extra == MediaPlayer.MEDIA_ERROR_IO || extra == MediaPlayer.MEDIA_ERROR_TIMED_OUT
+                                    ? "The stream from the Pi stopped."
+                                : "This phone could not play it.";
+                            changed(problem);
                             releasePlayer();
                             session = null;
                             stopSelf();
@@ -269,10 +280,18 @@ public final class PhonePlaybackService extends Service {
                             changed("Finished");
                         });
                         opened.prepareAsync();
-                    } catch (Exception error) { changed("Phone stream failed: " + error.getMessage()); releasePlayer(); }
+                    } catch (Exception error) {
+                        problem = "The stream could not be opened on this phone.";
+                        changed(problem);
+                        releasePlayer();
+                    }
                 });
             } catch (Exception error) {
-                ui.post(() -> { if (version == requestVersion) changed("Phone stream failed: " + error.getMessage()); });
+                ui.post(() -> {
+                    if (version != requestVersion) return;
+                    problem = "The Pi did not hand over the stream.";
+                    changed(problem);
+                });
             }
         });
     }
@@ -292,6 +311,7 @@ public final class PhonePlaybackService extends Service {
             releasePlayer();
             item = null;
             session = null;
+            problem = null;
             closePresentation();
             changed("Phone stopped");
             stopSelf();
