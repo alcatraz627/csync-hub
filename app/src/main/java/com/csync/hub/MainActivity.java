@@ -889,10 +889,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                 inboxRevealPath = file.getPath();
                 setShareMode(true);
                 renderInbox();
-                shareStatus.setText("Received file: " + file.getName());
             } catch (java.io.IOException error) {
                 inboxRevealPath = null;
-                shareStatus.setText("This received file is no longer available");
+                toast("That received file is no longer on this phone");
             }
         }
         String recipient = intent.getStringExtra("recipient_name");
@@ -912,8 +911,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                 PeerStore.select(this, recipient);
                 renderPeers(roster);
                 refreshShareHeading();
-                shareStatus.setText("Recipient selected: " + recipient);
-            } else shareStatus.setText("This device is no longer in the saved roster. Scan devices.");
+                shareSay("");
+            } else shareSay("That device is no longer in your list. Choose another.");
         }
     }
 
@@ -1273,19 +1272,45 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             shareFileUri = uri;
             shareFileName = displayName(uri);
             bindShareFile();
-            pageShare.findViewById(R.id.share_file_send).setVisibility(View.VISIBLE);
         });
+    private View shareSend;
 
     private void setupSharePage() {
         shareText = pageShare.findViewById(R.id.share_text);
         shareInbox = pageShare.findViewById(R.id.share_inbox);
         shareStatus = pageShare.findViewById(R.id.share_status);
-        pageShare.findViewById(R.id.share_file_pick).setOnClickListener(v -> shareFilePicker.launch(new String[]{"*/*"}));
-        pageShare.findViewById(R.id.share_file_send).setOnClickListener(v -> sendSelectedFile());
-        pageShare.findViewById(R.id.share_send).setOnClickListener(v -> sendToSelected(shareText.getText().toString(), true));
-        pageShare.findViewById(R.id.share_paste).setOnClickListener(v -> sendToSelected(clipboardText(), false));
+        shareSend = Kit.primaryButton(this, R.drawable.csi_send, "Send", this::sendComposed);
+        ((android.widget.FrameLayout) pageShare.findViewById(R.id.share_send_host)).addView(shareSend,
+            new android.widget.FrameLayout.LayoutParams(-1, -2));
+        shareText.addTextChangedListener(new android.text.TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            public void afterTextChanged(android.text.Editable s) { renderSendReady(); }
+        });
         bindShareFile();
         setShareMode(false);
+    }
+
+    /** Send looks ready only when there is something to send and someone to send it to. */
+    private void renderSendReady() {
+        if (shareSend == null) return;
+        boolean ready = !PeerStore.selected(this).isEmpty() &&
+            (shareFileUri != null || !shareText.getText().toString().trim().isEmpty());
+        shareSend.setAlpha(ready ? 1f : 0.45f);
+    }
+
+    /** One Send for the whole page: the attached file goes, and the message with it when there is one. */
+    private void sendComposed() {
+        String words = shareText.getText().toString();
+        if (shareFileUri == null && words.trim().isEmpty()) { toast("Write a message or attach a file first"); return; }
+        if (shareFileUri != null) sendSelectedFile();
+        if (!words.trim().isEmpty()) sendToSelected(words, true);
+    }
+
+    /** Say what is happening to a send under the button, or with nothing to say take the line away. */
+    private void shareSay(String words) {
+        shareStatus.setText(words);
+        shareStatus.setVisibility(words == null || words.isEmpty() ? View.GONE : View.VISIBLE);
     }
 
     /** Compose and Inbox are two modes of the Share tab; each has its own crumb, and back leaves Inbox for Compose. */
@@ -1304,15 +1329,36 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         Kit.pageTop(top, "share", this::openPlace);
         Kit.topAction(top, Kit.Icon.DEVICE, "Choose who receives", v -> openRecipientSheet());
         Kit.topAction(top, R.drawable.csi_download, "Received", v -> setShareMode(true));
-        ((TextView) pageShare.findViewById(R.id.share_sub)).setText(
-            "Your recipient stays visible while you choose what to send.");
         refreshShareHeading();
     }
 
+    /** Draw what can go with the message: the attached file, or the way to attach one, and the clipboard. */
     private void bindShareFile() {
-        View row = pageShare.findViewById(R.id.share_file_pick);
-        Kit.bindRow(row, Kit.Icon.FOLDER, shareFileName.isEmpty() ? "Choose a file" : shareFileName,
-            shareFileName.isEmpty() ? "Images, videos, and documents" : "Ready to send", null, true);
+        LinearLayout host = pageShare.findViewById(R.id.share_adds);
+        host.removeAllViews();
+        LinearLayout group = Kit.group(host);
+        View file = Kit.addRow(group);
+        if (shareFileUri == null) {
+            Kit.bindRow(file, Kit.Icon.FILE, "Attach a file", "A photo, a video or a document", null, true);
+            file.setOnClickListener(v -> shareFilePicker.launch(new String[]{"*/*"}));
+        } else {
+            Kit.bindRow(file, Kit.Icon.FILE, shareFileName, "Attached", null, false);
+            Kit.rowAction(file, R.drawable.csi_trash, "Remove the attachment", v -> {
+                shareFileUri = null;
+                shareFileName = "";
+                bindShareFile();
+            });
+            file.setClickable(false);
+        }
+        // The clipboard is read only on the tap: Android shows a notice every time an app looks at it.
+        View clip = Kit.addRow(group);
+        Kit.bindRow(clip, R.drawable.csi_clipboard, "Use the clipboard", "Adds the text you copied to the message", null, false);
+        clip.setOnClickListener(v -> {
+            String held = clipboardText();
+            if (held == null || held.trim().isEmpty()) { toast("There is no text on the clipboard"); return; }
+            shareText.getText().insert(Math.max(0, shareText.getSelectionStart()), held);
+        });
+        renderSendReady();
     }
 
     // Show the stored roster and inbox immediately, then refresh online state in
@@ -1325,13 +1371,22 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         if (!Prefs.token(this).isEmpty()) scanPeers();
     }
 
+    /** Draw the row that says who receives and whether they are online. */
     private void refreshShareHeading() {
+        LinearLayout host = pageShare.findViewById(R.id.share_recipient);
+        host.removeAllViews();
         String selected = PeerStore.selected(this);
-        TextView heading = pageShare.findViewById(R.id.share_heading);
-        heading.setVisibility(shareInboxMode ? View.GONE : View.VISIBLE);
-        if (shareInboxMode) return;
-        heading.setText(
-            selected.isEmpty() ? "Choose a recipient" : "Send to " + selected);
+        View row = Kit.addRow(Kit.group(host));
+        Kit.bindRow(row, Kit.Icon.DEVICE, selected.isEmpty() ? "Choose who receives" : "Send to " + selected, null, null, true);
+        JSONArray roster = PeerStore.load(this);
+        for (int i = 0; roster != null && i < roster.length(); i++) {
+            JSONObject peer = roster.optJSONObject(i);
+            if (peer == null || selected.isEmpty() || !selected.equals(peer.optString("name"))) continue;
+            boolean online = peer.optBoolean("online");
+            Kit.rowStatus(row, online ? Kit.Status.GOOD : Kit.Status.IDLE, online ? "Online" : "Offline");
+        }
+        row.setOnClickListener(v -> openRecipientSheet());
+        renderSendReady();
     }
 
     private String displayName(android.net.Uri uri) {
@@ -1354,7 +1409,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         if (uri == null) { toast("Choose a file first"); return; }
         if (target.isEmpty()) { toast("Pick a device first"); return; }
         if (token.isEmpty()) { toast("Set the token in Settings"); return; }
-        shareStatus.setText("Sending " + name + " to " + target);
+        shareSay("Sending " + name + " to " + target);
         new Thread(() -> {
             String result;
             boolean delivered = false;
@@ -1375,22 +1430,22 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                     lowerName.endsWith(".png") || lowerName.endsWith(".jpg") ||
                     lowerName.endsWith(".jpeg") || lowerName.endsWith(".webp")) kind = "image";
                 MeshClient.send(target, token, Prefs.deviceName(this), kind, name, bytes.toByteArray());
-                result = "Sent " + name + " to " + target;
+                result = "";
                 delivered = true;
             } catch (Exception error) {
-                result = "Failed to send " + name + ": " + error.getMessage();
+                result = name + " was not delivered to " + target + ". It is still attached."
+                    + (error.getMessage() == null ? "" : " " + error.getMessage());
             }
             final String message = result;
             final boolean sent = delivered;
             final String sentKind = kind;
             ui.post(() -> {
-                shareStatus.setText(message);
+                shareSay(message);
                 recordSent(name, sentKind, target, sent);
                 if (sent && uri.equals(shareFileUri)) {
                     shareFileUri = null;
                     shareFileName = "";
                     bindShareFile();
-                    pageShare.findViewById(R.id.share_file_send).setVisibility(View.GONE);
                 }
             });
         }, "share-file").start();
@@ -1422,23 +1477,21 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         JSONArray entries;
         try { entries = new JSONArray(getSharedPreferences("csync_share", MODE_PRIVATE).getString("sent", "[]")); }
         catch (Exception ignored) { entries = new JSONArray(); }
-        LinearLayout group = Kit.group(container);
         if (entries.length() == 0) {
-            View row = Kit.addRow(group);
-            Kit.bindRow(row, Kit.Icon.HISTORY, "No sends yet", "Texts and files you send appear here", null, false);
+            Kit.empty(container, R.drawable.csi_send, "Nothing sent yet", "What you send from this phone is listed here.", null);
             return;
         }
+        LinearLayout group = Kit.group(container);
         for (int i = 0; i < Math.min(entries.length(), 10); i++) {
             JSONObject item = entries.optJSONObject(i);
             if (item == null) continue;
             String kind = item.optString("kind", "file");
+            boolean delivered = item.optBoolean("delivered");
             View row = Kit.addRow(group);
             Kit.bindRow(row, "text".equals(kind) ? R.drawable.csi_text : "image".equals(kind) ? Kit.Icon.PHOTO : Kit.Icon.FILE,
-                item.optString("name"),
-                (kind.isEmpty() ? "File" : Character.toUpperCase(kind.charAt(0)) + kind.substring(1)) + " · "
-                    + item.optString("target") + " · " + relTime(item.optLong("at")) + " · "
-                    + (item.optBoolean("delivered") ? "Delivered" : "Failed"),
-                null, false);
+                item.optString("name"), item.optString("target") + " · " + relTime(item.optLong("at")), null, false);
+            Kit.rowStatus(row, delivered ? Kit.Status.GOOD : Kit.Status.BAD, delivered ? "Delivered" : "Failed");
+            row.setClickable(false);
         }
     }
 
@@ -1446,10 +1499,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         final String home = Prefs.homeIp(this), assist = Prefs.assistIp(this);
         final String token = Prefs.token(this);
         if (token.isEmpty() || (home.isEmpty() && assist.isEmpty())) {
-            shareStatus.setText("Set the Pi address and token in Settings to scan devices");
+            shareSay("Add the Pi address and the token in Settings to find your devices.");
             return;
         }
-        shareStatus.setText("Scanning devices");
         new Thread(() -> {
             try {
                 JSONArray scanned;
@@ -1459,10 +1511,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                     scanned = MeshClient.peers(assist, token);
                 }
                 final JSONArray merged = PeerStore.mergeScan(this, scanned);
-                ui.post(() -> { renderPeers(merged); shareStatus.setText(""); });
+                ui.post(() -> renderPeers(merged));
             } catch (Throwable e) {
-                final String msg = e.getMessage();
-                ui.post(() -> shareStatus.setText("scan failed: " + msg));
+                ui.post(() -> shareSay("Your devices could not be checked, so who is online may be out of date."));
             }
         }).start();
     }
@@ -1483,14 +1534,13 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             boolean online = o.optBoolean("online");
             String platform = o.optString("platform");
             actions.add(new Kit.Action(name.equals(selected) ? R.drawable.csi_check : Kit.Icon.DEVICE, name,
-                (platform.isEmpty() ? "" : platform + " · ") + (online ? "Online" : "Offline"), () -> {
+                platform.isEmpty() ? null : platform, () -> {
                     PeerStore.select(this, name);
                     refreshShareHeading();
-                }));
+                }).value(online ? "Online" : "Offline"));
         }
-        actions.add(new Kit.Action(R.drawable.csi_refresh, "Scan for devices", "Refresh who is online", this::scanPeers));
-        Kit.sheet(this, "Send to", selected.isEmpty() ? "Pick a device" : "Now: " + selected,
-            actions.toArray(new Kit.Action[0]));
+        actions.add(new Kit.Action(R.drawable.csi_refresh, "Check who is online", null, this::scanPeers));
+        Kit.sheet(this, "Send to", null, actions.toArray(new Kit.Action[0]));
     }
 
     private void sendToSelected(final String text, boolean fromComposer) {
@@ -1499,21 +1549,22 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         if (target.isEmpty()) { toast("Pick a device first"); return; }
         if (token.isEmpty()) { toast("Set the token in Settings"); return; }
         final String from = Prefs.deviceName(this);
-        shareStatus.setText("Sending to " + target);
+        shareSay("Sending to " + target);
         new Thread(() -> {
             String result;
             boolean sent = false;
             try {
                 MeshClient.send(target, token, from, "text", "shared.txt", text.getBytes("UTF-8"));
-                result = "sent to " + target;
+                result = "";
                 sent = true;
             } catch (Throwable e) {
-                result = "failed: " + e.getMessage();
+                result = "The message was not delivered to " + target + ". It is still in the box."
+                    + (e.getMessage() == null ? "" : " " + e.getMessage());
             }
             final String r = result;
             final boolean delivered = sent;
             ui.post(() -> {
-                shareStatus.setText(r);
+                shareSay(r);
                 recordSent(text.length() > 36 ? text.substring(0, 36) : text, "text", target, delivered);
                 if (delivered && fromComposer && text.contentEquals(shareText.getText())) shareText.setText("");
             });
@@ -1528,30 +1579,36 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         inboxGroup = null;
         java.io.File inbox = getExternalFilesDir("inbox");
         java.io.File[] senders = (inbox != null && inbox.exists()) ? inbox.listFiles() : null;
-        boolean any = false;
+        // Newest first, whoever sent it: the list is about what arrived, not about who sent it.
+        java.util.List<java.io.File> arrived = new java.util.ArrayList<>();
         if (senders != null) {
             for (java.io.File sender : senders) {
                 java.io.File[] files = sender.listFiles();
-                if (files == null) continue;
-                for (java.io.File f : files) {
-                    any = true;
-                    if (inboxGroup == null) inboxGroup = Kit.group(shareInbox);
-                    View row = Kit.addRow(inboxGroup);
-                    String lower = f.getName().toLowerCase(java.util.Locale.ROOT);
-                    boolean image = lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".webp");
-                    Kit.bindRow(row, image ? Kit.Icon.PHOTO : Kit.Icon.FILE, f.getName(),
-                        "From " + sender.getName() + " · " + relTime(f.lastModified()), null, true);
-                    row.setOnClickListener(v -> showInboxActions(f));
-                    try {
-                        if (f.getCanonicalPath().equals(inboxRevealPath))
-                            row.post(() -> row.requestRectangleOnScreen(
-                                new android.graphics.Rect(0, 0, row.getWidth(), row.getHeight()), true));
-                    } catch (java.io.IOException ignored) { }
-                }
+                if (files != null) arrived.addAll(java.util.Arrays.asList(files));
             }
         }
-        if (!any) Kit.bindRow(Kit.addRow(Kit.group(shareInbox)), R.drawable.csi_download,
-            "Nothing received yet", "Files other devices send you appear here", null, false);
+        arrived.sort((a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+        if (arrived.isEmpty()) {
+            Kit.empty(shareInbox, R.drawable.csi_download, "Nothing received yet",
+                "What other devices send to this phone is listed here.", null);
+            return;
+        }
+        Kit.label(shareInbox, arrived.size() == 1 ? "1 item" : arrived.size() + " items");
+        inboxGroup = Kit.group(shareInbox);
+        for (java.io.File f : arrived) {
+            View row = Kit.addRow(inboxGroup);
+            String lower = f.getName().toLowerCase(java.util.Locale.ROOT);
+            boolean image = lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".webp");
+            java.io.File sender = f.getParentFile();
+            Kit.bindRow(row, image ? Kit.Icon.PHOTO : Kit.Icon.FILE, f.getName(),
+                (sender == null ? "" : sender.getName() + " · ") + relTime(f.lastModified()), null, true);
+            row.setOnClickListener(v -> showInboxActions(f));
+            try {
+                if (f.getCanonicalPath().equals(inboxRevealPath))
+                    row.post(() -> row.requestRectangleOnScreen(
+                        new android.graphics.Rect(0, 0, row.getWidth(), row.getHeight()), true));
+            } catch (java.io.IOException ignored) { }
+        }
     }
 
     private void showInboxActions(java.io.File file) {

@@ -12,62 +12,35 @@
             android:orientation="vertical"
             android:paddingStart="@dimen/kit_gutter" android:paddingEnd="@dimen/kit_gutter"
             android:paddingBottom="24dp">
-            <TextView android:id="@+id/share_heading" style="@style/Kit.Text.PageTitle"
-                android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="6dp" android:text="Choose a recipient"/>
-            <TextView android:id="@+id/share_sub" style="@style/Kit.Text.PageSub"
-                android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="5dp"
-                android:text="Your recipient stays visible while you choose what to send."/>
-
             <LinearLayout android:id="@+id/share_compose"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical">
-                <TextView style="@style/Kit.Text.Section"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:layout_marginTop="18dp" android:layout_marginBottom="8dp"
-                    android:text="Message"/>
+                <!-- Who receives, with whether they are online. Tapping it chooses someone else. -->
+                <LinearLayout android:id="@+id/share_recipient" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:layout_marginTop="8dp"
+                    android:orientation="vertical"/>
                 <EditText android:id="@+id/share_text"
                     android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:minHeight="90dp" android:minLines="3" android:gravity="top|start"
-                    android:padding="12dp" android:hint="Type a message"
+                    android:layout_marginTop="12dp"
+                    android:minHeight="96dp" android:minLines="3" android:gravity="top|start"
+                    android:padding="14dp" android:hint="Write a message"
                     android:inputType="textMultiLine|textCapSentences" android:background="@drawable/card_bg"
-                    android:textSize="14sp" android:textColor="@color/text"
+                    android:textSize="14.5sp" android:textColor="@color/text"
                     android:textColorHint="@color/dim"/>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="horizontal" android:layout_marginTop="8dp">
-                    <com.google.android.material.button.MaterialButton android:id="@+id/share_send"
-                        android:layout_width="wrap_content" android:layout_height="48dp"
-                        android:text="Send text" app:icon="@drawable/csi_send"/>
-                    <com.google.android.material.button.MaterialButton android:id="@+id/share_paste"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
-                        android:layout_width="wrap_content" android:layout_height="48dp"
-                        android:layout_marginStart="8dp" android:text="Clipboard"
-                        app:icon="@drawable/csi_clipboard"/>
-                </LinearLayout>
-
-                <TextView style="@style/Kit.Text.Section"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:layout_marginTop="18dp" android:layout_marginBottom="8dp"
-                    android:text="File"/>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="vertical" android:background="@drawable/card_bg"
-                    android:clipToOutline="true">
-                    <include android:id="@+id/share_file_pick" layout="@layout/kit_row"/>
-                </LinearLayout>
-                <com.google.android.material.button.MaterialButton android:id="@+id/share_file_send"
-                    android:layout_width="wrap_content" android:layout_height="48dp"
-                    android:layout_marginTop="8dp" android:text="Send file"
-                    app:icon="@drawable/csi_send" android:visibility="gone"/>
-
+                <!-- What else goes with the message: a file, or what is on the clipboard. -->
+                <LinearLayout android:id="@+id/share_adds" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:layout_marginTop="12dp"
+                    android:orientation="vertical"/>
+                <FrameLayout android:id="@+id/share_send_host" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:layout_marginTop="12dp"/>
                 <TextView android:id="@+id/share_status" style="@style/Kit.Text.Meta"
                     android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"/>
+                    android:layout_marginTop="10dp" android:visibility="gone"/>
 
                 <TextView style="@style/Kit.Text.Section"
                     android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:layout_marginTop="18dp" android:layout_marginBottom="8dp"
-                    android:text="Sent from this device"/>
+                    android:text="Sent from this phone"/>
                 <LinearLayout android:id="@+id/share_sent" android:layout_width="match_parent"
                     android:layout_height="wrap_content" android:orientation="vertical"/>
             </LinearLayout>
@@ -76,7 +49,7 @@
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:visibility="gone">
                 <LinearLayout android:id="@+id/share_inbox" android:layout_width="match_parent"
-                    android:layout_height="wrap_content" android:layout_marginTop="18dp"
+                    android:layout_height="wrap_content"
                     android:orientation="vertical"/>
             </LinearLayout>
         </LinearLayout>
