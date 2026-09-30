@@ -88,7 +88,11 @@ public final class NotesActivity extends AppCompatActivity {
         setContentView(root);
         getOnBackPressedDispatcher().addCallback(this, backInApp);
         visiting = getIntent().getBooleanExtra(ShareActivity.RETURN, false);
-        root.getViewTreeObserver().addOnPreDrawListener(() -> { backInApp.setEnabled(page != Page.LIST && !visiting); return true; });
+        // The editor keeps Back even on a visit, so unsaved words can be asked about before the page goes.
+        root.getViewTreeObserver().addOnPreDrawListener(() -> {
+            backInApp.setEnabled(page == Page.EDIT || (page != Page.LIST && !visiting));
+            return true;
+        });
         topBar = (LinearLayout) getLayoutInflater().inflate(R.layout.kit_page_top, root, false);
         root.addView(topBar);
         heading = new TextView(this);
@@ -139,22 +143,19 @@ public final class NotesActivity extends AppCompatActivity {
         nav.setBackgroundColor(getColor(R.color.surface));
         nav.setSelectedItemId(R.id.nav_more);
         nav.setOnItemSelectedListener(item -> {
-            if (item.getItemId() == R.id.nav_more) { finish(); return false; }
-            if (item.getItemId() == R.id.nav_home) {
-                startActivity(new Intent(this, MainActivity.class)
+            int id = item.getItemId();
+            Runnable move;
+            // More is the page underneath, unless Notes was visited from elsewhere; then More is asked for by name.
+            if (id == R.id.nav_more && !visiting) move = this::finish;
+            else if (id == R.id.nav_media) move = () -> startActivity(new Intent(this, MediaActivity.class));
+            else {
+                String destination = id == R.id.nav_home ? "home" : id == R.id.nav_share ? "share" :
+                    id == R.id.nav_chat ? "chat" : "more";
+                move = () -> startActivity(new Intent(this, MainActivity.class)
                     .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                    .putExtra("destination", "home"));
-                return false;
+                    .putExtra("destination", destination));
             }
-            if (item.getItemId() == R.id.nav_media) {
-                startActivity(new Intent(this, MediaActivity.class));
-                return false;
-            }
-            String destination = item.getItemId() == R.id.nav_share ? "share" :
-                item.getItemId() == R.id.nav_chat ? "chat" : "more";
-            startActivity(new Intent(this, MainActivity.class)
-                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                .putExtra("destination", destination));
+            leaveEditor(move);
             return false;
         });
         // The bar grows by the navigation bar's height under it, so it wraps rather than fixing 64dp.
@@ -955,9 +956,15 @@ public final class NotesActivity extends AppCompatActivity {
         editorMode = mode;
         open(Page.EDIT, null, sharedFile != null ? sharedFileName + " is added when you save"
             : sharedImage != null ? "The picture is added when you save" : null);
+        // What counts as unsaved: anything at all in a new note, a change to a saved one.
+        editorBaseTitle = noteId == null ? "" : currentTitle;
+        editorBaseBody = noteId == null ? "" : currentBody;
         Runnable list = () -> { visiting = false; dropShared(); showingPins = false; showList(); };
         Runnable leave = () -> { if (noteId == null) list.run(); else loadNote(noteId); };
-        Kit.pageTop(topBar, visiting ? this::finish : leave, moreCrumb(), new Kit.Crumb(Kit.Icon.NOTES, "Notes", list),
+        Runnable more = moreCrumb().open;
+        Kit.pageTop(topBar, () -> leaveEditor(visiting ? this::finish : leave),
+            new Kit.Crumb(Kit.Icon.MORE, "More", () -> leaveEditor(more)),
+            new Kit.Crumb(Kit.Icon.NOTES, "Notes", () -> leaveEditor(list)),
             new Kit.Crumb(R.drawable.csi_markdown, noteId == null ? "New note" : "Note", null));
         // A long note puts the Save button far below, so the bar carries one as well.
         Kit.topAction(topBar, R.drawable.csi_check, "Save", v -> saveNote());
@@ -1004,6 +1011,23 @@ public final class NotesActivity extends AppCompatActivity {
         LinearLayout.LayoutParams below = new LinearLayout.LayoutParams(-1, -2);
         below.topMargin = dp(18);
         rows.addView(buttons, below);
+    }
+
+    private String editorBaseTitle = "", editorBaseBody = "";
+
+    private boolean editorHasUnsaved() {
+        if (page != Page.EDIT || title == null || body == null) return false;
+        return sharedImage != null || sharedFile != null ||
+            !title.getText().toString().trim().equals(editorBaseTitle.trim()) ||
+            !body.getText().toString().equals(editorBaseBody);
+    }
+
+    /** Leave the editor by {@code then}, asking first when words or an arriving file would be lost. */
+    private void leaveEditor(Runnable then) {
+        if (!editorHasUnsaved()) { then.run(); return; }
+        Kit.confirm(this, noteId == null ? "Drop this new note?" : "Drop the changes?",
+            noteId == null ? "It has not been saved on the Pi." : "The note stays as it was last saved.",
+            R.drawable.csi_trash, "Drop", then);
     }
 
     /** Preview shows the words as they will read, Plain shows what is typed, Rich shows both. */
@@ -1144,8 +1168,8 @@ public final class NotesActivity extends AppCompatActivity {
         @Override public void handleOnBackCancelled() { Kit.peekBack(pageView(), 0f); }
         @Override public void handleOnBackPressed() {
             Kit.peekBack(pageView(), 0f);
-            if (page == Page.EDIT && noteId != null) loadNote(noteId);
-            else if (page == Page.EDIT) { dropShared(); showingPins = false; showList(); }
+            if (page == Page.EDIT) leaveEditor(visiting ? NotesActivity.this::finish : noteId != null ? () -> loadNote(noteId)
+                : () -> { dropShared(); showingPins = false; showList(); });
             else if (page == Page.PIN) { showingPins = true; showList(); }
             else if (page == Page.NOTE) { showingPins = false; showList(); }
         }
