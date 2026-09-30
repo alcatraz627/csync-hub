@@ -65,8 +65,16 @@ final class Kit {
         setOptional(row.findViewById(R.id.kit_sub), sub);
         setOptional(row.findViewById(R.id.kit_end), end);
         row.findViewById(R.id.kit_chevron).setVisibility(opens ? View.VISIBLE : View.GONE);
-        row.setContentDescription(sub == null ? title : title + ", " + sub);
+        // The row is spoken as one thing, so everything written on it goes into what is said.
+        row.setContentDescription(spokenRow(title, sub, end));
         return row;
+    }
+
+    private static String spokenRow(CharSequence title, CharSequence sub, CharSequence end) {
+        StringBuilder said = new StringBuilder(title);
+        if (sub != null && sub.length() > 0) said.append(", ").append(sub);
+        if (end != null && end.length() > 0) said.append(", ").append(end);
+        return said.toString();
     }
 
     /** Show a quiet icon button at the row's end, for a row that has a second action of its own. */
@@ -90,7 +98,9 @@ final class Kit {
         end.setCompoundDrawablePadding(dp(c, 6));
         end.setText(words);
         end.setVisibility(View.VISIBLE);
-        row.setContentDescription(((TextView) row.findViewById(R.id.kit_title)).getText() + ", " + words);
+        TextView sub = row.findViewById(R.id.kit_sub);
+        row.setContentDescription(spokenRow(((TextView) row.findViewById(R.id.kit_title)).getText(),
+            sub.getVisibility() == View.VISIBLE ? sub.getText() : null, words));
     }
 
     interface Flip { void to(boolean on); }
