@@ -59,8 +59,8 @@ public class ShareActivity extends AppCompatActivity {
     protected void onCreate(Bundle b) {
         Appearance.apply(this);
         super.onCreate(b);
-        Appearance.applySystemBars(this);
         setContentView(R.layout.activity_share);
+        Appearance.edgeToEdge(this, null);
         body = findViewById(R.id.share_body);
         final Intent intent = getIntent();
         final String place = intent.getStringExtra(PLACE);

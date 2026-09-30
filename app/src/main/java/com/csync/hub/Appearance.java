@@ -51,4 +51,35 @@ final class Appearance {
     static void applySystemBars(Activity activity) {
         activity.getWindow().getDecorView().setSystemUiVisibility(systemBarFlags(activity));
     }
+
+    /**
+     * Draw the page behind the status and navigation bars, keeping its content clear of them.
+     *
+     * The page's root takes the top inset as padding, so the top bar sits under a status bar
+     * of the page's own colour. A bottom bar pads itself for the navigation bar (Material's
+     * bar does this on its own). While the keyboard is up the bottom bar steps aside and the
+     * root takes the keyboard's height instead, so nothing rides above the keys. Call after
+     * setContentView, with the page's bottom bar or null.
+     */
+    static void edgeToEdge(Activity activity, View bottomBar) {
+        android.view.Window window = activity.getWindow();
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false);
+        window.setStatusBarColor(android.graphics.Color.TRANSPARENT);
+        window.setNavigationBarColor(android.graphics.Color.TRANSPARENT);
+        if (android.os.Build.VERSION.SDK_INT >= 29) window.setNavigationBarContrastEnforced(false);
+        window.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(activity.getColor(R.color.bg)));
+        applySystemBars(activity);
+        View root = ((android.view.ViewGroup) activity.findViewById(android.R.id.content)).getChildAt(0);
+        if (root == null) return;
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
+            androidx.core.graphics.Insets bars = insets.getInsets(
+                androidx.core.view.WindowInsetsCompat.Type.systemBars() | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
+            boolean typing = insets.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime());
+            int keyboard = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime()).bottom;
+            if (bottomBar != null) bottomBar.setVisibility(typing ? View.GONE : View.VISIBLE);
+            // With no bottom bar the root itself keeps clear of the navigation bar.
+            v.setPadding(bars.left, bars.top, bars.right, typing ? keyboard : bottomBar == null ? bars.bottom : 0);
+            return insets;
+        });
+    }
 }

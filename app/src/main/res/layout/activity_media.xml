@@ -227,7 +227,7 @@
     </LinearLayout>
     <com.google.android.material.bottomnavigation.BottomNavigationView
         android:id="@+id/media_bottom_nav" android:layout_width="match_parent"
-        android:layout_height="64dp" android:background="@color/surface"
+        android:layout_height="wrap_content" android:minHeight="64dp" android:background="@color/surface"
         app:labelVisibilityMode="unlabeled" app:itemIconSize="24dp"
         app:itemIconTint="@color/nav_icon_tint"
         app:itemActiveIndicatorStyle="@style/Csync.NavIndicator" app:menu="@menu/nav_menu"/>

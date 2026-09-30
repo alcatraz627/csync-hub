@@ -78,7 +78,6 @@ public final class NotesActivity extends AppCompatActivity {
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
         Appearance.apply(this);
-        Appearance.applySystemBars(this);
         markwon = Markwon.create(this);
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -154,7 +153,10 @@ public final class NotesActivity extends AppCompatActivity {
                 .putExtra("destination", destination));
             return false;
         });
-        root.addView(nav, new LinearLayout.LayoutParams(-1, dp(64)));
+        // The bar grows by the navigation bar's height under it, so it wraps rather than fixing 64dp.
+        nav.setMinimumHeight(dp(64));
+        root.addView(nav, new LinearLayout.LayoutParams(-1, -2));
+        Appearance.edgeToEdge(this, nav);
         String host = Prefs.assistIp(this), token = Prefs.token(this);
         if (host.isEmpty() || token.isEmpty()) {
             Kit.pageTop(topBar, this::finish, moreCrumb(), new Kit.Crumb(Kit.Icon.NOTES, "Notes", null));

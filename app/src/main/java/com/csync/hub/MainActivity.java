@@ -88,7 +88,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             });
         }
         setContentView(R.layout.activity_main);
-        Appearance.applySystemBars(this);
+        Appearance.edgeToEdge(this, findViewById(R.id.nav));
         FrameLayout content = findViewById(R.id.content);
         LayoutInflater inf = LayoutInflater.from(this);
         pageHome = inf.inflate(R.layout.page_home_v2, content, false);
@@ -120,11 +120,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         com.google.android.material.bottomnavigation.BottomNavigationView nav = findViewById(R.id.nav);
         nav.setBackgroundColor(col(R.color.surface));
         nav.setElevation(0f);
-        // While the keyboard is up the bar steps aside, so typing gets the whole height above the keys.
+        // The chat heading folds while the keyboard is up; the bar stepping aside is the page's edge-to-edge rule.
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(getWindow().getDecorView(), (v, insets) -> {
-            boolean typing = insets.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime());
-            nav.setVisibility(typing ? View.GONE : View.VISIBLE);
-            syncChatHeading(typing);
+            syncChatHeading(insets.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()));
             return androidx.core.view.ViewCompat.onApplyWindowInsets(v, insets);
         });
         nav.setItemActiveIndicatorColor(android.content.res.ColorStateList.valueOf(

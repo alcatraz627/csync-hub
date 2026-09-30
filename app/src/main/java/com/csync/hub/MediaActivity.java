@@ -102,7 +102,7 @@ public final class MediaActivity extends AppCompatActivity {
         super.onCreate(saved);
         client = new MediaClient(Prefs.assistIp(this), Prefs.token(this));
         setContentView(R.layout.activity_media);
-        Appearance.applySystemBars(this);
+        Appearance.edgeToEdge(this, findViewById(R.id.media_bottom_nav));
         getOnBackPressedDispatcher().addCallback(this, backInApp);
         Kit.pullToRefresh(findViewById(R.id.media_list), () -> openTab(activeTab));
         findViewById(R.id.media_full_player).getViewTreeObserver().addOnPreDrawListener(() -> {

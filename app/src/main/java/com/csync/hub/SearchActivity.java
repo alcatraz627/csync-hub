@@ -67,7 +67,7 @@ public final class SearchActivity extends AppCompatActivity {
         super.onCreate(saved);
         Appearance.apply(this);
         setContentView(R.layout.activity_search);
-        Appearance.applySystemBars(this);
+        Appearance.edgeToEdge(this, findViewById(R.id.search_nav));
         queryView = findViewById(R.id.search_query);
         resultsView = findViewById(R.id.search_results);
         countView = findViewById(R.id.search_count);
