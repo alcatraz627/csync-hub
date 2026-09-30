@@ -40,8 +40,14 @@ final class MediaClient {
     JSONObject put(String path, JSONObject body) throws Exception { return request("PUT", path, body); }
     JSONObject delete(String path, JSONObject body) throws Exception { return request("DELETE", path, body); }
 
-    JSONObject uploadWallpaper(byte[] jpeg) throws Exception {
-        HttpURLConnection connection = (HttpURLConnection) new URL(url("/v1/display/wallpaper")).openConnection();
+    /** Save an image as the Pi cover, which also shows it. */
+    JSONObject uploadWallpaper(byte[] jpeg) throws Exception { return sendImage("/v1/display/wallpaper", jpeg); }
+
+    /** Show an image on the Pi screen now, leaving the saved cover as it is. */
+    JSONObject showImage(byte[] jpeg) throws Exception { return sendImage("/v1/display/show", jpeg); }
+
+    private JSONObject sendImage(String path, byte[] jpeg) throws Exception {
+        HttpURLConnection connection = (HttpURLConnection) new URL(url(path)).openConnection();
         connection.setRequestMethod("POST");
         connection.setConnectTimeout(5000);
         connection.setReadTimeout(15000);
@@ -62,7 +68,7 @@ final class MediaClient {
             }
             JSONObject result = new JSONObject(output.toString("UTF-8"));
             if (status >= 400) throw new MediaException(result.optString("code", "MEDIA_ERROR"),
-                result.optString("message", "Wallpaper upload failed"));
+                result.optString("message", "The image could not be sent to the Pi"));
             return result;
         } finally { connection.disconnect(); }
     }

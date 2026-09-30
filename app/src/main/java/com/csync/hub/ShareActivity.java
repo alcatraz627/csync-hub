@@ -122,10 +122,14 @@ public class ShareActivity extends AppCompatActivity {
             row(Kit.group(body), Kit.Icon.DISPLAY, "Play on Pi screen", null, false, this::playOnPi);
         } else if (kind == Kind.IMAGE) {
             Kit.label(body, "Show");
-            row(Kit.group(body), R.drawable.csi_image, "Set as the Pi cover", null, true, this::confirmPiCover);
+            LinearLayout show = Kit.group(body);
+            row(show, Kit.Icon.DISPLAY, "Show on Pi screen", null, false, () -> sendImageToPi(files.get(0), false));
+            row(show, R.drawable.csi_image, "Set as the Pi cover", null, true, this::confirmPiCover);
         } else if (kind == Kind.TEXT) {
-            Kit.label(body, "Use");
-            row(Kit.group(body), R.drawable.csi_copy, "Copy the text", null, false, this::copyText);
+            Kit.label(body, "Show");
+            LinearLayout show = Kit.group(body);
+            row(show, Kit.Icon.DISPLAY, "Show on Pi screen", null, false, this::showTextOnPi);
+            row(show, R.drawable.csi_copy, "Copy the text", null, false, this::copyText);
         } else first = false;
 
         if (first) Kit.label(body, "Keep or send");
@@ -273,7 +277,32 @@ public class ShareActivity extends AppCompatActivity {
 
     private void confirmPiCover() {
         Kit.sheet(this, "Use this image on the Pi screen?", "It becomes the Pi cover and replaces what is playing there.",
-            new Kit.Action(R.drawable.csi_image, "Set as the Pi cover", null, () -> setPiCover(files.get(0))));
+            new Kit.Action(R.drawable.csi_image, "Set as the Pi cover", null, () -> sendImageToPi(files.get(0), true)));
+    }
+
+    /** Put shared words up on the Pi screen, large enough to read from across the room. */
+    private void showTextOnPi() {
+        String host = Prefs.assistIp(this), token = Prefs.token(this);
+        if (host.isEmpty() || token.isEmpty()) { connectFirst(); return; }
+        say("Sending the text to the Pi");
+        new Thread(() -> {
+            String failure = null;
+            JSONObject result = null;
+            try { result = new MediaClient(host, token).post("/v1/display/show", new JSONObject().put("text", text)); }
+            catch (Exception error) { failure = error.getMessage() == null ? "The Pi did not answer." : error.getMessage(); }
+            final String error = failure;
+            final JSONObject shown = result;
+            main.post(() -> {
+                say(null);
+                if (error != null) {
+                    Kit.sheet(this, "It was not shown", error,
+                        new Kit.Action(R.drawable.csi_refresh, "Try again", null, this::showTextOnPi));
+                    return;
+                }
+                toast(shown.optBoolean("sentToDisplay") ? "Showing on the Pi screen" : "Sent. The Pi screen is off");
+                finish();
+            });
+        }, "share-show-text").start();
     }
 
     private void connectFirst() {
@@ -284,7 +313,8 @@ public class ShareActivity extends AppCompatActivity {
             }));
     }
 
-    private void setPiCover(Uri image) {
+    /** Send a shared image to the Pi, either to show now or to keep as the cover as well. */
+    private void sendImageToPi(Uri image, boolean asCover) {
         String host = Prefs.assistIp(this), token = Prefs.token(this);
         if (host.isEmpty() || token.isEmpty()) { connectFirst(); return; }
         say("Sending the image to the Pi");
@@ -313,18 +343,20 @@ public class ShareActivity extends AppCompatActivity {
                 ByteArrayOutputStream output = new ByteArrayOutputStream();
                 try { bitmap.compress(Bitmap.CompressFormat.JPEG, 85, output); }
                 finally { bitmap.recycle(); }
-                result = new MediaClient(host, token).uploadWallpaper(output.toByteArray());
+                MediaClient pi = new MediaClient(host, token);
+                result = asCover ? pi.uploadWallpaper(output.toByteArray()) : pi.showImage(output.toByteArray());
             } catch (Exception error) { failure = error.getMessage(); }
             String error = failure;
             JSONObject applied = result;
             main.post(() -> {
                 say(null);
                 if (error == null) {
-                    toast(applied.optBoolean("sentToDisplay") ?
-                        "Saved as the Pi cover and shown" : "Saved as the Pi cover. The Pi screen is off");
+                    boolean lit = applied.optBoolean("sentToDisplay");
+                    toast(asCover ? (lit ? "Saved as the Pi cover and shown" : "Saved as the Pi cover. The Pi screen is off")
+                        : (lit ? "Showing on the Pi screen" : "Sent. The Pi screen is off"));
                     finish();
-                } else Kit.sheet(this, "The Pi cover was not set", error,
-                    new Kit.Action(R.drawable.csi_refresh, "Try again", null, () -> setPiCover(image)));
+                } else Kit.sheet(this, asCover ? "The Pi cover was not set" : "It was not shown", error,
+                    new Kit.Action(R.drawable.csi_refresh, "Try again", null, () -> sendImageToPi(image, asCover)));
             });
         }, "share-pi-cover").start();
     }

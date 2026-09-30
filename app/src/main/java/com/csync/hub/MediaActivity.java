@@ -503,9 +503,12 @@ public final class MediaActivity extends AppCompatActivity {
     /** The readable name: no upload prefix, spaces for underscores and dots, and no file ending. The raw name is in File details. */
     static String displayMediaName(String name) {
         String readable = name.replaceFirst("^cast-[0-9a-f]{8,32}-", "");
-        int ending = readable.lastIndexOf('.');
-        if (ending > 0 && readable.length() - ending <= 5) readable = readable.substring(0, ending);
-        return readable.replace('_', ' ').replace('.', ' ').trim();
+        int dot = readable.lastIndexOf('.');
+        boolean ending = dot > 0 && readable.substring(dot + 1).matches("[A-Za-z0-9]{2,4}");
+        if (ending) readable = readable.substring(0, dot);
+        // Only a file name written without spaces uses dots in their place; shown words keep their full stops.
+        if (ending && readable.indexOf(' ') < 0) readable = readable.replace('.', ' ');
+        return readable.replace('_', ' ').trim();
     }
 
     /** Where a file lives, said shortly: the drive and the folder it sits in. */
@@ -574,6 +577,7 @@ public final class MediaActivity extends AppCompatActivity {
             case "paused": return "Paused " + where;
             case "loading": case "buffering": return "Loading " + where;
             case "finished": return "Finished " + where;
+            case "showing": return "Showing " + where;
             case "offline": return "The Pi cannot be reached";
             default: return problem == null ? "Nothing is playing " + where : "It could not be played " + where;
         }
@@ -581,7 +585,7 @@ public final class MediaActivity extends AppCompatActivity {
 
     private static Kit.Status stateStatus(String state, String problem) {
         switch (state) {
-            case "playing": return Kit.Status.GOOD;
+            case "playing": case "showing": return Kit.Status.GOOD;
             case "loading": case "buffering": return Kit.Status.WARN;
             case "offline": return Kit.Status.BAD;
             case "paused": case "finished": return Kit.Status.IDLE;
@@ -611,13 +615,15 @@ public final class MediaActivity extends AppCompatActivity {
             showing && onPi ? "The picture is on the Pi screen" :
             showing ? "The sound is on this phone" :
             state.equals("loading") || state.equals("buffering") ? "Loading" :
+            state.equals("showing") ? "It is on the Pi screen" :
             state.equals("finished") ? "Finished" : "");
         findViewById(R.id.player_display_row).setVisibility(onPi ? View.VISIBLE : View.GONE);
         android.widget.ImageView pause = findViewById(R.id.player_pause);
         pause.setImageResource(state.equals("paused") ? R.drawable.csi_play : R.drawable.csi_pause);
         pause.setContentDescription(state.equals("paused") ? "Resume" : "Pause");
         boolean ready = state.equals("playing") || state.equals("paused");
-        boolean active = ready || state.equals("loading") || state.equals("buffering");
+        // Something shown (a picture, words, a slideshow) can be stopped but has no position to seek.
+        boolean active = ready || state.equals("loading") || state.equals("buffering") || state.equals("showing");
         playerSeek.setEnabled(ready && duration > 0);
         playerSeek.setMax(Math.max(1, duration));
         if (!seeking) playerSeek.setProgress(Math.max(0, position));
@@ -1476,7 +1482,8 @@ public final class MediaActivity extends AppCompatActivity {
                         if (!screenActive || !"pi".equals(target)) return;
                         String playerState = state.optString("state");
                         boolean active = playerState.equals("playing") || playerState.equals("paused") ||
-                            playerState.equals("loading") || playerState.equals("buffering");
+                            playerState.equals("loading") || playerState.equals("buffering") ||
+                            playerState.equals("showing");
                         findViewById(R.id.media_player_controls).setVisibility(active ? View.VISIBLE : View.GONE);
                         findViewById(R.id.media_pause).setVisibility(playerState.equals("playing") ? View.VISIBLE : View.GONE);
                         findViewById(R.id.media_resume).setVisibility(playerState.equals("paused") ? View.VISIBLE : View.GONE);
