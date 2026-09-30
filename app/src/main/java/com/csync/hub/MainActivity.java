@@ -1209,8 +1209,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         View top = pageShare.findViewById(R.id.share_top);
         if (inbox) {
             Kit.pageTop(top, "received", this::openPlace);
-            ((TextView) pageShare.findViewById(R.id.share_heading)).setText("Received");
-            ((TextView) pageShare.findViewById(R.id.share_sub)).setText("Open an item, or share it on.");
+            // The breadcrumb already names this page, so it carries no heading of its own.
+            refreshShareHeading();
             renderInbox();
             return;
         }
@@ -1478,10 +1478,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             extension.toLowerCase(java.util.Locale.ROOT));
         if (mime == null) mime = "application/octet-stream";
         boolean textFile = mime.startsWith("text/") || mime.equals("application/json");
-        ItemActions.Kind kind = mime.startsWith("video/") ? ItemActions.Kind.VIDEO
-            : mime.startsWith("audio/") ? ItemActions.Kind.AUDIO
-            : mime.startsWith("image/") ? ItemActions.Kind.IMAGE : ItemActions.Kind.DOCUMENT;
-        ItemActions.Item item = new ItemActions.Item(kind, file.getName());
+        ItemActions.Item item = new ItemActions.Item(ItemActions.kindOf(mime), file.getName());
         java.io.File sender = file.getParentFile();
         item.sub = (sender == null ? "Received" : "From " + sender.getName()) + " · "
             + android.text.format.Formatter.formatShortFileSize(this, file.length());
@@ -2550,10 +2547,10 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             new Kit.Action(R.drawable.csi_archive, archived ? "Unarchive" : "Archive", null,
                 () -> { ChatStore.patch(this, id, "archived", !archived); renderHistoryList(); }),
             // Deleting cannot be undone, so it asks first in its own sheet, with a named button.
-            new Kit.Action(R.drawable.csi_trash, "Delete", null, () -> Kit.sheet(this, "Delete this conversation?", title,
-                new Kit.Action(R.drawable.csi_back, "Keep it", null, () -> { }),
-                new Kit.Action(R.drawable.csi_trash, "Delete", "It is removed from this phone",
-                    () -> { ChatStore.delete(this, id); ChatShortcuts.gone(this, id); renderHistoryList(); toast("Deleted"); }))));
+            new Kit.Action(R.drawable.csi_trash, "Delete", null, () -> Kit.confirm(this, "Delete this conversation?",
+                title + " is removed from this phone.", R.drawable.csi_trash, "Delete",
+                () -> { ChatStore.delete(this, id); ChatShortcuts.gone(this, id); renderHistoryList(); toast("Deleted"); }),
+                true));
     }
 
     private void openConversation(String id, String title) {

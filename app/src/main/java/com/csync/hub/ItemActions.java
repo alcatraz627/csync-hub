@@ -70,6 +70,24 @@ final class ItemActions {
         Item(Kind kind, String title) { this.kind = kind; this.title = title; }
     }
 
+    /** The kind a file is, read from its type. */
+    static Kind kindOf(String mime) {
+        String type = mime == null ? "" : mime;
+        return type.startsWith("video/") ? Kind.VIDEO : type.startsWith("audio/") ? Kind.AUDIO
+            : type.startsWith("image/") ? Kind.IMAGE : Kind.DOCUMENT;
+    }
+
+    static int icon(Kind kind) {
+        switch (kind) {
+            case VIDEO: case AUDIO: case VIDEO_LINK: return Kit.Icon.VIDEO;
+            case IMAGE: return Kit.Icon.PHOTO;
+            case LINK: return R.drawable.csi_link;
+            case TEXT: return R.drawable.csi_text;
+            case FILES: return Kit.Icon.FILES;
+            default: return Kit.Icon.FILE;
+        }
+    }
+
     /** A file already on this phone. */
     static Source local(Activity a, File file, String mime) {
         return got -> got.file(FileProvider.getUriForFile(a, a.getPackageName() + ".share", file), mime);
@@ -105,8 +123,7 @@ final class ItemActions {
         if (kind != Kind.FILES) {
             add(rest, a, item, Act.CHAT, Kit.Icon.CHAT, "Send to a conversation", false);
             if (!item.inNote) add(rest, a, item, Act.NOTE, Kit.Icon.NOTES, "Add to a note", false);
-            // A pin holds words or a link. The Pi has nowhere to keep a file with one yet.
-            if (!item.isPin && words) add(rest, a, item, Act.PIN, R.drawable.ic_pin, "Save as a pin", false);
+            if (!item.isPin) add(rest, a, item, Act.PIN, R.drawable.ic_pin, "Save as a pin", false);
         }
         if (here && !words && (Build.VERSION.SDK_INT >= 29 || item.own.containsKey(Act.SAVE)))
             add(rest, a, item, Act.SAVE, R.drawable.csi_download, "Save on this phone", false);
@@ -234,6 +251,7 @@ final class ItemActions {
                 ContentValues values = new ContentValues();
                 values.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
                 values.put(MediaStore.MediaColumns.MIME_TYPE, type);
+                values.put(MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS + "/csync");
                 values.put(MediaStore.MediaColumns.IS_PENDING, 1);
                 saved = a.getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
                 if (saved == null) throw new Exception("The phone's storage is not available");

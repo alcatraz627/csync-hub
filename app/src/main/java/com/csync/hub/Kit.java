@@ -199,6 +199,61 @@ final class Kit {
         dialog.getBehavior().setState(com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED);
     }
 
+    /**
+     * Ask before something is lost or replaced. The drawer has two buttons: one keeps things
+     * as they are, the other goes ahead and is named for what it does.
+     */
+    static void confirm(Context c, CharSequence title, CharSequence sub, int icon, String go, Runnable run) {
+        com.google.android.material.bottomsheet.BottomSheetDialog dialog =
+            new com.google.android.material.bottomsheet.BottomSheetDialog(c);
+        View body = LayoutInflater.from(c).inflate(R.layout.kit_sheet, null, false);
+        ((TextView) body.findViewById(R.id.kit_title)).setText(title);
+        setOptional(body.findViewById(R.id.kit_sub), sub);
+        LinearLayout buttons = new LinearLayout(c);
+        buttons.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams half = new LinearLayout.LayoutParams(0, -2, 1);
+        buttons.addView(button(c, R.drawable.csi_back, "Keep it", R.color.text, dialog::dismiss), half);
+        LinearLayout.LayoutParams other = new LinearLayout.LayoutParams(0, -2, 1);
+        other.setMarginStart(dp(c, 8));
+        buttons.addView(button(c, icon, go, R.color.danger, () -> { dialog.dismiss(); run.run(); }), other);
+        LinearLayout.LayoutParams row = new LinearLayout.LayoutParams(-1, -2);
+        row.topMargin = dp(c, 6);
+        ((LinearLayout) body.findViewById(R.id.kit_rows)).addView(buttons, row);
+        dialog.setContentView(scrolling(body));
+        dialog.show();
+    }
+
+    /** An outlined button with an icon and words in one colour, as the mock draws every plain button. */
+    static View button(Context c, int icon, String words, int colorRes, Runnable click) {
+        int color = ContextCompat.getColor(c, colorRes);
+        LinearLayout button = new LinearLayout(c);
+        button.setOrientation(LinearLayout.HORIZONTAL);
+        button.setGravity(android.view.Gravity.CENTER);
+        button.setMinimumHeight(dp(c, 48));
+        button.setPadding(dp(c, 16), 0, dp(c, 16), 0);
+        android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
+        shape.setColor(ContextCompat.getColor(c, R.color.surface));
+        shape.setStroke(dp(c, 1), ContextCompat.getColor(c, R.color.border));
+        shape.setCornerRadius(dp(c, 14));
+        button.setBackground(shape);
+        button.setForeground(ContextCompat.getDrawable(c, outValue(c)));
+        button.setClipToOutline(true);
+        ImageView symbol = new ImageView(c);
+        symbol.setImageResource(icon);
+        symbol.setImageTintList(ColorStateList.valueOf(color));
+        button.addView(symbol, new LinearLayout.LayoutParams(dp(c, 18), dp(c, 18)));
+        TextView label = new TextView(c);
+        label.setText(words);
+        label.setTextColor(color);
+        label.setTextSize(14.5f);
+        label.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
+        label.setPadding(dp(c, 8), 0, 0, 0);
+        button.addView(label);
+        button.setContentDescription(words);
+        button.setOnClickListener(v -> click.run());
+        return button;
+    }
+
     /** A drawer that shows one picture, for looking at an image without leaving the page. */
     static void pictureSheet(Context c, CharSequence title, android.graphics.Bitmap picture) {
         com.google.android.material.bottomsheet.BottomSheetDialog dialog =

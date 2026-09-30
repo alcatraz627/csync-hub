@@ -138,9 +138,17 @@ final class MediaClient {
 
     /** Keep any file of up to 20 MB beside a note. */
     JSONObject uploadNoteFile(String noteId, String name, String mime, byte[] data) throws Exception {
+        return uploadFile("/v1/notes/" + enc(noteId) + "/files?name=" + enc(name), mime, data);
+    }
+
+    /** Keep one file of up to 20 MB as a pin of its own. */
+    JSONObject uploadPinFile(String name, String mime, byte[] data) throws Exception {
+        return uploadFile("/v1/pins/file?name=" + enc(name), mime, data);
+    }
+
+    private JSONObject uploadFile(String route, String mime, byte[] data) throws Exception {
         if (data.length < 1 || data.length > 20 * 1024 * 1024) throw new Exception("Choose a file under 20 MB");
-        HttpURLConnection connection = (HttpURLConnection) new URL(url("/v1/notes/" + enc(noteId) +
-            "/files?name=" + enc(name))).openConnection();
+        HttpURLConnection connection = (HttpURLConnection) new URL(url(route)).openConnection();
         connection.setRequestMethod("POST");
         connection.setConnectTimeout(5000);
         connection.setReadTimeout(30000);

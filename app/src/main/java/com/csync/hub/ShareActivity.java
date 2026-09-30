@@ -102,7 +102,7 @@ public class ShareActivity extends AppCompatActivity {
             case "device": chooseDevice(); break;
             case "chat": toConversation(); break;
             case "note": toNote(); break;
-            case "pin": if (files.isEmpty()) toPin(); break;
+            case "pin": toPin(); break;
             default: break;
         }
     }
@@ -128,7 +128,7 @@ public class ShareActivity extends AppCompatActivity {
 
     private void render() {
         LinearLayout item = Kit.group(body);
-        Kit.bindRow(Kit.addRow(item), itemIcon(), itemTitle(), itemWords(), null, false).setClickable(false);
+        Kit.bindRow(Kit.addRow(item), ItemActions.icon(kind), itemTitle(), itemWords(), null, false).setClickable(false);
 
         progress = new TextView(this);
         progress.setTextAppearance(R.style.Kit_Text_RowSub);
@@ -158,17 +158,6 @@ public class ShareActivity extends AppCompatActivity {
         if (kind == ItemActions.Kind.IMAGE) sendImageToPi(files.get(0), false);
         else if (text != null && files.isEmpty()) showTextOnPi();
         else Kit.sheet(this, "It cannot be shown on the Pi screen", "The Pi screen shows video, audio, pictures and words.");
-    }
-
-    private int itemIcon() {
-        switch (kind) {
-            case VIDEO: case AUDIO: case VIDEO_LINK: return Kit.Icon.VIDEO;
-            case IMAGE: return Kit.Icon.PHOTO;
-            case LINK: return R.drawable.csi_link;
-            case TEXT: return R.drawable.csi_text;
-            case FILES: return Kit.Icon.FILES;
-            default: return Kit.Icon.FILE;
-        }
     }
 
     /** The readable name: the file's own name, or the first line of the text cut at a word. */
@@ -262,6 +251,15 @@ public class ShareActivity extends AppCompatActivity {
     }
 
     private void toPin() {
+        if (!files.isEmpty()) {
+            Uri file = files.get(0);
+            Intent pin = new Intent(this, NotesActivity.class).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                .putExtra("pin_file_uri", file).putExtra("pin_file_name", displayName(file));
+            pin.setClipData(android.content.ClipData.newUri(getContentResolver(), "File for a pin", file));
+            startActivity(pin);
+            finish();
+            return;
+        }
         boolean link = kind == ItemActions.Kind.LINK || kind == ItemActions.Kind.VIDEO_LINK;
         startActivity(new Intent(this, NotesActivity.class)
             .putExtra(link ? "pin_prefill_url" : "pin_prefill_text", text));

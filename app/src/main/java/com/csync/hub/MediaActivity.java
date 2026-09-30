@@ -844,9 +844,7 @@ public final class MediaActivity extends AppCompatActivity {
     private void chooseTarget(JSONObject item) {
         // The shared list names the choices. A drive file plays by its id on the Pi, so this page does the playing itself.
         String mime = item.optString("mime", "application/octet-stream");
-        ItemActions.Kind kind = mime.startsWith("video/") ? ItemActions.Kind.VIDEO
-            : mime.startsWith("audio/") ? ItemActions.Kind.AUDIO
-            : mime.startsWith("image/") ? ItemActions.Kind.IMAGE : ItemActions.Kind.DOCUMENT;
+        ItemActions.Kind kind = ItemActions.kindOf(mime);
         ItemActions.Item file = new ItemActions.Item(kind, displayMediaName(item.optString("name")));
         file.sub = placeWords(item);
         file.file = got -> {

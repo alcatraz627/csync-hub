@@ -68,6 +68,7 @@ final class CameraController {
     private boolean previewReady;
     private boolean actionInFlight;
     private boolean captureTransferInFlight;
+    private int captureCount;
     private String pendingLegacyCapture;
     private MediaClient client;
     private final AtomicBoolean statusInFlight = new AtomicBoolean();
@@ -109,10 +110,7 @@ final class CameraController {
             "Photos and recordings from the Pi", null, true);
         Kit.bindRow(root.findViewById(R.id.camera_show_display), Kit.Icon.DISPLAY, "Pi display",
             "Open screen and playback controls", null, true);
-        Kit.bindRow(root.findViewById(R.id.captures_storage), R.drawable.csi_refresh, "Saved captures",
-            "Pi camera folder · refresh list", null, false);
         root.findViewById(R.id.camera_captures_row).setOnClickListener(v -> openCaptures());
-        root.findViewById(R.id.captures_storage).setOnClickListener(v -> loadCaptures());
         capturesBack = new OnBackPressedCallback(false) {
             @Override public void handleOnBackPressed() { closeCaptures(); }
         };
@@ -159,6 +157,7 @@ final class CameraController {
         };
         Kit.pageTop(top, showingCaptures ? "captures" : "camera", open);
         if (!showingCaptures) Kit.topAction(top, Kit.Icon.PHOTO, "Captures", v -> openCaptures());
+        else Kit.topAction(top, R.drawable.csi_refresh, "Read the list again", v -> loadCaptures());
         capturesBack.setEnabled(visible && showingCaptures);
     }
 
@@ -315,62 +314,121 @@ final class CameraController {
         MediaClient active = client;
         if (active == null) return;
         int generation = ++listGeneration;
-        capturesStatus.setVisibility(View.VISIBLE);
-        capturesStatus.setText("Loading captures from Pi");
+        sayCaptures("Looking on the Pi");
         new Thread(() -> {
             try {
                 JSONArray files = active.get("/v1/camera/captures").getJSONArray("captures");
                 ui.post(() -> {
                     if (generation != listGeneration) return;
                     captures.removeAllViews();
+                    captureCount = 0;
+                    // The Pi lists the newest first, so each day's captures arrive together.
+                    String day = null;
+                    LinearLayout group = null;
                     for (int i = 0; i < files.length(); i++) {
                         JSONObject file = files.optJSONObject(i);
                         if (file == null) continue;
                         String name = file.optString("name");
                         if (!name.endsWith(".jpg") && !name.endsWith(".mp4") && !name.endsWith(".mjpeg")) continue;
-                        addCaptureRow(name, file.optLong("bytes"));
+                        String taken = captureDay(name);
+                        if (group == null || !taken.equals(day)) {
+                            day = taken;
+                            Kit.label(captures, day);
+                            group = Kit.group(captures);
+                        }
+                        long bytes = file.optLong("bytes");
+                        View row = Kit.addRow(group);
+                        Kit.bindRow(row, name.endsWith(".jpg") ? Kit.Icon.PHOTO : Kit.Icon.VIDEO, captureTitle(name),
+                            captureDetail(name, bytes), null, true);
+                        row.setOnClickListener(v -> showCapture(name, bytes));
+                        captureCount++;
                     }
                     loadedCapturesWords();
                 });
             } catch (Exception error) {
                 ui.post(() -> {
-                    if (generation == listGeneration) capturesStatus.setText("Captures unavailable: " + error.getMessage() + " · tap Saved captures to retry");
+                    if (generation == listGeneration)
+                        sayCaptures("The list could not be read from the Pi. " + error.getMessage());
                 });
             }
         }, "pi-camera-list").start();
     }
 
-    private void addCaptureRow(String name, long bytes) {
-        boolean photoFile = name.endsWith(".jpg");
-        boolean raw = name.endsWith(".mjpeg");
-        View row = Kit.addRow(captures);
-        String detail = (raw ? "Raw MJPEG · " : photoFile ? "Photo · " : "Video · ") +
-            (bytes > 0 ? android.text.format.Formatter.formatShortFileSize(activity, bytes) : "saved on Pi");
-        Kit.bindRow(row, photoFile ? Kit.Icon.PHOTO : Kit.Icon.VIDEO, captureLabel(name), detail, null, true);
-        row.setOnClickListener(v -> showCapture(name));
-    }
-
-    private String captureLabel(String name) {
-        boolean photoFile = name.endsWith(".jpg");
-        String type = photoFile ? "Photo" : "Recording";
+    /** When a capture was taken, read from the time in its file name. Null when the name carries none. */
+    private Date captureTime(String name) {
+        java.util.regex.Matcher stamp = java.util.regex.Pattern.compile("(\\d{8}-\\d{6})").matcher(name);
+        if (!stamp.find()) return null;
         try {
-            String stamp = name.substring(name.indexOf('-') + 1, name.indexOf('-', name.indexOf('-') + 1) + 7);
             SimpleDateFormat input = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US);
             input.setTimeZone(TimeZone.getTimeZone("UTC"));
-            Date date = input.parse(stamp);
-            return type + " · " + android.text.format.DateFormat.getTimeFormat(activity).format(date);
-        } catch (Exception ignored) { return type + " · " + name; }
+            return input.parse(stamp.group(1));
+        } catch (Exception unreadable) { return null; }
     }
 
-    private void showCapture(String name) {
-        // A raw recording is kept as a plain file: no player on the phone or the Pi screen reads it.
+    /** The day a capture belongs under: Today, Yesterday, or the date. */
+    private String captureDay(String name) {
+        Date taken = captureTime(name);
+        if (taken == null) return "Earlier";
+        if (android.text.format.DateUtils.isToday(taken.getTime())) return "Today";
+        if (android.text.format.DateUtils.isToday(taken.getTime() + 86400000L)) return "Yesterday";
+        return android.text.format.DateUtils.formatDateTime(activity, taken.getTime(),
+            android.text.format.DateUtils.FORMAT_SHOW_DATE | android.text.format.DateUtils.FORMAT_ABBREV_MONTH);
+    }
+
+    /** What a capture is called: Photo or Recording for the camera's own, else the name of the file that was kept here. */
+    private String captureTitle(String name) {
+        int dot = name.lastIndexOf('.');
+        // What is left of the name once the time and the camera's own prefix are taken away.
+        String own = (dot > 0 ? name.substring(0, dot) : name).replace('_', ' ').replaceAll("\\d{8}-\\d{6}", "")
+            .replaceAll("(?i)\\b(photo|video|cap|vid|img)\\b", "").replaceAll("^[\\d\\s-]+|[\\d\\s-]+$", "");
+        if (!own.isEmpty()) return own;
+        return name.endsWith(".jpg") ? "Photo" : name.endsWith(".mjpeg") ? "Recording, not converted" : "Recording";
+    }
+
+    private String captureDetail(String name, long bytes) {
+        Date taken = captureTime(name);
+        String size = bytes > 0 ? android.text.format.Formatter.formatShortFileSize(activity, bytes) : null;
+        String time = taken == null ? null : android.text.format.DateFormat.getTimeFormat(activity).format(taken);
+        return time == null ? size : size == null ? time : time + " · " + size;
+    }
+
+    /** A capture named in a sentence, such as "Photo from 7:22 AM". */
+    private String captureLabel(String name) {
+        Date taken = captureTime(name);
+        return taken == null ? captureTitle(name)
+            : captureTitle(name) + " from " + android.text.format.DateFormat.getTimeFormat(activity).format(taken);
+    }
+
+    private void showCapture(String name, long bytes) {
+        // A recording that was never converted is kept as a plain file: no player here or on the Pi screen reads it.
         ItemActions.Kind kind = name.endsWith(".jpg") ? ItemActions.Kind.IMAGE
             : name.endsWith(".mp4") ? ItemActions.Kind.VIDEO : ItemActions.Kind.DOCUMENT;
-        ItemActions.Item item = new ItemActions.Item(kind, captureLabel(name));
-        item.sub = kind == ItemActions.Kind.DOCUMENT ? "Raw recording, saved on the Pi" : "Saved on the Pi";
+        ItemActions.Item item = new ItemActions.Item(kind, captureTitle(name));
+        String detail = captureDetail(name, bytes);
+        item.sub = captureDay(name) + (detail == null ? "" : ", " + detail);
         item.file = got -> fetchCapture(name, got);
         item.own.put(ItemActions.Act.SAVE, () -> download(name));
+        item.more.add(new Kit.Action(R.drawable.csi_trash, "Delete", null, () ->
+            Kit.confirm(activity, "Delete this " + (kind == ItemActions.Kind.IMAGE ? "photo" : "recording") + "?",
+                "It is removed from the Pi.", R.drawable.csi_trash, "Delete", () -> deleteCapture(name)), true));
         ItemActions.sheet(activity, item);
+    }
+
+    private void deleteCapture(String name) {
+        MediaClient active = client;
+        sayCaptures("Deleting it from the Pi");
+        new Thread(() -> {
+            String problem = null;
+            try { active.delete("/v1/camera/captures/" + MediaClient.enc(name), null); }
+            catch (Exception error) { problem = error.getMessage() == null ? "The Pi did not answer." : error.getMessage(); }
+            String failure = problem;
+            ui.post(() -> {
+                if (failure == null) { loadCaptures(); return; }
+                loadedCapturesWords();
+                Kit.sheet(activity, "It was not deleted", failure,
+                    new Kit.Action(R.drawable.csi_refresh, "Try again", null, () -> deleteCapture(name)));
+            });
+        }, "pi-camera-delete").start();
     }
 
     private static String mime(String name) {
@@ -382,7 +440,7 @@ final class CameraController {
     private void fetchCapture(String name, ItemActions.Got got) {
         if (captureTransferInFlight) return;
         captureTransferInFlight = true;
-        capturesStatus.setText("Getting " + captureLabel(name) + " from the Pi");
+        sayCaptures("Getting " + captureLabel(name) + " from the Pi");
         MediaClient active = client;
         new Thread(() -> {
             HttpURLConnection connection = null;
@@ -405,7 +463,7 @@ final class CameraController {
             } catch (Exception error) {
                 ui.post(() -> {
                     captureTransferInFlight = false;
-                    capturesStatus.setText("It could not be fetched from the Pi. " + error.getMessage());
+                    sayCaptures("It could not be fetched from the Pi. " + error.getMessage());
                 });
             } finally { if (connection != null) connection.disconnect(); }
         }, "pi-camera-fetch").start();
@@ -413,9 +471,13 @@ final class CameraController {
 
     /** Put the count of captures back on the status line after a passing message. */
     private void loadedCapturesWords() {
-        // Rows sit with a divider between each pair, so n rows are 2n - 1 views.
-        int count = (captures.getChildCount() + 1) / 2;
-        capturesStatus.setText(count == 0 ? "No captures on Pi yet" : count + " saved on Pi · tap one for actions");
+        sayCaptures(captureCount == 0 ? "No captures yet. Photos and recordings from the Pi camera are kept here." : null);
+    }
+
+    /** Say what is happening to the captures, or clear the line with null once there is nothing to say. */
+    private void sayCaptures(String words) {
+        capturesStatus.setText(words);
+        capturesStatus.setVisibility(words == null ? View.GONE : View.VISIBLE);
     }
 
     private HttpURLConnection captureConnection(MediaClient active, String name) throws Exception {
@@ -447,7 +509,7 @@ final class CameraController {
         if (captureTransferInFlight) return;
         captureTransferInFlight = true;
         MediaClient active = client;
-        capturesStatus.setText("Saving " + name + " to phone");
+        sayCaptures("Saving " + captureLabel(name) + " on this phone");
         new Thread(() -> {
             HttpURLConnection connection = null;
             Uri saved = chosenUri;
@@ -469,7 +531,8 @@ final class CameraController {
                 }
                 ui.post(() -> {
                     captureTransferInFlight = false;
-                    capturesStatus.setText("Saved to phone: " + name);
+                    loadedCapturesWords();
+                    android.widget.Toast.makeText(activity, "Saved to Downloads", android.widget.Toast.LENGTH_SHORT).show();
                 });
             } catch (Exception error) {
                 if (saved != null && chosenUri == null) {
@@ -478,7 +541,7 @@ final class CameraController {
                 }
                 ui.post(() -> {
                     captureTransferInFlight = false;
-                    capturesStatus.setText("Save failed: " + error.getMessage());
+                    sayCaptures("It was not saved. " + error.getMessage());
                 });
             } finally { if (connection != null) connection.disconnect(); }
         }, "pi-camera-download").start();

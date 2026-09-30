@@ -65,25 +65,14 @@
             android:paddingEnd="@dimen/kit_gutter" android:paddingTop="6dp" android:paddingBottom="16dp">
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                 style="@style/Kit.Text.PageTitle" android:text="Captures"/>
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="4dp" style="@style/Kit.Text.PageSub" android:text="Choose a photo or recording, then open, share, or save it."/>
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="25dp" android:layout_marginBottom="10dp"
-                style="@style/Kit.Text.Section" android:text="Saved On Pi"/>
+            <!-- Shown only while something is happening or has gone wrong; a loaded list needs no words. -->
             <TextView android:id="@+id/captures_status" android:layout_width="match_parent"
-                android:layout_height="wrap_content" android:paddingBottom="8dp"
-                android:text="Loading captures" android:textSize="13sp" android:textColor="@color/dim"
+                android:layout_height="wrap_content" android:layout_marginTop="10dp"
+                style="@style/Kit.Text.RowSub" android:text="Looking on the Pi"
                 android:accessibilityLiveRegion="polite"/>
+            <!-- One labelled group of rows per day, built in CameraController. -->
             <LinearLayout android:id="@+id/camera_files" android:layout_width="match_parent"
-                android:layout_height="wrap_content" android:orientation="vertical"
-                android:background="@drawable/card_bg" android:clipToOutline="true"/>
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="24dp" android:layout_marginBottom="10dp"
-                style="@style/Kit.Text.Section" android:text="Storage"/>
-            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:orientation="vertical" android:background="@drawable/card_bg" android:clipToOutline="true">
-                <include android:id="@+id/captures_storage" layout="@layout/kit_row"/>
-            </LinearLayout>
+                android:layout_height="wrap_content" android:orientation="vertical"/>
         </LinearLayout>
     </ScrollView>
 </LinearLayout>

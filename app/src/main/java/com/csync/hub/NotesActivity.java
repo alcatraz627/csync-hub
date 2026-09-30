@@ -159,7 +159,9 @@ public final class NotesActivity extends AppCompatActivity {
         String pinUrl = getIntent().getStringExtra("pin_prefill_url");
         String pinText = getIntent().getStringExtra("pin_prefill_text");
         String noteBody = getIntent().getStringExtra("note_prefill_body");
-        if (pinUrl != null || pinText != null) editPin(null, pinUrl == null ? "" : pinUrl,
+        Uri pinFile = state == null ? getIntent().getParcelableExtra("pin_file_uri") : null;
+        if (pinFile != null) pinFile(pinFile, getIntent().getStringExtra("pin_file_name"));
+        else if (pinUrl != null || pinText != null) editPin(null, pinUrl == null ? "" : pinUrl,
             pinText == null ? "" : pinText);
         else if (noteBody != null && sharedImage == null && sharedFile == null) showEditor("", noteBody);
     }
@@ -367,6 +369,42 @@ public final class NotesActivity extends AppCompatActivity {
         else uploadSharedImage(id);
     }
 
+    /** Read a file that was handed over, up to the 20 MB the Pi keeps. */
+    private byte[] readAll(Uri source) throws Exception {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (InputStream input = getContentResolver().openInputStream(source)) {
+            if (input == null) throw new Exception("The file could not be read");
+            byte[] chunk = new byte[65536];
+            int count;
+            while ((count = input.read(chunk)) != -1) {
+                if (bytes.size() + count > 20 * 1024 * 1024) throw new Exception("Choose a file under 20 MB");
+                bytes.write(chunk, 0, count);
+            }
+        }
+        return bytes.toByteArray();
+    }
+
+    /** Keep a file on the Pi as a pin of its own, named after the file. */
+    private void pinFile(Uri source, String givenName) {
+        String name = givenName == null || givenName.isEmpty() ? "file" : givenName;
+        status.setText("Saving " + name + " as a pin");
+        new Thread(() -> {
+            try {
+                client.uploadPinFile(name, getContentResolver().getType(source), readAll(source));
+                ui.post(() -> {
+                    android.widget.Toast.makeText(this, "Saved to Pins", android.widget.Toast.LENGTH_SHORT).show();
+                    refreshPins();
+                });
+            } catch (Exception error) {
+                ui.post(() -> {
+                    status.setText("The pin was not saved");
+                    Kit.sheet(this, "The pin was not saved", error.getMessage(),
+                        new Kit.Action(R.drawable.csi_refresh, "Try again", null, () -> pinFile(source, givenName)));
+                });
+            }
+        }, "csync-pin-file").start();
+    }
+
     private void uploadSharedFile(String id) {
         if (sharedFile == null || imageUploading || id == null || id.isEmpty()) return;
         Uri source = sharedFile;
@@ -375,17 +413,7 @@ public final class NotesActivity extends AppCompatActivity {
         status.setText("Adding " + name + " to the note");
         new Thread(() -> {
             try {
-                ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-                try (InputStream input = getContentResolver().openInputStream(source)) {
-                    if (input == null) throw new Exception("The file could not be read");
-                    byte[] chunk = new byte[65536];
-                    int count;
-                    while ((count = input.read(chunk)) != -1) {
-                        if (bytes.size() + count > 20 * 1024 * 1024) throw new Exception("Choose a file under 20 MB");
-                        bytes.write(chunk, 0, count);
-                    }
-                }
-                client.uploadNoteFile(id, name, getContentResolver().getType(source), bytes.toByteArray());
+                client.uploadNoteFile(id, name, getContentResolver().getType(source), readAll(source));
                 ui.post(() -> {
                     imageUploading = false;
                     sharedFile = null;
@@ -549,12 +577,15 @@ public final class NotesActivity extends AppCompatActivity {
                 && !pinUrl.toLowerCase(java.util.Locale.ROOT).contains(query)
                 && !pinContent.toLowerCase(java.util.Locale.ROOT).contains(query)
                 && !pinTags.toLowerCase(java.util.Locale.ROOT).contains(query)) continue;
+            JSONObject held = pin.optJSONObject("file");
             String displayTitle = pinTitle.isEmpty() ?
                 (pinUrl.isEmpty() ? pinContent.split("\\n", 2)[0] : Uri.parse(pinUrl).getHost()) : pinTitle;
-            String source = pinUrl.isEmpty() ? "Text snippet" : Uri.parse(pinUrl).getHost();
+            String source = held != null ? android.text.format.Formatter.formatShortFileSize(this, held.optLong("size"))
+                : pinUrl.isEmpty() ? "Text snippet" : Uri.parse(pinUrl).getHost();
             String tags = pinTagsLabel(pin);
             View row = Kit.addRow(pinsGroup);
-            Kit.bindRow(row, pinUrl.isEmpty() ? R.drawable.csi_text : R.drawable.csi_link, displayTitle,
+            Kit.bindRow(row, held != null ? ItemActions.icon(ItemActions.kindOf(held.optString("mime")))
+                    : pinUrl.isEmpty() ? R.drawable.csi_text : R.drawable.csi_link, displayTitle,
                 source + (tags.isEmpty() ? "" : " · " + tags), null, true);
             row.setOnClickListener(v -> showPin(pin));
             pinShown++;
@@ -573,20 +604,32 @@ public final class NotesActivity extends AppCompatActivity {
         String shareText = url + (url.isEmpty() || content.isEmpty() ? "" : "\n\n") + content;
         String tags = pinTagsLabel(pin);
         String shown = title;
-        ItemActions.Item item = new ItemActions.Item(url.isEmpty() ? ItemActions.Kind.TEXT : ItemActions.Kind.LINK, shown);
-        item.sub = shareText + (description.isEmpty() ? "" : "\n\n" + description) + (tags.isEmpty() ? "" : "\n\n" + tags);
-        item.text = shareText;
-        item.link = url.isEmpty() ? null : url;
-        item.textName = shown + ".txt";
+        JSONObject held = pin.optJSONObject("file");
+        ItemActions.Item item;
+        if (held != null) {
+            // A pin that holds a file offers what that kind of file offers anywhere else.
+            String name = held.optString("name", "file"), mime = held.optString("mime", "application/octet-stream");
+            String pinId = pin.optString("id");
+            item = new ItemActions.Item(ItemActions.kindOf(mime), shown);
+            item.sub = android.text.format.Formatter.formatShortFileSize(this, held.optLong("size")) + ", pinned"
+                + (description.isEmpty() ? "" : "\n\n" + description) + (tags.isEmpty() ? "" : "\n\n" + tags);
+            item.file = got -> fetch("/v1/pins/" + MediaClient.enc(pinId) + "/file",
+                pinId + "-" + name.replaceAll("[^A-Za-z0-9._-]", "_"), mime, got);
+        } else {
+            item = new ItemActions.Item(url.isEmpty() ? ItemActions.Kind.TEXT : ItemActions.Kind.LINK, shown);
+            item.sub = shareText + (description.isEmpty() ? "" : "\n\n" + description) + (tags.isEmpty() ? "" : "\n\n" + tags);
+            item.text = shareText;
+            item.link = url.isEmpty() ? null : url;
+            item.textName = shown + ".txt";
+        }
         item.isPin = true;
         item.more.add(new Kit.Action(R.drawable.csi_edit, "Edit", null, () -> editPin(pin)));
         item.more.add(new Kit.Action(R.drawable.csi_trash, "Delete", null, () ->
-            Kit.sheet(this, "Delete this pin?", shown,
-                new Kit.Action(R.drawable.csi_trash, "Delete", null, () -> task(() -> {
-                    client.delete("/v1/pins/" + MediaClient.enc(pin.optString("id")),
-                        new JSONObject().put("expectedRevision", pin.optInt("revision")));
-                    ui.post(this::refreshPins);
-                }))), true));
+            Kit.confirm(this, "Delete this pin?", shown, R.drawable.csi_trash, "Delete", () -> task(() -> {
+                client.delete("/v1/pins/" + MediaClient.enc(pin.optString("id")),
+                    new JSONObject().put("expectedRevision", pin.optInt("revision")));
+                ui.post(this::refreshPins);
+            })), true));
         ItemActions.sheet(this, item);
     }
 
@@ -653,7 +696,8 @@ public final class NotesActivity extends AppCompatActivity {
             String name = pinTitle.getText().toString().trim();
             String url = pinUrl.getText().toString().trim();
             String content = pinContent.getText().toString().trim();
-            if (url.isEmpty() && content.isEmpty()) { pinContent.setError("Add a URL or text"); return; }
+            boolean holdsFile = pin != null && pin.optJSONObject("file") != null;
+            if (url.isEmpty() && content.isEmpty() && !holdsFile) { pinContent.setError("Add a URL or text"); return; }
             if (!url.isEmpty()) {
                 Uri parsed = Uri.parse(url);
                 if (!("http".equals(parsed.getScheme()) || "https".equals(parsed.getScheme())) ||
@@ -723,9 +767,9 @@ public final class NotesActivity extends AppCompatActivity {
         action("Share", () -> share(note));
         action("Add image", this::chooseImage);
         action("Add a file", this::chooseFile);
-        action("Delete", () -> Kit.sheet(this, "Delete this note?",
+        action("Delete", () -> Kit.confirm(this, "Delete this note?",
             note.optString("title") + " and everything kept with it is removed from the Pi.",
-            new Kit.Action(R.drawable.csi_trash, "Delete", null, this::deleteNote)));
+            R.drawable.csi_trash, "Delete", this::deleteNote));
         String noteTitle = note.optString("title");
         String source = note.optString("body");
         addModeTabs(note);
@@ -757,13 +801,10 @@ public final class NotesActivity extends AppCompatActivity {
             if (file == null) continue;
             String name = file.optString("name", "File"), mime = file.optString("mime", "application/octet-stream");
             String fileId = file.optString("id");
-            ItemActions.Kind kind = mime.startsWith("video/") ? ItemActions.Kind.VIDEO
-                : mime.startsWith("audio/") ? ItemActions.Kind.AUDIO
-                : mime.startsWith("image/") ? ItemActions.Kind.IMAGE : ItemActions.Kind.DOCUMENT;
+            ItemActions.Kind kind = ItemActions.kindOf(mime);
             String size = android.text.format.Formatter.formatShortFileSize(this, file.optLong("size"));
             View row = Kit.addRow(group);
-            Kit.bindRow(row, kind == ItemActions.Kind.IMAGE ? Kit.Icon.PHOTO
-                : kind == ItemActions.Kind.DOCUMENT ? Kit.Icon.FILE : Kit.Icon.VIDEO, name, size, null, true);
+            Kit.bindRow(row, ItemActions.icon(kind), name, size, null, true);
             row.setOnClickListener(v -> {
                 ItemActions.Item item = new ItemActions.Item(kind, name);
                 item.sub = size + ", in this note";
@@ -771,11 +812,11 @@ public final class NotesActivity extends AppCompatActivity {
                 item.file = got -> fetch("/v1/notes/" + MediaClient.enc(id) + "/files/" + MediaClient.enc(fileId),
                     fileId + "-" + name.replaceAll("[^A-Za-z0-9._-]", "_"), mime, got);
                 item.more.add(new Kit.Action(R.drawable.csi_trash, "Take out of this note", null, () ->
-                    Kit.sheet(this, "Take this file out of the note?", name + " is removed from the Pi.",
-                        new Kit.Action(R.drawable.csi_trash, "Take it out", null, () -> task(() -> {
+                    Kit.confirm(this, "Take it out of this note?", name + " is removed from the Pi.",
+                        R.drawable.csi_trash, "Take out", () -> task(() -> {
                             client.delete("/v1/notes/" + MediaClient.enc(id) + "/files/" + MediaClient.enc(fileId), null);
                             ui.post(() -> loadNote(id));
-                        }))), true));
+                        })), true));
                 ItemActions.sheet(this, item);
             });
         }
@@ -783,6 +824,7 @@ public final class NotesActivity extends AppCompatActivity {
 
     /** Bring something kept on the Pi onto this phone, then hand it on as a file that can be read. */
     private void fetch(String route, String saveAs, String mime, ItemActions.Got got) {
+        CharSequence before = status.getText();
         status.setText("Getting it from the Pi");
         task(() -> {
             File folder = new File(getCacheDir(), "share");
@@ -791,7 +833,7 @@ public final class NotesActivity extends AppCompatActivity {
             client.download(route, file);
             Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".share", file);
             ui.post(() -> {
-                status.setText("Pi note · revision " + revision);
+                status.setText(before);
                 got.file(uri, mime);
             });
         });
@@ -829,6 +871,12 @@ public final class NotesActivity extends AppCompatActivity {
         item.inNote = true;
         item.file = got -> fetch("/v1/notes/" + MediaClient.enc(id) + "/images/" + MediaClient.enc(imageId),
             "note-" + imageId.replaceAll("[^A-Za-z0-9_-]", "_") + ".png", "image/png", got);
+        item.more.add(new Kit.Action(R.drawable.csi_trash, "Take out of this note", null, () ->
+            Kit.confirm(this, "Take it out of this note?", "The picture is removed from the Pi.",
+                R.drawable.csi_trash, "Take out", () -> task(() -> {
+                    client.delete("/v1/notes/" + MediaClient.enc(id) + "/images/" + MediaClient.enc(imageId), null);
+                    ui.post(() -> loadNote(id));
+                })), true));
         ItemActions.sheet(this, item);
     }
 
