@@ -2211,8 +2211,54 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
      */
     private void exportConversation() {
         if (chatSession == null) return;
+        if (ChatStore.transcript(this, chatSession).length() == 0) { toast("There is nothing to save yet"); return; }
+        Kit.sheet(this, "Save this conversation", chatTitle.getText(),
+            new Kit.Action(R.drawable.csi_markdown, "Markdown",
+                "Text you can edit. What the assistant used is listed under each reply.", this::exportMarkdown),
+            new Kit.Action(R.drawable.csi_image, "Image",
+                "One tall picture of the whole conversation, as it looks here.", this::exportImage));
+    }
+
+    /** Draw every message of the open conversation into one picture and hand it to Android's share menu. */
+    private void exportImage() {
+        if (chatList.getWidth() == 0 || chatList.getHeight() == 0) return;
+        // A very long conversation is drawn smaller, so the picture stays within what a phone can hold in memory.
+        final float scale = Math.min(1f, 16000f / chatList.getHeight());
+        final android.graphics.Bitmap picture;
+        try {
+            picture = android.graphics.Bitmap.createBitmap(Math.round(chatList.getWidth() * scale) + dp(28),
+                Math.round(chatList.getHeight() * scale) + dp(28), android.graphics.Bitmap.Config.ARGB_8888);
+        } catch (OutOfMemoryError tooLarge) {
+            Kit.sheet(this, "The picture could not be made", "This conversation is too long for one picture. Markdown still works.");
+            return;
+        }
+        android.graphics.Canvas canvas = new android.graphics.Canvas(picture);
+        canvas.drawColor(col(R.color.bg));
+        canvas.translate(dp(14), dp(14));
+        canvas.scale(scale, scale);
+        chatList.draw(canvas);
+        final String title = chatTitle.getText().toString();
+        new Thread(() -> {
+            try {
+                java.io.File dir = new java.io.File(getCacheDir(), "share");
+                dir.mkdirs();
+                String name = title.replaceAll("[^A-Za-z0-9 ._-]", "").trim();
+                java.io.File file = new java.io.File(dir, (name.isEmpty() ? "conversation" : name) + ".png");
+                try (java.io.FileOutputStream stream = new java.io.FileOutputStream(file)) {
+                    picture.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, stream);
+                }
+                android.net.Uri uri = androidx.core.content.FileProvider.getUriForFile(this, getPackageName() + ".share", file);
+                Intent send = new Intent(Intent.ACTION_SEND).setType("image/png")
+                    .putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                ui.post(() -> startActivity(Intent.createChooser(send, "Save this conversation")));
+            } catch (Exception error) {
+                ui.post(() -> Kit.sheet(this, "The conversation could not be saved", "The picture could not be written on this phone."));
+            }
+        }, "chat-export").start();
+    }
+
+    private void exportMarkdown() {
         JSONArray transcript = ChatStore.transcript(this, chatSession);
-        if (transcript.length() == 0) { toast("There is nothing to save yet"); return; }
         String title = chatTitle.getText().toString();
         StringBuilder out = new StringBuilder("# ").append(title).append("\n");
         java.util.List<String> used = new java.util.ArrayList<>();
