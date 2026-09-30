@@ -44,7 +44,9 @@ final class MediaClient {
     JSONObject uploadWallpaper(byte[] jpeg) throws Exception { return sendImage("/v1/display/wallpaper", jpeg); }
 
     /** Show an image on the Pi screen now, leaving the saved cover as it is. */
-    JSONObject showImage(byte[] jpeg) throws Exception { return sendImage("/v1/display/show", jpeg); }
+    JSONObject showImage(byte[] jpeg, String name) throws Exception {
+        return sendImage("/v1/display/show" + (name == null || name.isEmpty() ? "" : "?name=" + enc(name)), jpeg);
+    }
 
     private JSONObject sendImage(String path, byte[] jpeg) throws Exception {
         HttpURLConnection connection = (HttpURLConnection) new URL(url(path)).openConnection();
@@ -130,6 +132,51 @@ final class MediaClient {
                     output.write(buffer, 0, count);
                 }
                 return output.toByteArray();
+            }
+        } finally { connection.disconnect(); }
+    }
+
+    /** Keep any file of up to 20 MB beside a note. */
+    JSONObject uploadNoteFile(String noteId, String name, String mime, byte[] data) throws Exception {
+        if (data.length < 1 || data.length > 20 * 1024 * 1024) throw new Exception("Choose a file under 20 MB");
+        HttpURLConnection connection = (HttpURLConnection) new URL(url("/v1/notes/" + enc(noteId) +
+            "/files?name=" + enc(name))).openConnection();
+        connection.setRequestMethod("POST");
+        connection.setConnectTimeout(5000);
+        connection.setReadTimeout(30000);
+        connection.setRequestProperty("X-Csync-Token", token);
+        connection.setRequestProperty("Content-Type", mime == null ? "application/octet-stream" : mime);
+        connection.setDoOutput(true);
+        connection.setFixedLengthStreamingMode(data.length);
+        try {
+            try (OutputStream output = connection.getOutputStream()) { output.write(data); }
+            int status = connection.getResponseCode();
+            InputStream input = status < 400 ? connection.getInputStream() : connection.getErrorStream();
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            byte[] buffer = new byte[4096];
+            int count;
+            while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
+            JSONObject result = new JSONObject(output.toString("UTF-8"));
+            if (status >= 400) throw new MediaException(result.optString("code", "MEDIA_ERROR"),
+                result.optString("message", "The file could not be added"));
+            return result;
+        } finally { connection.disconnect(); }
+    }
+
+    /** Fetch something from the Pi into a file on this phone. */
+    void download(String path, java.io.File to) throws Exception {
+        HttpURLConnection connection = (HttpURLConnection) new URL(url(path)).openConnection();
+        connection.setConnectTimeout(5000);
+        connection.setReadTimeout(20000);
+        connection.setRequestProperty("X-Csync-Token", token);
+        try {
+            int status = connection.getResponseCode();
+            if (status != 200) throw new Exception(status == 404 ? "It is no longer on the Pi" : "The Pi answered " + status);
+            try (InputStream input = connection.getInputStream();
+                 OutputStream output = new java.io.FileOutputStream(to)) {
+                byte[] buffer = new byte[65536];
+                int count;
+                while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
             }
         } finally { connection.disconnect(); }
     }

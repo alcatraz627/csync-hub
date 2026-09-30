@@ -34,8 +34,13 @@ import java.util.List;
  */
 public class ShareActivity extends AppCompatActivity {
 
-    /** The kinds of thing that can arrive, each with its own set of places to go. */
-    private enum Kind { MEDIA, IMAGE, DOCUMENT, FILES, VIDEO_LINK, LINK, TEXT }
+    /**
+     * Names the place an item from inside csync is going, so the page sends it there without
+     * asking. One of pi, cover, device, chat, note or pin.
+     */
+    static final String PLACE = "csync_place";
+    /** The file name words from inside csync arrive under on another device, such as a note's title. */
+    static final String TEXT_NAME = "csync_text_name";
 
     @Override protected void attachBaseContext(Context base) {
         super.attachBaseContext(Appearance.wrap(base));
@@ -46,7 +51,7 @@ public class ShareActivity extends AppCompatActivity {
     private String text;
     // The conversation picked in the share menu, when one was.
     private String conversation;
-    private Kind kind;
+    private ItemActions.Kind kind;
     private LinearLayout body;
     private TextView progress;
 
@@ -57,10 +62,11 @@ public class ShareActivity extends AppCompatActivity {
         Appearance.applySystemBars(this);
         setContentView(R.layout.activity_share);
         body = findViewById(R.id.share_body);
-        Kit.pageTop(findViewById(R.id.share_top), this::finish,
-            new Kit.Crumb(Kit.Icon.SHARE, "From another app", null));
-
         final Intent intent = getIntent();
+        final String place = intent.getStringExtra(PLACE);
+        Kit.pageTop(findViewById(R.id.share_top), this::finish,
+            new Kit.Crumb(Kit.Icon.SHARE, place == null ? "From another app" : "Send", null));
+
         CharSequence caption = intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
         if (caption != null && caption.length() > 0) text = caption.toString();
         if (Intent.ACTION_SEND.equals(intent.getAction())) {
@@ -79,28 +85,43 @@ public class ShareActivity extends AppCompatActivity {
 
         // A conversation picked straight from the share menu needs no question.
         conversation = ChatShortcuts.picked(intent);
-        if (conversation != null && kind != Kind.FILES) { toConversation(); return; }
+        if (conversation != null && kind != ItemActions.Kind.FILES) { toConversation(); return; }
         String entry = intent.getComponent() == null ? "" : intent.getComponent().getClassName();
         if (entry.endsWith(".SharePiScreen") && playOnPi()) return;
         render();
         String last = PeerStore.selected(this);
         if (entry.endsWith(".ShareLastDevice") && !last.isEmpty()) sendToPeer(last, 0);
+        if (place != null) go(place);
     }
 
-    private Kind kindOf() {
-        if (files.size() > 1) return Kind.FILES;
+    /** Send the item to the place that was chosen before this page opened. */
+    private void go(String place) {
+        switch (place) {
+            case "pi": toPiScreen(); break;
+            case "cover": if (kind == ItemActions.Kind.IMAGE) confirmPiCover(); break;
+            case "device": chooseDevice(); break;
+            case "chat": toConversation(); break;
+            case "note": toNote(); break;
+            case "pin": if (files.isEmpty()) toPin(); break;
+            default: break;
+        }
+    }
+
+    private ItemActions.Kind kindOf() {
+        if (files.size() > 1) return ItemActions.Kind.FILES;
         if (files.size() == 1) {
             Uri file = files.get(0);
-            if (playableType(file) != null) return Kind.MEDIA;
+            String plays = playableType(file);
+            if (plays != null) return plays.startsWith("audio/") ? ItemActions.Kind.AUDIO : ItemActions.Kind.VIDEO;
             String type;
             try { type = getContentResolver().getType(file); } catch (RuntimeException unreadable) { type = null; }
-            return isImage(displayName(file), type) ? Kind.IMAGE : Kind.DOCUMENT;
+            return isImage(displayName(file), type) ? ItemActions.Kind.IMAGE : ItemActions.Kind.DOCUMENT;
         }
-        if (youtubeLink(text) != null) return Kind.VIDEO_LINK;
+        if (youtubeLink(text) != null) return ItemActions.Kind.VIDEO_LINK;
         Uri link = Uri.parse(text.trim());
         boolean web = ("http".equalsIgnoreCase(link.getScheme()) || "https".equalsIgnoreCase(link.getScheme()))
             && link.getHost() != null;
-        return web ? Kind.LINK : Kind.TEXT;
+        return web ? ItemActions.Kind.LINK : ItemActions.Kind.TEXT;
     }
 
     // ---- the page ----
@@ -115,44 +136,33 @@ public class ShareActivity extends AppCompatActivity {
         progress.setVisibility(View.GONE);
         body.addView(progress);
 
-        // What can be done with it straight away comes first, then the places it can be kept or sent.
-        boolean first = true;
-        if (kind == Kind.MEDIA || kind == Kind.VIDEO_LINK) {
-            Kit.label(body, "Play");
-            row(Kit.group(body), Kit.Icon.DISPLAY, "Play on Pi screen", null, false, this::playOnPi);
-        } else if (kind == Kind.IMAGE) {
-            Kit.label(body, "Show");
-            LinearLayout show = Kit.group(body);
-            row(show, Kit.Icon.DISPLAY, "Show on Pi screen", null, false, () -> sendImageToPi(files.get(0), false));
-            row(show, R.drawable.csi_image, "Set as the Pi cover", null, true, this::confirmPiCover);
-        } else if (kind == Kind.TEXT) {
-            Kit.label(body, "Show");
-            LinearLayout show = Kit.group(body);
-            row(show, Kit.Icon.DISPLAY, "Show on Pi screen", null, false, this::showTextOnPi);
-            row(show, R.drawable.csi_copy, "Copy the text", null, false, this::copyText);
-        } else first = false;
-
-        if (first) Kit.label(body, "Keep or send");
-        else body.addView(new View(this), new LinearLayout.LayoutParams(-1, Kit.dp(this, 16)));
-        LinearLayout places = Kit.group(body);
-        row(places, Kit.Icon.DEVICE, "Send to a device", null, true, this::chooseDevice);
-        if (kind != Kind.FILES)
-            row(places, Kit.Icon.CHAT, "Send to a conversation", null, false, this::toConversation);
-        if (text != null && files.isEmpty() || kind == Kind.IMAGE)
-            row(places, Kit.Icon.NOTES, "Add to a note", null, false, this::toNote);
-        if (files.isEmpty())
-            row(places, R.drawable.ic_pin, "Save as a pin", null, false, this::toPin);
+        // The same list every other place uses. This page does each choice itself, since the item is already here.
+        ItemActions.Item shared = new ItemActions.Item(kind, itemTitle());
+        shared.incoming = true;
+        shared.text = text;
+        if (!files.isEmpty()) shared.file = got -> got.file(files.get(0), getContentResolver().getType(files.get(0)));
+        shared.own.put(ItemActions.Act.PLAY_PI, this::toPiScreen);
+        shared.own.put(ItemActions.Act.SHOW_PI, this::toPiScreen);
+        shared.own.put(ItemActions.Act.COVER, this::confirmPiCover);
+        shared.own.put(ItemActions.Act.COPY, this::copyText);
+        shared.own.put(ItemActions.Act.DEVICE, this::chooseDevice);
+        shared.own.put(ItemActions.Act.CHAT, this::toConversation);
+        shared.own.put(ItemActions.Act.NOTE, this::toNote);
+        shared.own.put(ItemActions.Act.PIN, this::toPin);
+        Kit.sections(body, ItemActions.sections(this, shared), null);
     }
 
-    private void row(LinearLayout group, int icon, String title, String sub, boolean opens, Runnable run) {
-        View row = Kit.addRow(group);
-        Kit.bindRow(row, icon, title, sub, null, opens);
-        row.setOnClickListener(v -> run.run());
+    /** Play it on the Pi screen, or show it there when it is a picture or words. */
+    private void toPiScreen() {
+        if (playOnPi()) return;
+        if (kind == ItemActions.Kind.IMAGE) sendImageToPi(files.get(0), false);
+        else if (text != null && files.isEmpty()) showTextOnPi();
+        else Kit.sheet(this, "It cannot be shown on the Pi screen", "The Pi screen shows video, audio, pictures and words.");
     }
 
     private int itemIcon() {
         switch (kind) {
-            case MEDIA: case VIDEO_LINK: return Kit.Icon.VIDEO;
+            case VIDEO: case AUDIO: case VIDEO_LINK: return Kit.Icon.VIDEO;
             case IMAGE: return Kit.Icon.PHOTO;
             case LINK: return R.drawable.csi_link;
             case TEXT: return R.drawable.csi_text;
@@ -174,7 +184,8 @@ public class ShareActivity extends AppCompatActivity {
     private String itemWords() {
         String what;
         switch (kind) {
-            case MEDIA: what = "Video or audio"; break;
+            case VIDEO: what = "Video"; break;
+            case AUDIO: what = "Audio"; break;
             case VIDEO_LINK: what = "YouTube link"; break;
             case IMAGE: what = "Image"; break;
             case LINK: what = "Link"; break;
@@ -205,11 +216,11 @@ public class ShareActivity extends AppCompatActivity {
 
     /** Start it on the Pi screen. False when this kind of item cannot be played there. */
     private boolean playOnPi() {
-        if (kind == Kind.VIDEO_LINK) {
+        if (kind == ItemActions.Kind.VIDEO_LINK) {
             Intent cast = new Intent(this, MediaActivity.class).setAction(Intent.ACTION_SEND).setType("text/plain");
             cast.putExtra(Intent.EXTRA_TEXT, youtubeLink(text));
             startActivity(cast);
-        } else if (kind == Kind.MEDIA) {
+        } else if (kind == ItemActions.Kind.VIDEO || kind == ItemActions.Kind.AUDIO) {
             Uri file = files.get(0);
             Intent cast = new Intent(this, MediaActivity.class).setAction(Intent.ACTION_SEND)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
@@ -237,18 +248,21 @@ public class ShareActivity extends AppCompatActivity {
 
     private void toNote() {
         Intent note = new Intent(this, NotesActivity.class);
-        if (kind == Kind.IMAGE) {
-            Uri image = files.get(0);
-            note.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).putExtra("note_image_uri", image);
+        if (!files.isEmpty()) {
+            // A picture is drawn inside the note; any other file is kept beside it.
+            Uri file = files.get(0);
+            note.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                .putExtra(kind == ItemActions.Kind.IMAGE ? "note_image_uri" : "note_file_uri", file);
+            if (kind != ItemActions.Kind.IMAGE) note.putExtra("note_file_name", displayName(file));
             if (text != null) note.putExtra("note_image_caption", text);
-            note.setClipData(android.content.ClipData.newUri(getContentResolver(), "Image for a note", image));
+            note.setClipData(android.content.ClipData.newUri(getContentResolver(), "File for a note", file));
         } else note.putExtra("note_prefill_body", text);
         startActivity(note);
         finish();
     }
 
     private void toPin() {
-        boolean link = kind == Kind.LINK || kind == Kind.VIDEO_LINK;
+        boolean link = kind == ItemActions.Kind.LINK || kind == ItemActions.Kind.VIDEO_LINK;
         startActivity(new Intent(this, NotesActivity.class)
             .putExtra(link ? "pin_prefill_url" : "pin_prefill_text", text));
         finish();
@@ -344,7 +358,7 @@ public class ShareActivity extends AppCompatActivity {
                 try { bitmap.compress(Bitmap.CompressFormat.JPEG, 85, output); }
                 finally { bitmap.recycle(); }
                 MediaClient pi = new MediaClient(host, token);
-                result = asCover ? pi.uploadWallpaper(output.toByteArray()) : pi.showImage(output.toByteArray());
+                result = asCover ? pi.uploadWallpaper(output.toByteArray()) : pi.showImage(output.toByteArray(), displayName(image));
             } catch (Exception error) { failure = error.getMessage(); }
             String error = failure;
             JSONObject applied = result;
@@ -446,13 +460,16 @@ public class ShareActivity extends AppCompatActivity {
         new Thread(() -> {
             int sent = nextItem;
             String err = null;
-            String pendingName = "shared.txt", pendingKind = "text";
+            String asked = getIntent().getStringExtra(TEXT_NAME);
+            final String textName = asked == null || asked.trim().isEmpty() ? "shared.txt"
+                : asked.replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", " ").trim();
+            String pendingName = textName, pendingKind = "text";
             try {
                 for (int item = nextItem; item < total; item++) {
                     if (item < textItems) {
-                        pendingName = "shared.txt";
+                        pendingName = textName;
                         pendingKind = "text";
-                        MeshClient.send(peer, token, from, "text", "shared.txt", text.getBytes("UTF-8"));
+                        MeshClient.send(peer, token, from, "text", textName, text.getBytes("UTF-8"));
                     } else {
                         Uri u = files.get(item - textItems);
                         byte[] data = read(u);

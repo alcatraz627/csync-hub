@@ -842,18 +842,28 @@ public final class MediaActivity extends AppCompatActivity {
     }
 
     private void chooseTarget(JSONObject item) {
-        // The same actions under the same names as every other place an item appears, and each one names its output.
-        String mime = item.optString("mime");
-        boolean plays = mime.startsWith("video/") || mime.startsWith("audio/");
-        String verb = plays ? "Play" : "Show";
-        java.util.List<Kit.Action> actions = new java.util.ArrayList<>();
-        actions.add(new Kit.Action(Kit.Icon.DISPLAY, verb + " on Pi screen", "Starts muted", () -> playPi(item)));
-        actions.add(new Kit.Action(Kit.Icon.DEVICE, verb + " on this phone", null, () -> playPhone(item, 0)));
-        if (mime.startsWith("video/"))
-            actions.add(new Kit.Action(R.drawable.csi_play, "Open in VLC", "Hands the file to VLC on this phone", () -> playVlc(item)));
-        actions.add(new Kit.Action(Kit.Icon.SHARE, "Share with another app", null, () -> shareFile(item)));
-        actions.add(new Kit.Action(R.drawable.csi_info, "File details", null, () -> fileDetails(item)));
-        Kit.sheet(this, displayMediaName(item.optString("name")), placeWords(item), actions.toArray(new Kit.Action[0]));
+        // The shared list names the choices. A drive file plays by its id on the Pi, so this page does the playing itself.
+        String mime = item.optString("mime", "application/octet-stream");
+        ItemActions.Kind kind = mime.startsWith("video/") ? ItemActions.Kind.VIDEO
+            : mime.startsWith("audio/") ? ItemActions.Kind.AUDIO
+            : mime.startsWith("image/") ? ItemActions.Kind.IMAGE : ItemActions.Kind.DOCUMENT;
+        ItemActions.Item file = new ItemActions.Item(kind, displayMediaName(item.optString("name")));
+        file.sub = placeWords(item);
+        file.file = got -> {
+            try { got.file(mediaUri(item), mime); }
+            catch (org.json.JSONException incomplete) { setStatus("This file cannot be read from the Pi"); }
+        };
+        file.own.put(ItemActions.Act.PLAY_PI, () -> playPi(item));
+        file.own.put(ItemActions.Act.PLAY_PHONE, () -> playPhone(item, 0));
+        file.own.put(ItemActions.Act.VLC, () -> playVlc(item));
+        file.notes.put(ItemActions.Act.PLAY_PI, "Starts muted");
+        file.notes.put(ItemActions.Act.VLC, "Hands the file to VLC on this phone");
+        if (kind == ItemActions.Kind.IMAGE) {
+            file.own.put(ItemActions.Act.SHOW_PI, () -> playPi(item));
+            file.own.put(ItemActions.Act.OPEN, () -> playPhone(item, 0));
+        }
+        file.more.add(new Kit.Action(R.drawable.csi_info, "File details", null, () -> fileDetails(item), true));
+        ItemActions.sheet(this, file);
     }
 
     private Uri mediaUri(JSONObject item) throws org.json.JSONException {
@@ -863,23 +873,6 @@ public final class MediaActivity extends AppCompatActivity {
             .appendQueryParameter("name", item.optString("name"))
             .appendQueryParameter("mime", item.optString("mime", "application/octet-stream"))
             .build();
-    }
-
-    private void shareFile(JSONObject item) {
-        try {
-            Uri uri = mediaUri(item);
-            Intent send = new Intent(Intent.ACTION_SEND)
-                .setType(item.optString("mime", "application/octet-stream"))
-                .putExtra(Intent.EXTRA_STREAM, uri);
-            send.setClipData(android.content.ClipData.newRawUri(item.optString("name"), uri));
-            send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            Intent chooser = Intent.createChooser(send, "Share Pi file");
-            chooser.setClipData(send.getClipData());
-            chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            startActivity(chooser);
-        } catch (Exception error) {
-            setStatus("Could not share " + item.optString("name") + ": " + error.getMessage());
-        }
     }
 
     private void playVlc(JSONObject item) {

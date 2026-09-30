@@ -1477,31 +1477,17 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         String mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(
             extension.toLowerCase(java.util.Locale.ROOT));
         if (mime == null) mime = "application/octet-stream";
-        String type = mime;
-        boolean textFile = type.startsWith("text/") || type.equals("application/json");
-        String[] choices = textFile ? new String[]{"Open", "Share", "Copy text"} :
-            new String[]{"Open", "Share"};
-        new androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle(file.getName())
-            .setItems(choices, (dialog, which) -> {
-                if (which == 2) { copyFile(file); return; }
-                try {
-                    Uri uri = FileProvider.getUriForFile(this,
-                        getPackageName() + ".share", file);
-                    Intent intent;
-                    if (which == 0) {
-                        intent = new Intent(Intent.ACTION_VIEW).setDataAndType(uri, type);
-                    } else {
-                        intent = new Intent(Intent.ACTION_SEND).setType(type)
-                            .putExtra(Intent.EXTRA_STREAM, uri);
-                    }
-                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                    startActivity(Intent.createChooser(intent,
-                        which == 0 ? "Open received file" : "Share received file"));
-                } catch (Exception error) {
-                    toast(which == 0 ? "No app can open this file" : "Cannot share this file");
-                }
-            }).show();
+        boolean textFile = mime.startsWith("text/") || mime.equals("application/json");
+        ItemActions.Kind kind = mime.startsWith("video/") ? ItemActions.Kind.VIDEO
+            : mime.startsWith("audio/") ? ItemActions.Kind.AUDIO
+            : mime.startsWith("image/") ? ItemActions.Kind.IMAGE : ItemActions.Kind.DOCUMENT;
+        ItemActions.Item item = new ItemActions.Item(kind, file.getName());
+        java.io.File sender = file.getParentFile();
+        item.sub = (sender == null ? "Received" : "From " + sender.getName()) + " · "
+            + android.text.format.Formatter.formatShortFileSize(this, file.length());
+        item.file = ItemActions.local(this, file, mime);
+        if (textFile) item.more.add(new Kit.Action(R.drawable.csi_copy, "Copy the text", null, () -> copyFile(file)));
+        ItemActions.sheet(this, item);
     }
 
     private void copyFile(java.io.File f) {

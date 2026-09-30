@@ -143,9 +143,79 @@ final class Kit {
     /** One choice in a drawer. */
     static final class Action {
         final int icon; final String label; final String sub; final Runnable run;
-        Action(int icon, String label, String sub, Runnable run) {
-            this.icon = icon; this.label = label; this.sub = sub; this.run = run;
+        // True when the choice leads to another question, which the row shows with a chevron.
+        final boolean opens;
+        Action(int icon, String label, String sub, Runnable run) { this(icon, label, sub, run, false); }
+        Action(int icon, String label, String sub, Runnable run, boolean opens) {
+            this.icon = icon; this.label = label; this.sub = sub; this.run = run; this.opens = opens;
         }
+    }
+
+    /** A labelled set of choices. A null label draws the set without a heading. */
+    static final class Section {
+        final String label; final java.util.List<Action> actions;
+        Section(String label, java.util.List<Action> actions) { this.label = label; this.actions = actions; }
+    }
+
+    /**
+     * Draw labelled sets of choices as groups of rows, on a page or inside a drawer.
+     * {@code before} runs ahead of whichever choice is tapped; a drawer uses it to close itself.
+     */
+    static void sections(ViewGroup parent, java.util.List<Section> sections, Runnable before) {
+        boolean first = true;
+        for (Section section : sections) {
+            if (section.actions.isEmpty()) continue;
+            if (section.label != null) label(parent, section.label);
+            else if (!first) parent.addView(new View(parent.getContext()),
+                new LinearLayout.LayoutParams(-1, dp(parent.getContext(), 16)));
+            first = false;
+            LinearLayout rows = group(parent);
+            for (Action action : section.actions) {
+                View row = addRow(rows);
+                bindRow(row, action.icon, action.label, action.sub, null, action.opens);
+                row.setOnClickListener(v -> { if (before != null) before.run(); action.run.run(); });
+            }
+        }
+    }
+
+    /** Open a bottom drawer whose choices come in labelled sets. */
+    static com.google.android.material.bottomsheet.BottomSheetDialog sheet(
+            Context c, CharSequence title, CharSequence sub, java.util.List<Section> sections) {
+        com.google.android.material.bottomsheet.BottomSheetDialog dialog =
+            new com.google.android.material.bottomsheet.BottomSheetDialog(c);
+        View body = LayoutInflater.from(c).inflate(R.layout.kit_sheet, null, false);
+        ((TextView) body.findViewById(R.id.kit_title)).setText(title);
+        setOptional(body.findViewById(R.id.kit_sub), sub);
+        sections(body.findViewById(R.id.kit_rows), sections, dialog::dismiss);
+        dialog.setContentView(scrolling(body));
+        openFully(dialog);
+        dialog.show();
+        return dialog;
+    }
+
+    /** Open a tall drawer at its full height, so its last rows are not hidden behind a half-open edge. */
+    private static void openFully(com.google.android.material.bottomsheet.BottomSheetDialog dialog) {
+        dialog.getBehavior().setSkipCollapsed(true);
+        dialog.getBehavior().setState(com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED);
+    }
+
+    /** A drawer that shows one picture, for looking at an image without leaving the page. */
+    static void pictureSheet(Context c, CharSequence title, android.graphics.Bitmap picture) {
+        com.google.android.material.bottomsheet.BottomSheetDialog dialog =
+            new com.google.android.material.bottomsheet.BottomSheetDialog(c);
+        View body = LayoutInflater.from(c).inflate(R.layout.kit_sheet, null, false);
+        ((TextView) body.findViewById(R.id.kit_title)).setText(title);
+        setOptional(body.findViewById(R.id.kit_sub), null);
+        ImageView image = new ImageView(c);
+        image.setImageBitmap(picture);
+        image.setAdjustViewBounds(true);
+        image.setContentDescription(title);
+        image.setBackgroundResource(R.drawable.card_bg);
+        image.setClipToOutline(true);
+        ((LinearLayout) body.findViewById(R.id.kit_rows)).addView(image, new LinearLayout.LayoutParams(-1, -2));
+        dialog.setContentView(scrolling(body));
+        openFully(dialog);
+        dialog.show();
     }
 
     /**
@@ -162,7 +232,7 @@ final class Kit {
         LinearLayout rows = actions.length == 0 ? null : group(body.findViewById(R.id.kit_rows));
         for (Action action : actions) {
             View row = addRow(rows);
-            bindRow(row, action.icon, action.label, action.sub, null, false);
+            bindRow(row, action.icon, action.label, action.sub, null, action.opens);
             row.setOnClickListener(v -> { dialog.dismiss(); action.run.run(); });
         }
         dialog.setContentView(scrolling(body));

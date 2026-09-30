@@ -330,9 +330,7 @@ final class CameraController {
                         if (!name.endsWith(".jpg") && !name.endsWith(".mp4") && !name.endsWith(".mjpeg")) continue;
                         addCaptureRow(name, file.optLong("bytes"));
                     }
-                    int count = captures.getChildCount() / 2;
-                    capturesStatus.setText(count == 0 ? "No captures on Pi yet" :
-                        count + " saved on Pi · tap one for actions");
+                    loadedCapturesWords();
                 });
             } catch (Exception error) {
                 ui.post(() -> {
@@ -365,17 +363,14 @@ final class CameraController {
     }
 
     private void showCapture(String name) {
-        boolean raw = name.endsWith(".mjpeg");
-        String[] actions = raw ? new String[]{"Save raw MJPEG", "Open in compatible app", "Share raw MJPEG"} :
-            new String[]{"Preview / open", "Share", "Save to phone"};
-        new AlertDialog.Builder(activity).setTitle(raw ? captureLabel(name) + " · Raw MJPEG" : captureLabel(name))
-            .setItems(actions, (dialog, which) -> {
-                if (raw) {
-                    if (which == 0) download(name);
-                    else transferForAction(name, which == 1);
-                } else if (which == 2) download(name);
-                else transferForAction(name, which == 0);
-            }).show();
+        // A raw recording is kept as a plain file: no player on the phone or the Pi screen reads it.
+        ItemActions.Kind kind = name.endsWith(".jpg") ? ItemActions.Kind.IMAGE
+            : name.endsWith(".mp4") ? ItemActions.Kind.VIDEO : ItemActions.Kind.DOCUMENT;
+        ItemActions.Item item = new ItemActions.Item(kind, captureLabel(name));
+        item.sub = kind == ItemActions.Kind.DOCUMENT ? "Raw recording, saved on the Pi" : "Saved on the Pi";
+        item.file = got -> fetchCapture(name, got);
+        item.own.put(ItemActions.Act.SAVE, () -> download(name));
+        ItemActions.sheet(activity, item);
     }
 
     private static String mime(String name) {
@@ -383,10 +378,11 @@ final class CameraController {
             name.endsWith(".mjpeg") ? "video/x-motion-jpeg" : "video/mp4";
     }
 
-    private void transferForAction(String name, boolean open) {
+    /** Bring a capture from the Pi onto this phone, then hand it on as a file that can be read. */
+    private void fetchCapture(String name, ItemActions.Got got) {
         if (captureTransferInFlight) return;
         captureTransferInFlight = true;
-        capturesStatus.setText("Preparing " + name);
+        capturesStatus.setText("Getting " + captureLabel(name) + " from the Pi");
         MediaClient active = client;
         new Thread(() -> {
             HttpURLConnection connection = null;
@@ -403,46 +399,23 @@ final class CameraController {
                 Uri uri = FileProvider.getUriForFile(activity, activity.getPackageName() + ".share", file);
                 ui.post(() -> {
                     captureTransferInFlight = false;
-                    capturesStatus.setText("Ready: " + captureLabel(name));
-                    launchCapture(uri, name, open, file);
+                    loadedCapturesWords();
+                    got.file(uri, mime(name));
                 });
             } catch (Exception error) {
                 ui.post(() -> {
                     captureTransferInFlight = false;
-                    capturesStatus.setText("Could not prepare capture: " + error.getMessage());
+                    capturesStatus.setText("It could not be fetched from the Pi. " + error.getMessage());
                 });
             } finally { if (connection != null) connection.disconnect(); }
-        }, "pi-camera-open-share").start();
+        }, "pi-camera-fetch").start();
     }
 
-    private void launchCapture(Uri uri, String name, boolean open, File file) {
-        if (open && name.endsWith(".jpg")) {
-            Bitmap bitmap = BitmapFactory.decodeFile(file.getAbsolutePath());
-            if (bitmap == null) {
-                capturesStatus.setText("Photo preview unavailable; use Open in another app");
-                return;
-            }
-            ImageView image = new ImageView(activity);
-            image.setImageBitmap(bitmap);
-            image.setAdjustViewBounds(true);
-            image.setContentDescription("Preview of " + name);
-            new AlertDialog.Builder(activity).setTitle(captureLabel(name))
-                .setView(image).setPositiveButton("Open in app", (dialog, which) ->
-                    launchExternal(uri, name, true))
-                .setNegativeButton("Close", null).show();
-            return;
-        }
-        launchExternal(uri, name, open);
-    }
-
-    private void launchExternal(Uri uri, String name, boolean open) {
-        String type = mime(name);
-        Intent intent = open ? new Intent(Intent.ACTION_VIEW).setDataAndType(uri, type) :
-            new Intent(Intent.ACTION_SEND).setType(type).putExtra(Intent.EXTRA_STREAM, uri);
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        intent.setClipData(ClipData.newUri(activity.getContentResolver(), name, uri));
-        try { activity.startActivity(open ? intent : Intent.createChooser(intent, "Share capture")); }
-        catch (Exception error) { capturesStatus.setText("No app can open " + type + " on this phone"); }
+    /** Put the count of captures back on the status line after a passing message. */
+    private void loadedCapturesWords() {
+        // Rows sit with a divider between each pair, so n rows are 2n - 1 views.
+        int count = (captures.getChildCount() + 1) / 2;
+        capturesStatus.setText(count == 0 ? "No captures on Pi yet" : count + " saved on Pi · tap one for actions");
     }
 
     private HttpURLConnection captureConnection(MediaClient active, String name) throws Exception {

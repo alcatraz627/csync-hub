@@ -75,12 +75,9 @@
             <LinearLayout android:id="@+id/share_inbox_section"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:visibility="gone">
-                <TextView style="@style/Kit.Text.Section"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:layout_marginTop="18dp" android:layout_marginBottom="8dp"
-                    android:text="Received"/>
                 <LinearLayout android:id="@+id/share_inbox" android:layout_width="match_parent"
-                    android:layout_height="wrap_content" android:orientation="vertical"/>
+                    android:layout_height="wrap_content" android:layout_marginTop="18dp"
+                    android:orientation="vertical"/>
             </LinearLayout>
         </LinearLayout>
     </ScrollView>

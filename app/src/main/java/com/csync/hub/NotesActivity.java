@@ -49,6 +49,9 @@ public final class NotesActivity extends AppCompatActivity {
     private int revision;
     private boolean noteSaving;
     private Uri sharedImage;
+    // A file that arrived to be kept beside a note, and the name it goes by.
+    private Uri sharedFile;
+    private String sharedFileName;
     private boolean sharedImagePrompted;
     private boolean imageUploading;
     private boolean editing;
@@ -149,17 +152,21 @@ public final class NotesActivity extends AppCompatActivity {
         client = new MediaClient(host, token);
         sharedImage = state == null ? getIntent().getParcelableExtra("note_image_uri") :
             state.getParcelable("shared_image_uri");
+        sharedFile = state == null ? getIntent().getParcelableExtra("note_file_uri") :
+            state.getParcelable("shared_file_uri");
+        sharedFileName = getIntent().getStringExtra("note_file_name");
         showList();
         String pinUrl = getIntent().getStringExtra("pin_prefill_url");
         String pinText = getIntent().getStringExtra("pin_prefill_text");
         String noteBody = getIntent().getStringExtra("note_prefill_body");
         if (pinUrl != null || pinText != null) editPin(null, pinUrl == null ? "" : pinUrl,
             pinText == null ? "" : pinText);
-        else if (noteBody != null && sharedImage == null) showEditor("", noteBody);
+        else if (noteBody != null && sharedImage == null && sharedFile == null) showEditor("", noteBody);
     }
 
     @Override protected void onSaveInstanceState(Bundle state) {
         state.putParcelable("shared_image_uri", sharedImage);
+        state.putParcelable("shared_file_uri", sharedFile);
         super.onSaveInstanceState(state);
     }
 
@@ -308,7 +315,7 @@ public final class NotesActivity extends AppCompatActivity {
                             notes.length() + " notes and " + listedPins.length() + " pins on Pi") :
                         notes.length() + " matching Pi notes");
                     renderListRows();
-                    if (sharedImage != null && !sharedImagePrompted) chooseSharedImageNote();
+                    if ((sharedImage != null || sharedFile != null) && !sharedImagePrompted) chooseSharedNote();
                 });
             } catch (Exception error) {
                 ui.post(() -> {
@@ -319,39 +326,84 @@ public final class NotesActivity extends AppCompatActivity {
         }, "csync-note-search").start();
     }
 
-    private void chooseSharedImageNote() {
+    /** Ask which note an arriving picture or file goes into. Closing the drawer drops it. */
+    private void chooseSharedNote() {
         sharedImagePrompted = true;
         String caption = getIntent().getStringExtra("note_image_caption");
-        int count = listedNotes == null ? 0 : listedNotes.length();
-        String[] choices = new String[count + 1];
-        choices[0] = "New note";
-        for (int i = 0; i < count; i++) {
+        java.util.List<Kit.Action> choices = new java.util.ArrayList<>();
+        choices.add(new Kit.Action(R.drawable.csi_plus, "A new note", null,
+            () -> showEditor("", caption == null ? "" : caption)));
+        for (int i = 0; listedNotes != null && i < listedNotes.length(); i++) {
             JSONObject note = listedNotes.optJSONObject(i);
-            choices[i + 1] = note == null ? "Untitled note" : note.optString("title", "Untitled note");
-        }
-        new AlertDialog.Builder(this).setTitle("Add image to Pi note")
-            .setItems(choices, (dialog, selected) -> {
-                if (selected == 0) showEditor("", caption == null ? "" : caption);
-                else {
-                    JSONObject note = listedNotes.optJSONObject(selected - 1);
-                    if (note == null) return;
-                    if (caption == null || caption.isEmpty()) uploadSharedImage(note.optString("id"));
-                    else task(() -> {
-                        JSONObject latest = client.get("/v1/notes/" +
-                            MediaClient.enc(note.optString("id"))).getJSONObject("note");
-                        ui.post(() -> {
-                            noteId = latest.optString("id");
-                            revision = latest.optInt("revision");
-                            String source = latest.optString("body");
-                            showEditor(latest.optString("title"), source +
-                                (source.isEmpty() ? "" : "\n\n") + caption);
-                        });
+            if (note == null) continue;
+            choices.add(new Kit.Action(Kit.Icon.NOTES, note.optString("title", "Untitled note"), null, () -> {
+                if (caption == null || caption.isEmpty()) uploadShared(note.optString("id"));
+                else task(() -> {
+                    JSONObject latest = client.get("/v1/notes/" +
+                        MediaClient.enc(note.optString("id"))).getJSONObject("note");
+                    ui.post(() -> {
+                        noteId = latest.optString("id");
+                        revision = latest.optInt("revision");
+                        String source = latest.optString("body");
+                        showEditor(latest.optString("title"), source +
+                            (source.isEmpty() ? "" : "\n\n") + caption);
                     });
+                });
+            }));
+        }
+        Kit.sheet(this, "Add to a note", sharedFile == null ? "The picture is drawn inside the note" :
+                sharedFileName + " is kept beside the note", choices.toArray(new Kit.Action[0]))
+            .setOnCancelListener(closed -> dropShared());
+    }
+
+    private void dropShared() {
+        sharedImage = null;
+        sharedFile = null;
+    }
+
+    /** Add whatever arrived, a picture or a file, to the note that was picked. */
+    private void uploadShared(String id) {
+        if (sharedFile != null) uploadSharedFile(id);
+        else uploadSharedImage(id);
+    }
+
+    private void uploadSharedFile(String id) {
+        if (sharedFile == null || imageUploading || id == null || id.isEmpty()) return;
+        Uri source = sharedFile;
+        String name = sharedFileName == null || sharedFileName.isEmpty() ? "file" : sharedFileName;
+        imageUploading = true;
+        status.setText("Adding " + name + " to the note");
+        new Thread(() -> {
+            try {
+                ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+                try (InputStream input = getContentResolver().openInputStream(source)) {
+                    if (input == null) throw new Exception("The file could not be read");
+                    byte[] chunk = new byte[65536];
+                    int count;
+                    while ((count = input.read(chunk)) != -1) {
+                        if (bytes.size() + count > 20 * 1024 * 1024) throw new Exception("Choose a file under 20 MB");
+                        bytes.write(chunk, 0, count);
+                    }
                 }
-            })
-            .setNegativeButton("Cancel", (dialog, which) -> { sharedImage = null; })
-            .setOnCancelListener(dialog -> { sharedImage = null; })
-            .show();
+                client.uploadNoteFile(id, name, getContentResolver().getType(source), bytes.toByteArray());
+                ui.post(() -> {
+                    imageUploading = false;
+                    sharedFile = null;
+                    loadNote(id);
+                });
+            } catch (Exception error) {
+                ui.post(() -> {
+                    imageUploading = false;
+                    status.setText("The file was not added");
+                    Kit.sheet(this, "The file was not added", error.getMessage(),
+                        new Kit.Action(R.drawable.csi_refresh, "Try again", null, () -> uploadSharedFile(id)),
+                        new Kit.Action(Kit.Icon.NOTES, "Open the note without it", null, () -> {
+                            sharedFile = null;
+                            loadNote(id);
+                        }));
+                });
+            }
+        }, "csync-note-shared-file").start();
     }
 
     private byte[] sharedImagePng(Uri uri) throws Exception {
@@ -410,15 +462,13 @@ public final class NotesActivity extends AppCompatActivity {
             } catch (Exception error) {
                 ui.post(() -> {
                     imageUploading = false;
-                    status.setText("Image was not added: " + error.getMessage());
-                    new AlertDialog.Builder(this).setTitle("Image was not added")
-                        .setMessage(error.getMessage())
-                        .setNegativeButton("Keep note", (dialog, which) -> {
+                    status.setText("The picture was not added");
+                    Kit.sheet(this, "The picture was not added", error.getMessage(),
+                        new Kit.Action(R.drawable.csi_refresh, "Try again", null, () -> uploadSharedImage(id)),
+                        new Kit.Action(Kit.Icon.NOTES, "Open the note without it", null, () -> {
                             sharedImage = null;
                             loadNote(id);
-                        })
-                        .setPositiveButton("Retry", (dialog, which) -> uploadSharedImage(id))
-                        .show();
+                        }));
                 });
             }
         }, "csync-note-shared-image").start();
@@ -518,37 +568,26 @@ public final class NotesActivity extends AppCompatActivity {
         String content = pin.optString("content");
         String description = pin.optString("description");
         String title = pin.optString("title");
-        if (title.isEmpty()) title = url.isEmpty() ? "Text pin" : Uri.parse(url).getHost();
+        // The same name the list gives it: its own title, else the site, else its first line.
+        if (title.isEmpty()) title = url.isEmpty() ? content.split("\\n", 2)[0] : Uri.parse(url).getHost();
         String shareText = url + (url.isEmpty() || content.isEmpty() ? "" : "\n\n") + content;
         String tags = pinTagsLabel(pin);
-        AlertDialog.Builder dialog = new AlertDialog.Builder(this).setTitle(title)
-            .setMessage(shareText + (description.isEmpty() ? "" : "\n\n" + description)
-                + (tags.isEmpty() ? "" : "\n\n" + tags))
-            .setNeutralButton("Actions", (closed, which) -> new AlertDialog.Builder(this)
-                .setTitle(pin.optString("title").isEmpty() ?
-                    (url.isEmpty() ? "Text pin" : Uri.parse(url).getHost()) : pin.optString("title"))
-                .setItems(new String[]{"Edit pin", "Share pin", "Delete pin"}, (menu, choice) -> {
-                    if (choice == 0) {
-                        editPin(pin);
-                    } else if (choice == 1) {
-                        Intent share = new Intent(Intent.ACTION_SEND);
-                        share.setType("text/plain");
-                        share.putExtra(Intent.EXTRA_TEXT, shareText);
-                        startActivity(Intent.createChooser(share, "Share pin"));
-                    } else {
-                        new AlertDialog.Builder(this).setTitle("Delete this pin?")
-                            .setNegativeButton("Cancel", null)
-                            .setPositiveButton("Delete", (confirm, delete) -> task(() -> {
-                                client.delete("/v1/pins/" + MediaClient.enc(pin.optString("id")),
-                                    new JSONObject().put("expectedRevision", pin.optInt("revision")));
-                                ui.post(this::refreshPins);
-                            })).show();
-                    }
-                }).show())
-            .setNegativeButton("Close", null);
-        if (!url.isEmpty()) dialog.setPositiveButton("Open URL", (closed, which) ->
-            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))));
-        dialog.show();
+        String shown = title;
+        ItemActions.Item item = new ItemActions.Item(url.isEmpty() ? ItemActions.Kind.TEXT : ItemActions.Kind.LINK, shown);
+        item.sub = shareText + (description.isEmpty() ? "" : "\n\n" + description) + (tags.isEmpty() ? "" : "\n\n" + tags);
+        item.text = shareText;
+        item.link = url.isEmpty() ? null : url;
+        item.textName = shown + ".txt";
+        item.isPin = true;
+        item.more.add(new Kit.Action(R.drawable.csi_edit, "Edit", null, () -> editPin(pin)));
+        item.more.add(new Kit.Action(R.drawable.csi_trash, "Delete", null, () ->
+            Kit.sheet(this, "Delete this pin?", shown,
+                new Kit.Action(R.drawable.csi_trash, "Delete", null, () -> task(() -> {
+                    client.delete("/v1/pins/" + MediaClient.enc(pin.optString("id")),
+                        new JSONObject().put("expectedRevision", pin.optInt("revision")));
+                    ui.post(this::refreshPins);
+                }))), true));
+        ItemActions.sheet(this, item);
     }
 
     private String pinTagsLabel(JSONObject pin) {
@@ -683,12 +722,10 @@ public final class NotesActivity extends AppCompatActivity {
         actions.setVisibility(View.VISIBLE);
         action("Share", () -> share(note));
         action("Add image", this::chooseImage);
-        action("Delete", () -> new AlertDialog.Builder(this)
-            .setTitle("Delete this note?")
-            .setMessage(note.optString("title"))
-            .setNegativeButton("Cancel", null)
-            .setPositiveButton("Delete", (dialog, which) -> deleteNote())
-            .show());
+        action("Add a file", this::chooseFile);
+        action("Delete", () -> Kit.sheet(this, "Delete this note?",
+            note.optString("title") + " and everything kept with it is removed from the Pi.",
+            new Kit.Action(R.drawable.csi_trash, "Delete", null, this::deleteNote)));
         String noteTitle = note.optString("title");
         String source = note.optString("body");
         addModeTabs(note);
@@ -706,7 +743,58 @@ public final class NotesActivity extends AppCompatActivity {
         contentCard.addView(markdown);
         rows.addView(contentCard, new LinearLayout.LayoutParams(-1, -2));
         status.setText("Pi note · revision " + revision);
+        showFiles(noteId, note.optJSONArray("files"));
         loadImages(noteId);
+    }
+
+    /** List the files kept beside a note. Each one offers the same choices as a file anywhere else. */
+    private void showFiles(String id, JSONArray files) {
+        if (files == null || files.length() == 0) return;
+        Kit.label(rows, "Files");
+        LinearLayout group = Kit.group(rows);
+        for (int i = 0; i < files.length(); i++) {
+            JSONObject file = files.optJSONObject(i);
+            if (file == null) continue;
+            String name = file.optString("name", "File"), mime = file.optString("mime", "application/octet-stream");
+            String fileId = file.optString("id");
+            ItemActions.Kind kind = mime.startsWith("video/") ? ItemActions.Kind.VIDEO
+                : mime.startsWith("audio/") ? ItemActions.Kind.AUDIO
+                : mime.startsWith("image/") ? ItemActions.Kind.IMAGE : ItemActions.Kind.DOCUMENT;
+            String size = android.text.format.Formatter.formatShortFileSize(this, file.optLong("size"));
+            View row = Kit.addRow(group);
+            Kit.bindRow(row, kind == ItemActions.Kind.IMAGE ? Kit.Icon.PHOTO
+                : kind == ItemActions.Kind.DOCUMENT ? Kit.Icon.FILE : Kit.Icon.VIDEO, name, size, null, true);
+            row.setOnClickListener(v -> {
+                ItemActions.Item item = new ItemActions.Item(kind, name);
+                item.sub = size + ", in this note";
+                item.inNote = true;
+                item.file = got -> fetch("/v1/notes/" + MediaClient.enc(id) + "/files/" + MediaClient.enc(fileId),
+                    fileId + "-" + name.replaceAll("[^A-Za-z0-9._-]", "_"), mime, got);
+                item.more.add(new Kit.Action(R.drawable.csi_trash, "Take out of this note", null, () ->
+                    Kit.sheet(this, "Take this file out of the note?", name + " is removed from the Pi.",
+                        new Kit.Action(R.drawable.csi_trash, "Take it out", null, () -> task(() -> {
+                            client.delete("/v1/notes/" + MediaClient.enc(id) + "/files/" + MediaClient.enc(fileId), null);
+                            ui.post(() -> loadNote(id));
+                        }))), true));
+                ItemActions.sheet(this, item);
+            });
+        }
+    }
+
+    /** Bring something kept on the Pi onto this phone, then hand it on as a file that can be read. */
+    private void fetch(String route, String saveAs, String mime, ItemActions.Got got) {
+        status.setText("Getting it from the Pi");
+        task(() -> {
+            File folder = new File(getCacheDir(), "share");
+            if (!folder.isDirectory() && !folder.mkdirs()) throw new Exception("This phone has no room to fetch it");
+            File file = new File(folder, saveAs);
+            client.download(route, file);
+            Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".share", file);
+            ui.post(() -> {
+                status.setText("Pi note · revision " + revision);
+                got.file(uri, mime);
+            });
+        });
     }
 
     private void loadImages(String id) {
@@ -736,45 +824,28 @@ public final class NotesActivity extends AppCompatActivity {
     }
 
     private void openNoteImage(String id, String imageId) {
-        new AlertDialog.Builder(this).setTitle("Note screenshot")
-            .setItems(new String[]{"View image", "Share image"}, (dialog, choice) -> {
-                if (choice == 0) task(() -> {
-                    byte[] bytes = client.getBytes("/v1/notes/" + MediaClient.enc(id) +
-                        "/images/" + MediaClient.enc(imageId), 1024 * 1024);
-                    Bitmap full = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
-                    if (full == null) throw new Exception("Could not open this screenshot");
-                    ui.post(() -> {
-                        ImageView image = new ImageView(this);
-                        image.setImageBitmap(full);
-                        image.setAdjustViewBounds(true);
-                        image.setScaleType(ImageView.ScaleType.FIT_CENTER);
-                        new AlertDialog.Builder(this).setTitle("Note screenshot")
-                            .setView(image).setPositiveButton("Close", null).show();
-                    });
-                });
-                else shareNoteImage(id, imageId);
-            }).show();
+        ItemActions.Item item = new ItemActions.Item(ItemActions.Kind.IMAGE, "Picture in this note");
+        item.sub = heading.getText().toString();
+        item.inNote = true;
+        item.file = got -> fetch("/v1/notes/" + MediaClient.enc(id) + "/images/" + MediaClient.enc(imageId),
+            "note-" + imageId.replaceAll("[^A-Za-z0-9_-]", "_") + ".png", "image/png", got);
+        ItemActions.sheet(this, item);
     }
 
-    private void shareNoteImage(String id, String imageId) {
-        status.setText("Preparing screenshot to share");
-        task(() -> {
-            byte[] bytes = client.getBytes("/v1/notes/" + MediaClient.enc(id) +
-                "/images/" + MediaClient.enc(imageId), 1024 * 1024);
-            File folder = new File(getCacheDir(), "share");
-            if (!folder.isDirectory() && !folder.mkdirs()) throw new Exception("Cannot prepare screenshot");
-            File file = new File(folder, "note-" + imageId.replaceAll("[^A-Za-z0-9_-]", "_") + ".png");
-            try (FileOutputStream output = new FileOutputStream(file)) { output.write(bytes); }
-            Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".share", file);
-            ui.post(() -> {
-                Intent send = new Intent(Intent.ACTION_SEND).setType("image/png")
-                    .putExtra(Intent.EXTRA_STREAM, uri)
-                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                send.setClipData(ClipData.newUri(getContentResolver(), "Note screenshot", uri));
-                startActivity(Intent.createChooser(send, "Share note screenshot"));
-                status.setText("Pi note screenshot ready to share");
-            });
-        });
+    private void chooseFile() {
+        Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        picker.setType("*/*");
+        picker.addCategory(Intent.CATEGORY_OPENABLE);
+        startActivityForResult(picker, 43);
+    }
+
+    /** The name a picked file goes by, as the phone reports it. */
+    private String pickedName(Uri uri) {
+        try (android.database.Cursor c = getContentResolver().query(uri, null, null, null, null)) {
+            int column = c == null ? -1 : c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
+            if (column >= 0 && c.moveToFirst() && c.getString(column) != null) return c.getString(column);
+        } catch (Exception unknown) { }
+        return "file";
     }
 
     private void chooseImage() {
@@ -786,6 +857,12 @@ public final class NotesActivity extends AppCompatActivity {
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == 43 && resultCode == Activity.RESULT_OK && data != null && data.getData() != null && noteId != null) {
+            sharedFile = data.getData();
+            sharedFileName = pickedName(sharedFile);
+            uploadSharedFile(noteId);
+            return;
+        }
         if (requestCode != 42 || resultCode != Activity.RESULT_OK || data == null || data.getData() == null || noteId == null) return;
         Uri selected = data.getData();
         String id = noteId;
@@ -818,7 +895,7 @@ public final class NotesActivity extends AppCompatActivity {
         editorMode = mode;
         reset();
         Runnable leave = () -> {
-            if (noteId == null) { sharedImage = null; showList(); }
+            if (noteId == null) { dropShared(); showList(); }
             else loadNote(noteId);
         };
         Kit.pageTop(topBar, leave, moreCrumb(), new Kit.Crumb(Kit.Icon.NOTES, "Notes", this::showList),
@@ -827,7 +904,7 @@ public final class NotesActivity extends AppCompatActivity {
         search.setVisibility(View.GONE);
         actions.setVisibility(View.VISIBLE);
         action("Cancel", () -> {
-            if (noteId == null) { sharedImage = null; showList(); }
+            if (noteId == null) { dropShared(); showList(); }
             else loadNote(noteId);
         });
         action("Save", this::saveNote);
@@ -857,7 +934,8 @@ public final class NotesActivity extends AppCompatActivity {
         rows.addView(preview);
         setEditorMode(mode);
         status.setText(noteId == null ?
-            (sharedImage == null ? "New Pi note" : "Shared image will be added after Save") :
+            (sharedFile != null ? sharedFileName + " is added after you save"
+                : sharedImage != null ? "The picture is added after you save" : "New Pi note") :
             "Editing revision " + revision);
     }
 
@@ -894,7 +972,7 @@ public final class NotesActivity extends AppCompatActivity {
                         data.put("expectedRevision", expected));
                 JSONObject saved = result.getJSONObject("note");
                 ui.post(() -> {
-                    if (sharedImage != null) uploadSharedImage(saved.optString("id"));
+                    if (sharedImage != null || sharedFile != null) uploadShared(saved.optString("id"));
                     else showNote(saved);
                 });
             } catch (Exception error) {
@@ -903,11 +981,10 @@ public final class NotesActivity extends AppCompatActivity {
                     if (error instanceof MediaClient.MediaException &&
                         "NOTE_CONFLICT".equals(((MediaClient.MediaException) error).code)) {
                         status.setText("This note changed on Pi. Your draft is still here.");
-                        new AlertDialog.Builder(this).setTitle("Note changed on Pi")
-                            .setMessage("Keep editing your draft, or reload the Pi version.")
-                            .setNegativeButton("Keep draft", null)
-                            .setPositiveButton("Reload Pi version", (dialog, which) -> loadNote(id))
-                            .show();
+                        Kit.sheet(this, "This note changed on the Pi",
+                            "Your draft is still here. Close this to keep editing it.",
+                            new Kit.Action(R.drawable.csi_refresh, "Load the Pi's version", "Your draft is dropped",
+                                () -> loadNote(id)));
                     } else status.setText("Save failed: " + error.getMessage());
                 });
             }
@@ -926,77 +1003,68 @@ public final class NotesActivity extends AppCompatActivity {
     }
 
     private void share(JSONObject note) {
-        new AlertDialog.Builder(this).setTitle("Share note")
-            .setItems(new String[]{"Choose conversation", "Choose device", "Other apps"},
-                (dialog, choice) -> {
-                    if (choice == 0) shareToConversation(note);
-                    else if (choice == 1) shareToDevice(note);
-                    else shareToOtherApp(note);
-                }).show();
+        ItemActions.Item item = new ItemActions.Item(ItemActions.Kind.TEXT, note.optString("title"));
+        item.sub = "Note";
+        item.text = sharedText(note);
+        item.textName = note.optString("title") + ".md";
+        item.inNote = true;
+        item.own.put(ItemActions.Act.CHAT, () -> shareToConversation(note));
+        item.own.put(ItemActions.Act.SHOW_PI, () -> showOnPi(note));
+        ItemActions.sheet(this, item);
+    }
+
+    /** Put the note up on the Pi screen under its own title, so the screen names what it is showing. */
+    private void showOnPi(JSONObject note) {
+        status.setText("Sending the note to the Pi screen");
+        new Thread(() -> {
+            String problem = null;
+            boolean lit = false;
+            try {
+                String words = note.optString("body").trim();
+                lit = client.post("/v1/display/show", new JSONObject()
+                    .put("title", note.optString("title"))
+                    .put("text", words.isEmpty() ? note.optString("title") : words)).optBoolean("sentToDisplay");
+            } catch (Exception error) { problem = error.getMessage() == null ? "The Pi did not answer." : error.getMessage(); }
+            String failure = problem;
+            boolean shown = lit;
+            ui.post(() -> {
+                status.setText("Pi note · revision " + revision);
+                if (failure != null) Kit.sheet(this, "It was not shown", failure,
+                    new Kit.Action(R.drawable.csi_refresh, "Try again", null, () -> showOnPi(note)));
+                else android.widget.Toast.makeText(this, shown ? "Showing on the Pi screen" : "Sent. The Pi screen is off",
+                    android.widget.Toast.LENGTH_SHORT).show();
+            });
+        }, "csync-note-show").start();
     }
 
     private String sharedText(JSONObject note) {
         return "# " + note.optString("title") + "\n\n" + note.optString("body");
     }
 
+    /** A note can join a conversation already under way, so this asks which one. */
     private void shareToConversation(JSONObject note) {
         JSONArray index = ChatStore.index(this);
-        String[] labels = new String[index.length() + 1];
-        labels[0] = "New conversation";
+        java.util.List<Kit.Action> choices = new java.util.ArrayList<>();
+        choices.add(new Kit.Action(R.drawable.csi_plus, "A new conversation", null, () -> openConversation(note, null)));
         for (int i = 0; i < index.length(); i++) {
             JSONObject item = index.optJSONObject(i);
-            labels[i + 1] = item == null ? "(untitled)" : item.optString("title", "(untitled)");
+            if (item == null) continue;
+            choices.add(new Kit.Action(Kit.Icon.CHAT, item.optString("title", "Untitled"), null,
+                () -> openConversation(note, item.optString("id"))));
         }
-        new AlertDialog.Builder(this).setTitle("Choose conversation")
-            .setItems(labels, (dialog, selected) -> {
-                Intent intent = new Intent(this, MainActivity.class);
-                intent.putExtra("destination", "chat");
-                intent.putExtra("chat_prefill", sharedText(note));
-                if (selected > 0) {
-                    JSONObject item = index.optJSONObject(selected - 1);
-                    if (item != null) intent.putExtra("chat_session", item.optString("id"));
-                }
-                startActivity(intent);
-            }).show();
+        Kit.sheet(this, "Send to a conversation", note.optString("title"), choices.toArray(new Kit.Action[0]));
     }
 
-    private void shareToDevice(JSONObject note) {
-        JSONArray peers = PeerStore.load(this);
-        if (peers.length() == 0) {
-            status.setText("Scan named peers in Share first");
-            return;
-        }
-        String[] labels = new String[peers.length()];
-        for (int i = 0; i < peers.length(); i++) {
-            JSONObject peer = peers.optJSONObject(i);
-            labels[i] = peer == null ? "Unknown" : peer.optString("name", "Unknown");
-        }
-        new AlertDialog.Builder(this).setTitle("Send to device")
-            .setItems(labels, (dialog, selected) -> {
-                String peer = labels[selected];
-                String token = Prefs.token(this);
-                if (peer.equals("Unknown") || token.isEmpty()) {
-                    status.setText("Choose a named peer and connect in Settings");
-                    return;
-                }
-                status.setText("Sending note to " + peer);
-                task(() -> {
-                    MeshClient.send(peer, token, Prefs.deviceName(this), "text",
-                        note.optString("title") + ".md", sharedText(note).getBytes("UTF-8"));
-                    ui.post(() -> status.setText("Sent note to " + peer));
-                });
-            }).show();
-    }
-
-    private void shareToOtherApp(JSONObject note) {
-        Intent intent = new Intent(Intent.ACTION_SEND);
-        intent.setType("text/plain");
-        intent.putExtra(Intent.EXTRA_TEXT, sharedText(note));
-        startActivity(Intent.createChooser(intent, "Share note"));
+    private void openConversation(JSONObject note, String session) {
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.putExtra("destination", "chat");
+        intent.putExtra("chat_prefill", sharedText(note));
+        if (session != null) intent.putExtra("chat_session", session);
+        startActivity(intent);
     }
 
     @Override public void onBackPressed() {
-        if (editing && noteId == null) { sharedImage = null; showList(); }
+        if (editing && noteId == null) { dropShared(); showList(); }
         else if (editing) loadNote(noteId);
         else if (noteId != null) showList();
         else super.onBackPressed();
