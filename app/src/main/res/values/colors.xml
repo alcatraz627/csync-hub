@@ -21,7 +21,8 @@
     <color name="player_poster_top">#E8EEF2</color>
     <color name="player_poster_bottom">#DDE6EA</color>
     <!-- launch splash, fixed dark in both themes -->
-    <color name="splash_bg">#0F1216</color>
+    <color name="splash_bg">#120E24</color>
+    <color name="icon_black">#000000</color>
     <!-- accents -->
     <color name="coral">#E4572E</color>
     <color name="teal">#0D9488</color>

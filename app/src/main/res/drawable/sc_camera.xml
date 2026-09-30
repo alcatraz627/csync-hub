@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher shortcut icon. It carries its own colours because the launcher draws it without the app theme. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48">
+    <path android:fillColor="#7C5CFF" android:pathData="M24,24 m-22,0 a22,22 0 1,0 44,0 a22,22 0 1,0 -44,0"/>
+    <group android:translateX="12" android:translateY="11.5">
+        <path android:fillColor="#FFFFFF" android:fillType="evenOdd" android:pathData="M4 6h4l1.5-2h5L16 6h4a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z M8,13a4,4 0 1,0 8,0a4,4 0 1,0 -8,0z"/>
+    </group>
+</vector>

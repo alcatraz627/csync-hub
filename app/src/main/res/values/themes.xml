@@ -13,7 +13,8 @@
         <item name="android:windowAnimationStyle">@null</item>
         <item name="android:windowLightStatusBar" tools:targetApi="m">true</item>
         <item name="android:windowSplashScreenBackground" tools:targetApi="s">@color/splash_bg</item>
-        <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="s">@drawable/splash_icon</item>
+        <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="s">@drawable/splash_anim</item>
+        <item name="android:windowSplashScreenAnimationDuration" tools:targetApi="s">980</item>
         <item name="android:windowSplashScreenIconBackgroundColor" tools:targetApi="s">@color/splash_bg</item>
     </style>
 

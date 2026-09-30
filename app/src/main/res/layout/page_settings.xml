@@ -157,6 +157,16 @@
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:layout_marginTop="12dp" android:textSize="12sp" android:textColor="@color/dim"
                     android:text="Applies across screens and system bars; status colors keep their meaning."/>
+                <TextView style="@style/CsyncAppearanceHeading" android:layout_marginTop="22dp"
+                    android:text="App icon"/>
+                <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp" android:scrollbars="none">
+                    <LinearLayout android:id="@+id/set_icon_row" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:orientation="horizontal"/>
+                </HorizontalScrollView>
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp" android:textSize="12sp" android:textColor="@color/dim"
+                    android:text="The home screen redraws when the icon changes. An icon inside a folder may move out of it."/>
             </LinearLayout>
 
             <!-- connection card -->

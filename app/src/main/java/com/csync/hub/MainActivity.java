@@ -71,6 +71,22 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         Appearance.apply(this);
+        if (Build.VERSION.SDK_INT >= 31) {
+            // Let the launch animation leave by growing and fading, so Home arrives under it instead of cutting in.
+            // Home is usually ready before the mesh has finished drawing, so wait out the rest of it (under a second).
+            getSplashScreen().setOnExitAnimationListener(splash -> {
+                long left = 0;
+                if (splash.getIconAnimationStart() != null && splash.getIconAnimationDuration() != null) {
+                    long ran = java.time.Duration.between(splash.getIconAnimationStart(), java.time.Instant.now()).toMillis();
+                    // The phone's animation speed setting stretches or removes the drawing, so the wait follows it.
+                    float speed = Build.VERSION.SDK_INT >= 33 ? android.animation.ValueAnimator.getDurationScale() : 1f;
+                    long whole = (long) (splash.getIconAnimationDuration().toMillis() * speed);
+                    left = Math.max(0, Math.min(5000, whole - ran));
+                }
+                splash.animate().alpha(0f).scaleX(1.18f).scaleY(1.18f).setStartDelay(left).setDuration(260)
+                    .withEndAction(splash::remove).start();
+            });
+        }
         setContentView(R.layout.activity_main);
         Appearance.applySystemBars(this);
         FrameLayout content = findViewById(R.id.content);
@@ -150,7 +166,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         int tab = tabFromIntent(intent);
         com.google.android.material.bottomnavigation.BottomNavigationView nav = findViewById(R.id.nav);
         nav.setSelectedItemId(tab == 1 ? R.id.nav_share : tab == 2 ? R.id.nav_chat :
-            tab == 6 ? R.id.nav_more : R.id.nav_home);
+            tab >= 3 ? R.id.nav_more : R.id.nav_home);
         show(tab);
         acceptChatDraft(intent);
         acceptSearchDestination(intent);
@@ -159,8 +175,15 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private int tabFromIntent(Intent intent) {
         if (intent == null) return 0;
         String destination = intent.getStringExtra("destination");
-        return "share".equals(destination) ? 1 : "chat".equals(destination) ? 2 :
-            "more".equals(destination) ? 6 : 0;
+        if (destination == null) return 0;
+        switch (destination) {
+            case "share": return 1;
+            case "chat": case "chat-new": return 2;
+            case "tools": return 3;
+            case "camera": return 5;
+            case "more": return 6;
+            default: return 0;
+        }
     }
 
     // Keep the open surface across a theme or accent change, which recreates the
@@ -773,6 +796,45 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         ((android.widget.ImageView) custom).setImageTintList(
             android.content.res.ColorStateList.valueOf(android.graphics.Color.WHITE));
         custom.setOnClickListener(v -> showCustomAccentPicker());
+        renderIconChoices();
+    }
+
+    /** The row of launcher icons under Appearance. The chosen one carries a ring and its name in the accent. */
+    private void renderIconChoices() {
+        LinearLayout row = pageSettings.findViewById(R.id.set_icon_row);
+        row.removeAllViews();
+        String now = IconChoice.current(this);
+        for (int i = 0; i < IconChoice.NAMES.length; i++) {
+            final String name = IconChoice.NAMES[i];
+            boolean picked = name.equals(now);
+            LinearLayout cell = new LinearLayout(this);
+            cell.setOrientation(LinearLayout.VERTICAL);
+            cell.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
+            cell.setPadding(dp(6), dp(6), dp(6), dp(6));
+            android.widget.ImageView art = new android.widget.ImageView(this);
+            art.setImageResource(IconChoice.ART[i]);
+            android.graphics.drawable.GradientDrawable ring = new android.graphics.drawable.GradientDrawable();
+            ring.setCornerRadius(dp(20));
+            ring.setStroke(dp(2), picked ? accent() : android.graphics.Color.TRANSPARENT);
+            art.setBackground(ring);
+            art.setPadding(dp(5), dp(5), dp(5), dp(5));
+            cell.addView(art, new LinearLayout.LayoutParams(dp(66), dp(66)));
+            TextView label = new TextView(this);
+            label.setText(name);
+            label.setTextSize(12);
+            label.setTextColor(picked ? accent() : col(R.color.dim));
+            label.setGravity(android.view.Gravity.CENTER);
+            label.setPadding(0, dp(4), 0, 0);
+            cell.addView(label);
+            cell.setContentDescription(name + " icon, " + IconChoice.ABOUT[i] + (picked ? ", chosen" : ""));
+            cell.setOnClickListener(v -> {
+                if (name.equals(IconChoice.current(this))) return;
+                IconChoice.use(this, name);
+                renderIconChoices();
+                toast(name + " is now the app icon");
+            });
+            row.addView(cell);
+        }
     }
 
     private void styleAppearanceGroup(LinearLayout group) {
@@ -1596,6 +1658,16 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     private void acceptChatDraft(Intent intent) {
         if (intent == null) return;
+        // A launcher shortcut, a widget or a tile asked for a fresh conversation.
+        if ("chat-new".equals(intent.getStringExtra("destination"))) {
+            intent.removeExtra("destination");
+            newConversation();
+            // Coming from outside the app, the point is to type straight away.
+            chatInput.postDelayed(() -> ((android.view.inputmethod.InputMethodManager)
+                getSystemService(INPUT_METHOD_SERVICE)).showSoftInput(chatInput,
+                    android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT), 250);
+            return;
+        }
         String draft = intent.getStringExtra("chat_prefill");
         if (draft == null || draft.isEmpty()) return;
         String id = intent.getStringExtra("chat_session");

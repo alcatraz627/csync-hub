@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What appears when the csync icon is pressed and held. Each opens a place in the app directly. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="new_chat" android:enabled="true"
+        android:icon="@drawable/sc_chat"
+        android:shortcutShortLabel="@string/sc_chat_short"
+        android:shortcutLongLabel="@string/sc_chat_long">
+        <intent android:action="android.intent.action.VIEW"
+            android:targetPackage="com.csync.hub" android:targetClass="com.csync.hub.MainActivity">
+            <extra android:name="destination" android:value="chat-new"/>
+        </intent>
+    </shortcut>
+    <shortcut android:shortcutId="send" android:enabled="true"
+        android:icon="@drawable/sc_send"
+        android:shortcutShortLabel="@string/sc_send_short"
+        android:shortcutLongLabel="@string/sc_send_long">
+        <intent android:action="android.intent.action.VIEW"
+            android:targetPackage="com.csync.hub" android:targetClass="com.csync.hub.MainActivity">
+            <extra android:name="destination" android:value="share"/>
+        </intent>
+    </shortcut>
+    <shortcut android:shortcutId="camera" android:enabled="true"
+        android:icon="@drawable/sc_camera"
+        android:shortcutShortLabel="@string/sc_camera_short"
+        android:shortcutLongLabel="@string/sc_camera_long">
+        <intent android:action="android.intent.action.VIEW"
+            android:targetPackage="com.csync.hub" android:targetClass="com.csync.hub.MainActivity">
+            <extra android:name="destination" android:value="camera"/>
+        </intent>
+    </shortcut>
+</shortcuts>

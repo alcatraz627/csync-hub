@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The launch animation: the hub appears, its three links draw outward, the devices pop in, and a ring pulses once. -->
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt">
+    <aapt:attr name="android:drawable">
+        <vector android:width="108dp" android:height="108dp"
+            android:viewportWidth="108" android:viewportHeight="108">
+            <group android:name="pulse" android:pivotX="54" android:pivotY="54" android:scaleX="0.6" android:scaleY="0.6">
+                <path android:name="pulse_ring" android:strokeColor="#FF8A3D" android:strokeWidth="2.5" android:strokeAlpha="0"
+                    android:pathData="M54,54 m-22,0 a22,22 0 1,0 44,0 a22,22 0 1,0 -44,0"/>
+            </group>
+            <path android:name="link_top" android:strokeWidth="4.5" android:strokeLineCap="round"
+                android:trimPathEnd="0" android:strokeColor="#FF7A59" android:pathData="M54,54 L54,30"/>
+            <path android:name="link_left" android:strokeWidth="4.5" android:strokeLineCap="round"
+                android:trimPathEnd="0" android:strokeColor="#E0479E" android:pathData="M54,54 L33,70"/>
+            <path android:name="link_right" android:strokeWidth="4.5" android:strokeLineCap="round"
+                android:trimPathEnd="0" android:strokeColor="#8E6BFF" android:pathData="M54,54 L75,70"/>
+            <group android:name="node_top" android:pivotX="54" android:pivotY="29" android:scaleX="0" android:scaleY="0">
+                <path android:fillColor="#FF8A3D" android:pathData="M54,29 m-7,0 a7,7 0 1,0 14,0 a7,7 0 1,0 -14,0"/>
+            </group>
+            <group android:name="node_left" android:pivotX="33" android:pivotY="71" android:scaleX="0" android:scaleY="0">
+                <path android:fillColor="#E0479E" android:pathData="M33,71 m-7,0 a7,7 0 1,0 14,0 a7,7 0 1,0 -14,0"/>
+            </group>
+            <group android:name="node_right" android:pivotX="75" android:pivotY="71" android:scaleX="0" android:scaleY="0">
+                <path android:fillColor="#8E6BFF" android:pathData="M75,71 m-7,0 a7,7 0 1,0 14,0 a7,7 0 1,0 -14,0"/>
+            </group>
+            <group android:name="hub" android:pivotX="54" android:pivotY="54" android:scaleX="0" android:scaleY="0">
+                <path android:pathData="M54,54 m-13,0 a13,13 0 1,0 26,0 a13,13 0 1,0 -26,0">
+                    <aapt:attr name="android:fillColor">
+                        <gradient android:type="linear" android:startX="41" android:startY="41" android:endX="67" android:endY="67">
+                            <item android:offset="0" android:color="#FF8A3D"/>
+                            <item android:offset="0.55" android:color="#E4572E"/>
+                            <item android:offset="1" android:color="#B2277A"/>
+                        </gradient>
+                    </aapt:attr>
+                </path>
+                <path android:fillColor="#FFFFFF" android:pathData="M54,54 m-5,0 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0"/>
+            </group>
+        </vector>
+    </aapt:attr>
+
+    <target android:name="hub">
+        <aapt:attr name="android:animation">
+            <set>
+                <objectAnimator android:propertyName="scaleX" android:valueFrom="0" android:valueTo="1"
+                    android:duration="320" android:interpolator="@android:anim/overshoot_interpolator"/>
+                <objectAnimator android:propertyName="scaleY" android:valueFrom="0" android:valueTo="1"
+                    android:duration="320" android:interpolator="@android:anim/overshoot_interpolator"/>
+            </set>
+        </aapt:attr>
+    </target>
+    <target android:name="link_top">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="trimPathEnd" android:valueFrom="0" android:valueTo="1"
+                android:startOffset="220" android:duration="260" android:interpolator="@android:interpolator/fast_out_slow_in"/>
+        </aapt:attr>
+    </target>
+    <target android:name="link_left">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="trimPathEnd" android:valueFrom="0" android:valueTo="1"
+                android:startOffset="300" android:duration="260" android:interpolator="@android:interpolator/fast_out_slow_in"/>
+        </aapt:attr>
+    </target>
+    <target android:name="link_right">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="trimPathEnd" android:valueFrom="0" android:valueTo="1"
+                android:startOffset="380" android:duration="260" android:interpolator="@android:interpolator/fast_out_slow_in"/>
+        </aapt:attr>
+    </target>
+    <target android:name="node_top">
+        <aapt:attr name="android:animation">
+            <set>
+                <objectAnimator android:propertyName="scaleX" android:valueFrom="0" android:valueTo="1"
+                    android:startOffset="440" android:duration="240" android:interpolator="@android:anim/overshoot_interpolator"/>
+                <objectAnimator android:propertyName="scaleY" android:valueFrom="0" android:valueTo="1"
+                    android:startOffset="440" android:duration="240" android:interpolator="@android:anim/overshoot_interpolator"/>
+            </set>
+        </aapt:attr>
+    </target>
+    <target android:name="node_left">
+        <aapt:attr name="android:animation">
+            <set>
+                <objectAnimator android:propertyName="scaleX" android:valueFrom="0" android:valueTo="1"
+                    android:startOffset="520" android:duration="240" android:interpolator="@android:anim/overshoot_interpolator"/>
+                <objectAnimator android:propertyName="scaleY" android:valueFrom="0" android:valueTo="1"
+                    android:startOffset="520" android:duration="240" android:interpolator="@android:anim/overshoot_interpolator"/>
+            </set>
+        </aapt:attr>
+    </target>
+    <target android:name="node_right">
+        <aapt:attr name="android:animation">
+            <set>
+                <objectAnimator android:propertyName="scaleX" android:valueFrom="0" android:valueTo="1"
+                    android:startOffset="600" android:duration="240" android:interpolator="@android:anim/overshoot_interpolator"/>
+                <objectAnimator android:propertyName="scaleY" android:valueFrom="0" android:valueTo="1"
+                    android:startOffset="600" android:duration="240" android:interpolator="@android:anim/overshoot_interpolator"/>
+            </set>
+        </aapt:attr>
+    </target>
+    <target android:name="pulse">
+        <aapt:attr name="android:animation">
+            <set>
+                <objectAnimator android:propertyName="scaleX" android:valueFrom="0.6" android:valueTo="1.7"
+                    android:startOffset="560" android:duration="420" android:interpolator="@android:interpolator/fast_out_slow_in"/>
+                <objectAnimator android:propertyName="scaleY" android:valueFrom="0.6" android:valueTo="1.7"
+                    android:startOffset="560" android:duration="420" android:interpolator="@android:interpolator/fast_out_slow_in"/>
+            </set>
+        </aapt:attr>
+    </target>
+    <target android:name="pulse_ring">
+        <aapt:attr name="android:animation">
+            <set android:ordering="sequentially">
+                <objectAnimator android:propertyName="strokeAlpha" android:valueFrom="0" android:valueTo="0.8"
+                    android:startOffset="560" android:duration="120"/>
+                <objectAnimator android:propertyName="strokeAlpha" android:valueFrom="0.8" android:valueTo="0"
+                    android:duration="300"/>
+            </set>
+        </aapt:attr>
+    </target>
+</animated-vector>

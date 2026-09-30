@@ -4,7 +4,8 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     <!-- Mesh hub: a central node linked to three device nodes. -->
-    <group>
+    <!-- Shrunk and nudged down so the top device stays inside the launcher's round mask. -->
+    <group android:pivotX="54" android:pivotY="54" android:scaleX="0.84" android:scaleY="0.84" android:translateY="5">
         <path
             android:strokeColor="#E4572E"
             android:strokeWidth="4"

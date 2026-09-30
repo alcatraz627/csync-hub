@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sc_chat_short">New chat</string>
+    <string name="sc_chat_long">New chat with the Pi assistant</string>
+    <string name="sc_send_short">Send</string>
+    <string name="sc_send_long">Send to a device</string>
+    <string name="sc_camera_short">Pi camera</string>
+    <string name="sc_camera_long">Pi camera, live</string>
+</resources>
