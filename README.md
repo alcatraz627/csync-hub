@@ -1,4 +1,8 @@
-# csync hub
+<p align="center">
+  <img src=".github/readme/banner.svg" alt="csync-hub banner: The conspiracy corkboard" width="100%">
+</p>
+
+# <img src=".github/readme/favicon.svg" alt="" width="32" height="32"> csync hub
 
 The phone side of csync: one Android app to reach your own machines over
 Tailscale, talk to the assistant on your home server, and see at a glance whether
@@ -8,6 +12,13 @@ It pairs with the mesh agent and the Gemini-backed assistant in the
 [csync](https://github.com/alcatraz627/csync) repo. The phone needs nothing but
 the shared mesh token and a device on the tailnet to talk to. Devices are
 referenced by name and resolved by MagicDNS, so no IP ever appears in the UI.
+
+<details>
+<summary>Riddle answer</summary>
+
+MagicDNS on the tailnet: csync hub refers to every device by name and lets MagicDNS resolve it, so no IP ever appears in the UI.
+
+</details>
 
 ## The five surfaces
 
