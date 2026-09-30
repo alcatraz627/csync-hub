@@ -253,11 +253,13 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     }
 
     /** In a conversation the large title steps aside while the keyboard is up, unless it is the title being typed. */
+    /** The conversation's heading folds while typing and in landscape, where height is what the transcript needs. */
     private void syncChatHeading(boolean typing) {
         if (pageChat == null || chatTitleEdit == null) return;
         boolean renaming = chatTitleEdit.getVisibility() == View.VISIBLE;
+        boolean wide = getResources().getConfiguration().orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE;
         pageChat.findViewById(R.id.chat_heading).setVisibility(
-            typing && chatConvoMode && !renaming ? View.GONE : View.VISIBLE);
+            (typing || wide) && chatConvoMode && !renaming ? View.GONE : View.VISIBLE);
     }
 
     private boolean keyboardUp() {
