@@ -499,6 +499,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         Kit.label(page, "In the share menu of other apps");
         group = Kit.group(page);
         Kit.bindRow(Kit.addRow(group), Kit.Icon.SHARE, "csync", "Asks where the item goes", null, false);
+        Kit.bindRow(Kit.addRow(group), Kit.Icon.DISPLAY, "Pi screen", "Plays a video, a song or a YouTube link at once", null, false);
+        Kit.bindRow(Kit.addRow(group), Kit.Icon.DEVICE, "Last device", "Sends it to the device you sent to last", null, false);
     }
 
     private void showToolsStatus(String title, int statusId) {
@@ -1927,6 +1929,13 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             if (saved != null) openConversation(wanted, saved.optString("title"));
             return;
         }
+        // Another app shared a file into a conversation: it waits beside a new message, ready to send.
+        android.net.Uri shared = intent.getParcelableExtra("chat_attach_uri");
+        if (shared != null) {
+            intent.removeExtra("chat_attach_uri");
+            newConversation();
+            attachToChat(shared);
+        }
         String draft = intent.getStringExtra("chat_prefill");
         if (draft == null || draft.isEmpty()) return;
         String id = intent.getStringExtra("chat_session");
@@ -2312,7 +2321,10 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     // Files waiting to go with the next message: {name, mime, path to a private cached copy}.
     private final java.util.List<JSONObject> chatAttachments = new java.util.ArrayList<>();
     private final androidx.activity.result.ActivityResultLauncher<String[]> chatAttachPicker =
-        registerForActivityResult(new androidx.activity.result.contract.ActivityResultContracts.OpenDocument(), uri -> {
+        registerForActivityResult(new androidx.activity.result.contract.ActivityResultContracts.OpenDocument(), this::attachToChat);
+
+    /** Put a copy of a file beside the message being written, to go with it when it is sent. */
+    private void attachToChat(android.net.Uri uri) {
             if (uri == null) return;
             String name = displayName(uri);
             String mime = getContentResolver().getType(uri);
@@ -2337,7 +2349,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                 copy.delete();
                 toast(error.getMessage() == null ? "Could not attach this file" : error.getMessage());
             }
-        });
+    }
 
     private void renderChatAttachments() {
         com.google.android.material.chip.ChipGroup group = pageChat.findViewById(R.id.chat_attachments);

@@ -1,7 +1,7 @@
 package com.csync.hub;
 
-import android.content.Intent;
 import android.content.Context;
+import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -10,8 +10,10 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.OpenableColumns;
+import android.view.View;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -22,147 +24,231 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Routes Android Sharesheet content to a Pi screen, a local draft, or a peer.
+ * What another app shared into csync, and every place it can go: the Pi screen, one of your
+ * devices, a conversation, a note or a pin. One page for every kind of item, so the same thing
+ * is offered under the same words whatever was shared.
+ *
+ * Two more entries in Android's share menu skip the page: "Send to Pi screen" plays the item
+ * at once, and "Send to your last device" sends it to the device you sent to last. Either one
+ * opens the page instead when it cannot do its job, so nothing is dropped silently.
  */
 public class ShareActivity extends AppCompatActivity {
+
+    /** The kinds of thing that can arrive, each with its own set of places to go. */
+    private enum Kind { MEDIA, IMAGE, DOCUMENT, FILES, VIDEO_LINK, LINK, TEXT }
 
     @Override protected void attachBaseContext(Context base) {
         super.attachBaseContext(Appearance.wrap(base));
     }
 
     private final Handler main = new Handler(Looper.getMainLooper());
-    private Uri imageToSave;
+    private final List<Uri> files = new ArrayList<>();
+    private String text;
+    private Kind kind;
+    private LinearLayout body;
+    private TextView progress;
 
     @Override
     protected void onCreate(Bundle b) {
         Appearance.apply(this);
         super.onCreate(b);
         Appearance.applySystemBars(this);
-        if (b != null) imageToSave = b.getParcelable("pending_image_uri");
-        if (imageToSave != null) return;
+        setContentView(R.layout.activity_share);
+        body = findViewById(R.id.share_body);
+        Kit.pageTop(findViewById(R.id.share_top), this::finish,
+            new Kit.Crumb(Kit.Icon.SHARE, "From another app", null));
 
         final Intent intent = getIntent();
-        final String action = intent.getAction();
-        final String type = intent.getType();
-        final List<Uri> uris = new ArrayList<>();
-        String incomingText = null;
-
-        if (Intent.ACTION_SEND.equals(action)) {
-            CharSequence caption = intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
-            if (caption != null) incomingText = caption.toString();
-            Uri u = intent.getParcelableExtra(Intent.EXTRA_STREAM);
-            if (u != null) uris.add(u);
-        } else if (Intent.ACTION_SEND_MULTIPLE.equals(action)) {
-            CharSequence caption = intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
-            if (caption != null) incomingText = caption.toString();
-            ArrayList<Uri> list = intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
-            if (list != null) uris.addAll(list);
+        CharSequence caption = intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
+        if (caption != null && caption.length() > 0) text = caption.toString();
+        if (Intent.ACTION_SEND.equals(intent.getAction())) {
+            Uri one = intent.getParcelableExtra(Intent.EXTRA_STREAM);
+            if (one != null) files.add(one);
+        } else if (Intent.ACTION_SEND_MULTIPLE.equals(intent.getAction())) {
+            ArrayList<Uri> many = intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
+            if (many != null) files.addAll(many);
         }
-        final String sharedText = incomingText == null || incomingText.isEmpty() ? null : incomingText;
-
-        if (sharedText == null && uris.isEmpty()) {
-            toast("Nothing to share");
+        if (text == null && files.isEmpty()) {
+            toast("Nothing was shared");
             finish();
             return;
         }
+        kind = kindOf();
 
-        boolean mediaFile = uris.size() == 1 && isPlayableMedia(uris.get(0));
-        String youtubeUrl = sharedText == null ? null : youtubeLink(sharedText);
-        boolean youtube = youtubeUrl != null;
-        if (sharedText != null && uris.isEmpty()) {
-            Uri link = Uri.parse(sharedText.trim());
-            boolean webLink = ("http".equalsIgnoreCase(link.getScheme()) ||
-                "https".equalsIgnoreCase(link.getScheme())) && link.getHost() != null;
-            List<String> choices = new ArrayList<>();
-            if (youtube) choices.add("Show on Pi screen");
-            if (webLink) choices.add("Save URL pin");
-            else choices.add("Save text pin");
-            choices.add("New note");
-            choices.add("Send to chat");
-            choices.add("Send to peer");
-            new AlertDialog.Builder(this).setTitle("Share with csync")
-                .setItems(choices.toArray(new String[0]), (dialog, selected) -> {
-                    String choice = choices.get(selected);
-                    if ("Show on Pi screen".equals(choice)) {
-                        Intent cast = new Intent(this, MediaActivity.class).setAction(Intent.ACTION_SEND);
-                        cast.setType("text/plain");
-                        cast.putExtra(Intent.EXTRA_TEXT, youtubeUrl);
-                        startActivity(cast);
-                        finish();
-                    } else if ("Save URL pin".equals(choice) || "Save text pin".equals(choice)
-                        || "New note".equals(choice)) {
-                        Intent save = new Intent(this, NotesActivity.class);
-                        String destination = "Save URL pin".equals(choice) ? "pin_prefill_url" :
-                            "Save text pin".equals(choice) ? "pin_prefill_text" : "note_prefill_body";
-                        save.putExtra(destination, sharedText);
-                        startActivity(save);
-                        finish();
-                    } else if ("Send to chat".equals(choice)) {
-                        Intent chat = new Intent(this, MainActivity.class);
-                        chat.putExtra("destination", "chat");
-                        chat.putExtra("chat_prefill", sharedText);
-                        startActivity(chat);
-                        finish();
-                    } else choosePeerAndSend(sharedText, uris);
-                }).setNegativeButton("Cancel", (dialog, choice) -> finish())
-                .setOnCancelListener(dialog -> finish()).show();
-            return;
-        }
-        if (mediaFile) {
-            new AlertDialog.Builder(this).setTitle("Share with csync")
-                .setItems(new String[]{"Play on Pi screen", "Send to peer"}, (dialog, choice) -> {
-                    if (choice == 0) {
-                        Intent cast = new Intent(this, MediaActivity.class).setAction(Intent.ACTION_SEND)
-                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                        cast.setType(playableType(uris.get(0)));
-                        cast.putExtra(Intent.EXTRA_STREAM, uris.get(0));
-                        cast.setClipData(android.content.ClipData.newUri(getContentResolver(),
-                            "Media to cast", uris.get(0)));
-                        startActivity(cast);
-                        finish();
-                    } else choosePeerAndSend(sharedText, uris);
-                }).setNegativeButton("Cancel", (dialog, choice) -> finish())
-                .setOnCancelListener(dialog -> finish()).show();
-            return;
-        }
-        if (uris.size() == 1 && isImage(displayName(uris.get(0)),
-                getContentResolver().getType(uris.get(0)))) {
-            Uri image = uris.get(0);
-            new AlertDialog.Builder(this).setTitle("Shared image")
-                .setItems(new String[]{"Save on this phone", "Add to Pi note", "Set as Pi cover", "Send to device"},
-                    (dialog, choice) -> {
-                        if (choice == 0) saveImageOnPhone(image);
-                        else if (choice == 1) {
-                            Intent note = new Intent(this, NotesActivity.class)
-                                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                            note.putExtra("note_image_uri", image);
-                            if (sharedText != null) note.putExtra("note_image_caption", sharedText);
-                            note.setClipData(android.content.ClipData.newUri(getContentResolver(),
-                                "Image for Pi note", image));
-                            startActivity(note);
-                            finish();
-                        } else if (choice == 2) new AlertDialog.Builder(this)
-                            .setTitle("Use image on Pi display?")
-                            .setMessage("This saves the image as the Pi cover and replaces active Pi playback.")
-                            .setPositiveButton("Set cover", (confirm, decision) -> setPiCover(image))
-                            .setNegativeButton("Cancel", (confirm, decision) -> finish())
-                            .show();
-                        else choosePeerAndSend(sharedText, uris);
-                    })
-                .setNegativeButton("Cancel", (dialog, choice) -> finish())
-                .setOnCancelListener(dialog -> finish()).show();
-            return;
-        }
-        new AlertDialog.Builder(this).setTitle("Share with csync")
-            .setItems(new String[]{uris.size() == 1 ? "Send file to device" :
-                "Send " + uris.size() + " files to device"},
-                (dialog, choice) -> choosePeerAndSend(sharedText, uris))
-            .setNegativeButton("Cancel", (dialog, choice) -> finish())
-            .setOnCancelListener(dialog -> finish()).show();
+        String entry = intent.getComponent() == null ? "" : intent.getComponent().getClassName();
+        if (entry.endsWith(".SharePiScreen") && playOnPi()) return;
+        render();
+        String last = PeerStore.selected(this);
+        if (entry.endsWith(".ShareLastDevice") && !last.isEmpty()) sendToPeer(last, 0);
     }
 
-    private boolean isPlayableMedia(Uri uri) {
-        return playableType(uri) != null;
+    private Kind kindOf() {
+        if (files.size() > 1) return Kind.FILES;
+        if (files.size() == 1) {
+            Uri file = files.get(0);
+            if (playableType(file) != null) return Kind.MEDIA;
+            String type;
+            try { type = getContentResolver().getType(file); } catch (RuntimeException unreadable) { type = null; }
+            return isImage(displayName(file), type) ? Kind.IMAGE : Kind.DOCUMENT;
+        }
+        if (youtubeLink(text) != null) return Kind.VIDEO_LINK;
+        Uri link = Uri.parse(text.trim());
+        boolean web = ("http".equalsIgnoreCase(link.getScheme()) || "https".equalsIgnoreCase(link.getScheme()))
+            && link.getHost() != null;
+        return web ? Kind.LINK : Kind.TEXT;
+    }
+
+    // ---- the page ----
+
+    private void render() {
+        LinearLayout item = Kit.group(body);
+        Kit.bindRow(Kit.addRow(item), itemIcon(), itemTitle(), itemWords(), null, false).setClickable(false);
+
+        progress = new TextView(this);
+        progress.setTextAppearance(R.style.Kit_Text_RowSub);
+        progress.setPadding(Kit.dp(this, 4), Kit.dp(this, 10), 0, 0);
+        progress.setVisibility(View.GONE);
+        body.addView(progress);
+
+        // What can be done with it straight away comes first, then the places it can be kept or sent.
+        boolean first = true;
+        if (kind == Kind.MEDIA || kind == Kind.VIDEO_LINK) {
+            Kit.label(body, "Play");
+            row(Kit.group(body), Kit.Icon.DISPLAY, "Play on Pi screen", null, false, this::playOnPi);
+        } else if (kind == Kind.IMAGE) {
+            Kit.label(body, "Show");
+            row(Kit.group(body), R.drawable.csi_image, "Set as the Pi cover", null, true, this::confirmPiCover);
+        } else if (kind == Kind.TEXT) {
+            Kit.label(body, "Use");
+            row(Kit.group(body), R.drawable.csi_copy, "Copy the text", null, false, this::copyText);
+        } else first = false;
+
+        if (first) Kit.label(body, "Keep or send");
+        else body.addView(new View(this), new LinearLayout.LayoutParams(-1, Kit.dp(this, 16)));
+        LinearLayout places = Kit.group(body);
+        row(places, Kit.Icon.DEVICE, "Send to a device", null, true, this::chooseDevice);
+        if (kind != Kind.FILES)
+            row(places, Kit.Icon.CHAT, "Send to a conversation", null, false, this::toConversation);
+        if (text != null && files.isEmpty() || kind == Kind.IMAGE)
+            row(places, Kit.Icon.NOTES, "Add to a note", null, false, this::toNote);
+        if (files.isEmpty())
+            row(places, R.drawable.ic_pin, "Save as a pin", null, false, this::toPin);
+    }
+
+    private void row(LinearLayout group, int icon, String title, String sub, boolean opens, Runnable run) {
+        View row = Kit.addRow(group);
+        Kit.bindRow(row, icon, title, sub, null, opens);
+        row.setOnClickListener(v -> run.run());
+    }
+
+    private int itemIcon() {
+        switch (kind) {
+            case MEDIA: case VIDEO_LINK: return Kit.Icon.VIDEO;
+            case IMAGE: return Kit.Icon.PHOTO;
+            case LINK: return R.drawable.csi_link;
+            case TEXT: return R.drawable.csi_text;
+            case FILES: return Kit.Icon.FILES;
+            default: return Kit.Icon.FILE;
+        }
+    }
+
+    /** The readable name: the file's own name, or the first line of the text cut at a word. */
+    private String itemTitle() {
+        if (files.size() > 1) return files.size() + " files";
+        if (files.size() == 1) return displayName(files.get(0));
+        String line = text.trim().split("\n", 2)[0];
+        if (line.length() <= 70) return line;
+        int cut = line.lastIndexOf(' ', 70);
+        return line.substring(0, cut > 30 ? cut : 70);
+    }
+
+    private String itemWords() {
+        String what;
+        switch (kind) {
+            case MEDIA: what = "Video or audio"; break;
+            case VIDEO_LINK: what = "YouTube link"; break;
+            case IMAGE: what = "Image"; break;
+            case LINK: what = "Link"; break;
+            case TEXT: what = "Text"; break;
+            case FILES: what = "Files"; break;
+            default: what = "File";
+        }
+        String from = sharedFrom();
+        return from == null ? what : what + " · from " + from;
+    }
+
+    /** The name of the app that shared it, when Android says which one it was. */
+    private String sharedFrom() {
+        try {
+            Uri referrer = getReferrer();
+            if (referrer == null || !"android-app".equals(referrer.getScheme())) return null;
+            android.content.pm.PackageManager apps = getPackageManager();
+            return apps.getApplicationLabel(apps.getApplicationInfo(referrer.getHost(), 0)).toString();
+        } catch (Exception unknown) { return null; }
+    }
+
+    private void say(String words) {
+        progress.setText(words);
+        progress.setVisibility(words == null ? View.GONE : View.VISIBLE);
+    }
+
+    // ---- the places ----
+
+    /** Start it on the Pi screen. False when this kind of item cannot be played there. */
+    private boolean playOnPi() {
+        if (kind == Kind.VIDEO_LINK) {
+            Intent cast = new Intent(this, MediaActivity.class).setAction(Intent.ACTION_SEND).setType("text/plain");
+            cast.putExtra(Intent.EXTRA_TEXT, youtubeLink(text));
+            startActivity(cast);
+        } else if (kind == Kind.MEDIA) {
+            Uri file = files.get(0);
+            Intent cast = new Intent(this, MediaActivity.class).setAction(Intent.ACTION_SEND)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            cast.setType(playableType(file));
+            cast.putExtra(Intent.EXTRA_STREAM, file);
+            cast.setClipData(android.content.ClipData.newUri(getContentResolver(), "Media to play", file));
+            startActivity(cast);
+        } else return false;
+        finish();
+        return true;
+    }
+
+    private void toConversation() {
+        Intent chat = new Intent(this, MainActivity.class).putExtra("destination", "chat");
+        if (text != null) chat.putExtra("chat_prefill", text);
+        if (files.size() == 1) {
+            Uri file = files.get(0);
+            chat.putExtra("chat_attach_uri", file).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            chat.setClipData(android.content.ClipData.newUri(getContentResolver(), "File for the assistant", file));
+        }
+        startActivity(chat);
+        finish();
+    }
+
+    private void toNote() {
+        Intent note = new Intent(this, NotesActivity.class);
+        if (kind == Kind.IMAGE) {
+            Uri image = files.get(0);
+            note.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).putExtra("note_image_uri", image);
+            if (text != null) note.putExtra("note_image_caption", text);
+            note.setClipData(android.content.ClipData.newUri(getContentResolver(), "Image for a note", image));
+        } else note.putExtra("note_prefill_body", text);
+        startActivity(note);
+        finish();
+    }
+
+    private void toPin() {
+        boolean link = kind == Kind.LINK || kind == Kind.VIDEO_LINK;
+        startActivity(new Intent(this, NotesActivity.class)
+            .putExtra(link ? "pin_prefill_url" : "pin_prefill_text", text));
+        finish();
+    }
+
+    private void copyText() {
+        ((android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE))
+            .setPrimaryClip(android.content.ClipData.newPlainText("Shared text", text));
+        toast("Copied");
+        finish();
     }
 
     private String playableType(Uri uri) {
@@ -179,66 +265,23 @@ public class ShareActivity extends AppCompatActivity {
         return null;
     }
 
-    private void saveImageOnPhone(Uri image) {
-        imageToSave = image;
-        Intent create = new Intent(Intent.ACTION_CREATE_DOCUMENT)
-            .addCategory(Intent.CATEGORY_OPENABLE)
-            .setType(imageType(image))
-            .putExtra(Intent.EXTRA_TITLE, displayName(image));
-        startActivityForResult(create, 90);
+    private void confirmPiCover() {
+        Kit.sheet(this, "Use this image on the Pi screen?", "It becomes the Pi cover and replaces what is playing there.",
+            new Kit.Action(R.drawable.csi_image, "Set as the Pi cover", null, () -> setPiCover(files.get(0))));
     }
 
-    @Override protected void onSaveInstanceState(Bundle state) {
-        state.putParcelable("pending_image_uri", imageToSave);
-        super.onSaveInstanceState(state);
-    }
-
-    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode != 90) return;
-        if (resultCode != RESULT_OK || data == null || data.getData() == null || imageToSave == null) {
-            finish();
-            return;
-        }
-        Uri source = imageToSave, destination = data.getData();
-        new Thread(() -> {
-            String failure = null;
-            try (InputStream input = getContentResolver().openInputStream(source);
-                 java.io.OutputStream output = getContentResolver().openOutputStream(destination)) {
-                if (input == null || output == null) throw new Exception("Could not open the image");
-                byte[] buffer = new byte[8192];
-                int count;
-                while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
-            } catch (Exception error) {
-                failure = error.getMessage();
-                try { getContentResolver().delete(destination, null, null); }
-                catch (Exception ignored) { }
-            }
-            String result = failure;
-            main.post(() -> {
-                if (result == null) { toast("Image saved on this phone"); finish(); }
-                else new AlertDialog.Builder(this).setTitle("Could not save image")
-                    .setMessage(result)
-                    .setPositiveButton("Try again", (dialog, choice) -> saveImageOnPhone(source))
-                    .setNegativeButton("Cancel", (dialog, choice) -> finish()).show();
-            });
-        }, "share-image-save").start();
-    }
-
-    private String imageType(Uri image) {
-        String type = getContentResolver().getType(image);
-        return type != null && type.startsWith("image/") ? type : "image/png";
+    private void connectFirst() {
+        Kit.sheet(this, "Connect the Pi first", "The Pi address and the token are set in Settings. Share this again afterwards.",
+            new Kit.Action(Kit.Icon.SETTINGS, "Open More", null, () -> {
+                startActivity(new Intent(this, MainActivity.class).putExtra("destination", "more"));
+                finish();
+            }));
     }
 
     private void setPiCover(Uri image) {
         String host = Prefs.assistIp(this), token = Prefs.token(this);
-        if (host.isEmpty() || token.isEmpty()) {
-            new AlertDialog.Builder(this).setTitle("Connect the Pi")
-                .setMessage("Set the Pi address and mesh token in More → Settings first.")
-                .setPositiveButton("Close", (dialog, choice) -> finish()).show();
-            return;
-        }
-        toast("Preparing Pi cover");
+        if (host.isEmpty() || token.isEmpty()) { connectFirst(); return; }
+        say("Sending the image to the Pi");
         new Thread(() -> {
             String failure = null;
             JSONObject result = null;
@@ -246,21 +289,21 @@ public class ShareActivity extends AppCompatActivity {
                 BitmapFactory.Options bounds = new BitmapFactory.Options();
                 bounds.inJustDecodeBounds = true;
                 try (InputStream input = getContentResolver().openInputStream(image)) {
-                    if (input == null) throw new Exception("Could not read shared image");
+                    if (input == null) throw new Exception("The image could not be read");
                     BitmapFactory.decodeStream(input, null, bounds);
                 }
                 if (bounds.outWidth <= 0 || bounds.outHeight <= 0)
-                    throw new Exception("Could not decode shared image");
+                    throw new Exception("The image could not be read");
                 BitmapFactory.Options options = new BitmapFactory.Options();
                 options.inSampleSize = 1;
                 while (bounds.outWidth / options.inSampleSize > 1920 ||
                        bounds.outHeight / options.inSampleSize > 1080) options.inSampleSize *= 2;
                 Bitmap bitmap;
                 try (InputStream input = getContentResolver().openInputStream(image)) {
-                    if (input == null) throw new Exception("Could not read shared image");
+                    if (input == null) throw new Exception("The image could not be read");
                     bitmap = BitmapFactory.decodeStream(input, null, options);
                 }
-                if (bitmap == null) throw new Exception("Could not decode shared image");
+                if (bitmap == null) throw new Exception("The image could not be read");
                 ByteArrayOutputStream output = new ByteArrayOutputStream();
                 try { bitmap.compress(Bitmap.CompressFormat.JPEG, 85, output); }
                 finally { bitmap.recycle(); }
@@ -269,19 +312,19 @@ public class ShareActivity extends AppCompatActivity {
             String error = failure;
             JSONObject applied = result;
             main.post(() -> {
+                say(null);
                 if (error == null) {
                     toast(applied.optBoolean("sentToDisplay") ?
-                        "Pi cover saved and shown" : "Pi cover saved; display unavailable");
+                        "Saved as the Pi cover and shown" : "Saved as the Pi cover. The Pi screen is off");
                     finish();
-                } else new AlertDialog.Builder(this).setTitle("Could not set Pi cover")
-                    .setMessage(error)
-                    .setPositiveButton("Retry", (dialog, choice) -> setPiCover(image))
-                    .setNegativeButton("Cancel", (dialog, choice) -> finish()).show();
+                } else Kit.sheet(this, "The Pi cover was not set", error,
+                    new Kit.Action(R.drawable.csi_refresh, "Try again", null, () -> setPiCover(image)));
             });
         }, "share-pi-cover").start();
     }
 
     private String youtubeLink(String sharedText) {
+        if (sharedText == null) return null;
         try {
             java.util.regex.Matcher links = java.util.regex.Pattern.compile("https://[^\\s]+", java.util.regex.Pattern.CASE_INSENSITIVE)
                 .matcher(sharedText);
@@ -304,54 +347,37 @@ public class ShareActivity extends AppCompatActivity {
         } catch (Exception error) { return null; }
     }
 
-    private void choosePeerAndSend(String sharedText, List<Uri> uris) {
+    // ---- sending to a device ----
+
+    private void chooseDevice() {
         JSONArray roster = PeerStore.load(this);
-        List<String> names = new ArrayList<>();
-        List<String> labels = new ArrayList<>();
-        String selected = PeerStore.selected(this);
+        List<Kit.Action> devices = new ArrayList<>();
+        String last = PeerStore.selected(this);
         for (int i = 0; i < roster.length(); i++) {
             JSONObject peer = roster.optJSONObject(i);
-            if (peer == null) continue;
+            if (peer == null || peer.optString("name").isEmpty()) continue;
             String name = peer.optString("name");
-            if (name.isEmpty()) continue;
-            names.add(name);
-            labels.add(name + (peer.optBoolean("online") ? " · online" : " · last seen offline")
-                + (name.equals(selected) ? " · selected" : ""));
+            String state = peer.optBoolean("online") ? "Online" : "Offline when last seen";
+            devices.add(new Kit.Action(Kit.Icon.DEVICE, name, name.equals(last) ? state + " · you sent here last" : state, () -> {
+                PeerStore.select(this, name);
+                sendToPeer(name, 0);
+            }));
         }
-        if (names.isEmpty()) {
-            new AlertDialog.Builder(this).setTitle("Choose a device")
-                .setMessage("Scan your mesh devices to choose where this item goes.")
-                .setPositiveButton("Scan devices", (dialog, choice) -> scanPeersAndChoose(sharedText, uris))
-                .setNegativeButton("Cancel", (dialog, choice) -> finish())
-                .setOnCancelListener(dialog -> finish()).show();
+        if (devices.isEmpty()) {
+            Kit.sheet(this, "No devices known yet", "csync looks for your devices through the Pi.",
+                new Kit.Action(R.drawable.csi_refresh, "Look for devices", null, this::scanThenChoose));
             return;
         }
-        new AlertDialog.Builder(this).setTitle("Send to device")
-            .setItems(labels.toArray(new String[0]), (dialog, choice) -> {
-                String peer = names.get(choice);
-                PeerStore.select(this, peer);
-                sendToPeer(peer, sharedText, uris, 0);
-            })
-            .setNegativeButton("Cancel", (dialog, choice) -> finish())
-            .setOnCancelListener(dialog -> finish()).show();
+        Kit.sheet(this, "Send to a device", itemTitle(), devices.toArray(new Kit.Action[0]));
     }
 
-    private void scanPeersAndChoose(String sharedText, List<Uri> uris) {
+    private void scanThenChoose() {
         String home = Prefs.homeIp(this);
         String backup = Prefs.assistIp(this);
         if (home.isEmpty()) home = backup;
         String token = Prefs.token(this);
-        if (home.isEmpty() || token.isEmpty()) {
-            new AlertDialog.Builder(this).setTitle("Connect csync")
-                .setMessage("Set the Pi or home peer and mesh token in More → Settings, then share this item again.")
-                .setPositiveButton("Open More", (dialog, choice) -> {
-                    startActivity(new Intent(this, MainActivity.class).putExtra("destination", "more"));
-                    finish();
-                })
-                .setNegativeButton("Cancel", (dialog, choice) -> finish()).show();
-            return;
-        }
-        toast("Scanning devices");
+        if (home.isEmpty() || token.isEmpty()) { connectFirst(); return; }
+        say("Looking for your devices");
         final String scanHost = home;
         new Thread(() -> {
             String error = null;
@@ -364,88 +390,69 @@ public class ShareActivity extends AppCompatActivity {
             }
             final String failure = error;
             main.post(() -> {
-                if (failure == null) choosePeerAndSend(sharedText, uris);
-                else new AlertDialog.Builder(this).setTitle("Could not scan devices")
-                    .setMessage(failure)
-                    .setPositiveButton("Retry", (dialog, choice) -> scanPeersAndChoose(sharedText, uris))
-                    .setNegativeButton("Cancel", (dialog, choice) -> finish()).show();
+                say(null);
+                if (failure == null) chooseDevice();
+                else Kit.sheet(this, "Your devices could not be found", failure,
+                    new Kit.Action(R.drawable.csi_refresh, "Try again", null, this::scanThenChoose));
             });
         }, "share-peer-scan").start();
     }
 
-    private void sendToPeer(String peer, String sharedText, List<Uri> uris, int nextItem) {
+    private void sendToPeer(String peer, int nextItem) {
         final String token = Prefs.token(this);
-        if (token.isEmpty()) {
-            toast("Set the mesh token in csync Settings first");
-            finish();
-            return;
-        }
+        if (token.isEmpty()) { connectFirst(); return; }
         final String from = Prefs.deviceName(this);
-        final int textItems = sharedText == null ? 0 : 1;
-        final int total = textItems + uris.size();
-        AlertDialog progress = new AlertDialog.Builder(this)
-            .setTitle("Sending to " + peer)
-            .setMessage("Sending item " + (nextItem + 1) + " of " + total)
-            .setCancelable(false).create();
-        progress.show();
-        new Thread(new Runnable() {
-            public void run() {
-                int sent = nextItem;
-                String err = null;
-                String pendingName = "shared.txt", pendingKind = "text";
-                try {
-                    for (int item = nextItem; item < total; item++) {
-                        if (item < textItems) {
-                            pendingName = "shared.txt";
-                            pendingKind = "text";
-                            MeshClient.send(peer, token, from, "text", "shared.txt",
-                                sharedText.getBytes("UTF-8"));
-                        } else {
-                            Uri u = uris.get(item - textItems);
-                            byte[] data = read(u);
-                            String name = displayName(u);
-                            String kind = isImage(name, getContentResolver().getType(u)) ? "image" : "file";
-                            pendingName = name;
-                            pendingKind = kind;
-                            MeshClient.send(peer, token, from, kind, name, data);
-                        }
-                        recordSent(pendingName, pendingKind, peer, true);
-                        sent++;
-                        if (sent < total) {
-                            final int next = sent + 1;
-                            main.post(() -> progress.setMessage("Sending item " + next + " of " + total));
-                        }
+        final int textItems = text == null ? 0 : 1;
+        final int total = textItems + files.size();
+        say(total == 1 ? "Sending to " + peer : "Sending " + (nextItem + 1) + " of " + total + " to " + peer);
+        new Thread(() -> {
+            int sent = nextItem;
+            String err = null;
+            String pendingName = "shared.txt", pendingKind = "text";
+            try {
+                for (int item = nextItem; item < total; item++) {
+                    if (item < textItems) {
+                        pendingName = "shared.txt";
+                        pendingKind = "text";
+                        MeshClient.send(peer, token, from, "text", "shared.txt", text.getBytes("UTF-8"));
+                    } else {
+                        Uri u = files.get(item - textItems);
+                        byte[] data = read(u);
+                        String name = displayName(u);
+                        String sentAs = isImage(name, getContentResolver().getType(u)) ? "image" : "file";
+                        pendingName = name;
+                        pendingKind = sentAs;
+                        MeshClient.send(peer, token, from, sentAs, name, data);
                     }
-                } catch (Throwable e) {
-                    err = e.getMessage();
-                    recordSent(pendingName, pendingKind, peer, false);
+                    recordSent(pendingName, pendingKind, peer, true);
+                    sent++;
+                    if (sent < total) {
+                        final int next = sent + 1;
+                        main.post(() -> say("Sending " + next + " of " + total + " to " + peer));
+                    }
                 }
-                final int delivered = sent;
-                final String error = err;
-                if (error == null) android.util.Log.i("csynchub", "shared " + delivered + " item(s) to " + peer);
-                else android.util.Log.e("csynchub", "share failed: " + error);
-                main.post(new Runnable() {
-                    public void run() {
-                        progress.dismiss();
-                        if (error == null) {
-                            toast("Sent " + delivered + " to " + peer);
-                            finish();
-                        } else {
-                            new AlertDialog.Builder(ShareActivity.this).setTitle("Share failed")
-                                .setMessage(delivered + " of " + total + " items confirmed sent to " + peer + ". " +
-                                    (error == null ? "The item could not be sent." : error))
-                                .setPositiveButton("Retry remaining", (dialog, choice) ->
-                                    sendToPeer(peer, sharedText, uris, delivered))
-                                .setNegativeButton("Cancel", (dialog, choice) -> finish())
-                                .setOnCancelListener(dialog -> finish()).show();
-                        }
-                    }
-                });
+            } catch (Throwable e) {
+                err = e.getMessage() == null ? "The device did not answer." : e.getMessage();
+                recordSent(pendingName, pendingKind, peer, false);
             }
-        }).start();
+            final int delivered = sent;
+            final String error = err;
+            main.post(() -> {
+                say(null);
+                if (error == null) {
+                    toast(total == 1 ? "Sent to " + peer : "Sent " + delivered + " to " + peer);
+                    finish();
+                    return;
+                }
+                Kit.sheet(this, "It was not sent", delivered + " of " + total + " reached " + peer + ". " + error,
+                    new Kit.Action(R.drawable.csi_refresh, delivered == 0 ? "Try again" : "Send the rest", null,
+                        () -> sendToPeer(peer, delivered)),
+                    new Kit.Action(Kit.Icon.DEVICE, "Choose another device", null, this::chooseDevice));
+            });
+        }, "share-send").start();
     }
 
-    private void recordSent(String name, String kind, String target, boolean delivered) {
+    private void recordSent(String name, String sentAs, String target, boolean delivered) {
         android.content.SharedPreferences prefs = getSharedPreferences("csync_share", MODE_PRIVATE);
         JSONArray prior;
         try { prior = new JSONArray(prefs.getString("sent", "[]")); }
@@ -453,7 +460,7 @@ public class ShareActivity extends AppCompatActivity {
         JSONObject entry = new JSONObject();
         try {
             entry.put("name", name);
-            entry.put("kind", kind);
+            entry.put("kind", sentAs);
             entry.put("target", target);
             entry.put("delivered", delivered);
             entry.put("at", System.currentTimeMillis());

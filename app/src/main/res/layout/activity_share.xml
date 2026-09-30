@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- From another app: what was shared, then every place it can go. ShareActivity fills the rows. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:background="@color/bg">
+
+    <include android:id="@+id/share_top" layout="@layout/kit_page_top"/>
+
+    <ScrollView android:layout_width="match_parent" android:layout_height="0dp"
+        android:layout_weight="1">
+        <LinearLayout android:id="@+id/share_body"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="@dimen/kit_gutter" android:paddingEnd="@dimen/kit_gutter"
+            android:paddingTop="6dp" android:paddingBottom="24dp"/>
+    </ScrollView>
+</LinearLayout>
