@@ -302,7 +302,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         if (page == 3) {
             showToolsDetail(0);
             refreshToolsHealth();
-            AppUpdater.refreshStatus(this, pageTools.findViewById(R.id.tools_update_status));
+            AppUpdater.refreshStatus(this, toolsUpdateStatus);
         }
         if (page == 4) { closeSettingsDetail(); refreshConnection(); refreshAssistant(); }
         if (page == 5 && resumed) cameraController.show();
@@ -343,8 +343,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         }
         ((android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancel(7002);
         if (current == 3 && toolsDetail == 1) ensureShizuku();
-        if (current == 3) AppUpdater.refreshStatus(this,
-            pageTools.findViewById(R.id.tools_update_status));
+        if (current == 3) AppUpdater.refreshStatus(this, toolsUpdateStatus);
         if (current == 5) cameraController.show();
         miniPlayer.start();
     }
@@ -389,19 +388,70 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageCamera.findViewById(R.id.camera_show_display).setOnClickListener(v ->
             startActivity(new Intent(this, MediaActivity.class).putExtra("player_target", "pi")));
         showMoreDetail(0);
+        buildTools();
         showToolsDetail(0);
         closeSettingsDetail();
-        pageTools.findViewById(R.id.tools_media).setOnClickListener(v -> startActivity(new Intent(this, MediaActivity.class)));
-        pageTools.findViewById(R.id.tools_process_route).setOnClickListener(v -> showToolsDetail(1));
-        pageTools.findViewById(R.id.tools_widgets_route).setOnClickListener(v -> showToolsDetail(2));
-        pageTools.findViewById(R.id.tools_update).setOnClickListener(v ->
-            AppUpdater.start(this, pageTools.findViewById(R.id.tools_update_status)));
-        pageTools.findViewById(R.id.tools_media_health_row).setOnClickListener(v ->
-            showToolsStatus("Pi media service", R.id.tools_media_status));
-        pageTools.findViewById(R.id.tools_power_health_row).setOnClickListener(v ->
-            showToolsStatus("Pi power", R.id.tools_power_status));
-        // The app shows what exists. This row described a feature that is not built, so it stays out of sight.
-        pageTools.findViewById(R.id.tools_performance_row).setVisibility(View.GONE);
+    }
+
+    // ---------------- tools ----------------
+
+    private static final String[] TOOL_PARTS = {"Media", "Assistant", "Camera", "Power", "Drives"};
+    private final View[] toolRows = new View[TOOL_PARTS.length];
+    // What a tap on each part's row explains, in a sentence.
+    private final String[] toolFacts = new String[TOOL_PARTS.length];
+    private View toolsLeadDot;
+    private TextView toolsLeadWords, toolsUpdateStatus;
+
+    /** Tools: one line on how things are, then each part of the Pi, this phone's tools, and the app's own update. */
+    private void buildTools() {
+        LinearLayout page = pageTools.findViewById(R.id.tools_overview);
+        page.removeAllViews();
+        LinearLayout lead = new LinearLayout(this);
+        lead.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        lead.setPadding(dp(2), dp(8), 0, 0);
+        toolsLeadDot = new View(this);
+        toolsLeadDot.setBackgroundResource(R.drawable.kit_dot);
+        lead.addView(toolsLeadDot, new LinearLayout.LayoutParams(dp(9), dp(9)));
+        toolsLeadWords = new TextView(this);
+        toolsLeadWords.setTextAppearance(R.style.Kit_Text_RowTitle);
+        toolsLeadWords.setPadding(dp(9), 0, 0, 0);
+        lead.addView(toolsLeadWords);
+        page.addView(lead);
+
+        Kit.label(page, "Raspberry Pi");
+        LinearLayout group = Kit.group(page);
+        int[] icons = {Kit.Icon.MEDIA, Kit.Icon.CHAT, Kit.Icon.CAMERA, R.drawable.csi_alert, Kit.Icon.FILES};
+        for (int i = 0; i < TOOL_PARTS.length; i++) {
+            int part = i;
+            toolRows[i] = Kit.addRow(group);
+            Kit.bindRow(toolRows[i], icons[i], TOOL_PARTS[i], null, null, false);
+            toolRows[i].setOnClickListener(v -> {
+                if (toolFacts[part] != null) Kit.sheet(this, TOOL_PARTS[part], toolFacts[part]);
+            });
+        }
+
+        Kit.label(page, "This phone");
+        group = Kit.group(page);
+        Kit.bindRow(Kit.addRow(group), Kit.Icon.DEVICE, "Process monitor", "Memory, processor, temperature", null, true)
+            .setOnClickListener(v -> showToolsDetail(1));
+        Kit.bindRow(Kit.addRow(group), R.drawable.csi_launcher, "Widgets", "Widgets, tiles, shortcuts and the share menu", null, true)
+            .setOnClickListener(v -> showToolsDetail(2));
+
+        Kit.label(page, "This app");
+        View update = Kit.addRow(Kit.group(page));
+        Kit.bindRow(update, R.drawable.csi_download, "Update csync from the Pi", "Installed: " + appVersion(), null, false);
+        toolsUpdateStatus = update.findViewById(R.id.kit_sub);
+        update.setOnClickListener(v -> AppUpdater.start(this, toolsUpdateStatus));
+    }
+
+    private void setToolsLead(Kit.Status status, String words) {
+        Kit.setStatus(toolsLeadDot, status);
+        toolsLeadWords.setText(words);
+    }
+
+    private void setToolPart(int part, Kit.Status status, String words, String fact) {
+        Kit.rowStatus(toolRows[part], status, words);
+        toolFacts[part] = fact;
     }
 
     /**
@@ -473,11 +523,6 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         Kit.bindRow(Kit.addRow(group), Kit.Icon.SHARE, "csync", "Asks where the item goes", null, false);
         Kit.bindRow(Kit.addRow(group), Kit.Icon.DISPLAY, "Pi screen", "Plays a video, a song or a YouTube link at once", null, false);
         Kit.bindRow(Kit.addRow(group), Kit.Icon.DEVICE, "Last device", "Sends it to the device you sent to last", null, false);
-    }
-
-    private void showToolsStatus(String title, int statusId) {
-        String status = ((TextView) pageTools.findViewById(statusId)).getText().toString();
-        Kit.sheet(this, title, status);
     }
 
     private void showMoreDetail(int detail) {
@@ -592,19 +637,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private void showToolsDetail(int detail) {
         toolsDetail = detail;
         boolean overview = detail == 0;
-        for (int id : new int[]{R.id.tools_health, R.id.tools_service_heading,
-                R.id.tools_service_rows, R.id.tools_utility_heading, R.id.tools_utility_rows})
-            pageTools.findViewById(id).setVisibility(overview ? View.VISIBLE : View.GONE);
+        pageTools.findViewById(R.id.tools_overview).setVisibility(overview ? View.VISIBLE : View.GONE);
         pageTools.findViewById(R.id.tools_process_section).setVisibility(detail == 1 ? View.VISIBLE : View.GONE);
         pageTools.findViewById(R.id.tools_widget_section).setVisibility(detail == 2 ? View.VISIBLE : View.GONE);
-        pageTools.findViewById(R.id.tools_title).setVisibility(View.GONE);
-        pageTools.findViewById(R.id.tools_subtitle).setVisibility(View.GONE);
-        ((TextView) pageTools.findViewById(R.id.tools_title)).setText(detail == 1 ?
-            "Observe before acting" : detail == 2 ? "Useful shortcuts" : "Tools");
-        ((TextView) pageTools.findViewById(R.id.tools_subtitle)).setText(detail == 1 ?
-            "Live phone samples need Shizuku." : detail == 2 ?
-            "Widgets, tiles, shortcuts and the share menu." :
-            "Pi service health and phone utilities.");
         View top = pageTools.findViewById(R.id.tools_back);
         Kit.pageTop(top, overview ? "tools" : detail == 1 ? "process" : "widgets", this::openPlace);
         if (overview) Kit.topAction(top, R.drawable.csi_refresh, "Check again", v -> refreshToolsHealth());
@@ -659,49 +694,60 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     }
 
     private void refreshToolsHealth() {
-        TextView headline = pageTools.findViewById(R.id.tools_health_headline);
-        TextView detail = pageTools.findViewById(R.id.tools_health_detail);
-        TextView mediaStatus = pageTools.findViewById(R.id.tools_media_status);
-        TextView powerStatus = pageTools.findViewById(R.id.tools_power_status);
         String host = Prefs.assistIp(this), token = Prefs.token(this);
         if (host.isEmpty() || token.isEmpty()) {
-            headline.setText("Connect your Pi");
-            detail.setText("Set the Pi address and mesh token in Settings");
-            mediaStatus.setText("Connection not configured");
-            powerStatus.setText("No Pi diagnostic sample");
+            setToolsLead(Kit.Status.IDLE, "The Pi is not connected");
+            for (int i = 0; i < TOOL_PARTS.length; i++)
+                setToolPart(i, Kit.Status.IDLE, "Not set", "Set the Pi's address and the token in Settings, under Connection.");
             return;
         }
-        headline.setText("Checking Pi");
-        detail.setText("Reading service and power state");
+        setToolsLead(Kit.Status.WARN, "Checking the Pi");
+        for (int i = 0; i < TOOL_PARTS.length; i++) setToolPart(i, Kit.Status.IDLE, "Checking", null);
         new Thread(() -> {
-            boolean healthy = false;
+            MediaClient client = new MediaClient(host, token);
+            boolean media = false, camera = false;
             JSONObject power = null;
-            try {
-                MediaClient client = new MediaClient(host, token);
-                healthy = client.get("/v1/health").optBoolean("ok");
-                power = client.get("/v1/diagnostics").optJSONObject("power");
-            } catch (Exception ignored) { }
-            final boolean mediaReady = healthy;
+            JSONArray drives = null;
+            try { media = client.get("/v1/health").optBoolean("ok"); } catch (Exception ignored) { }
+            try { power = client.get("/v1/diagnostics").optJSONObject("power"); } catch (Exception ignored) { }
+            try { client.get("/v1/camera/status"); camera = true; } catch (Exception ignored) { }
+            try { drives = client.get("/v1/drives").optJSONArray("drives"); } catch (Exception ignored) { }
+            boolean assistant = MeshClient.reachable(host, MeshClient.ASSIST_PORT);
+            final boolean mediaUp = media, cameraUp = camera, assistantUp = assistant;
             final JSONObject currentPower = power;
+            final JSONArray listed = drives;
             ui.post(() -> {
-                mediaStatus.setText(mediaReady ? "Authenticated media API reachable" : "Media API unavailable");
-                if (currentPower == null) {
-                    headline.setText(mediaReady ? "Pi media is reachable" : "Pi is unavailable");
-                    detail.setText("Power diagnostics could not be read");
-                    powerStatus.setText("No current power sample");
-                    return;
+                setToolPart(0, mediaUp ? Kit.Status.GOOD : Kit.Status.BAD, mediaUp ? "Ready" : "Not answering",
+                    mediaUp ? "The Pi is serving its drives and its screen." : "The part of the Pi that serves drives and the screen did not answer.");
+                setToolPart(1, assistantUp ? Kit.Status.GOOD : Kit.Status.BAD, assistantUp ? "Ready" : "Not answering",
+                    assistantUp ? "The Pi assistant is running." : "The Pi assistant did not answer, so Chat cannot reply.");
+                setToolPart(2, cameraUp ? Kit.Status.GOOD : Kit.Status.IDLE, cameraUp ? "Ready" : "Not found",
+                    cameraUp ? "The Pi camera can be opened." : "The Pi did not report a camera.");
+                boolean lowNow = currentPower != null && currentPower.optBoolean("underVoltageNow");
+                boolean lowEarlier = currentPower != null && currentPower.optBoolean("underVoltageSinceBoot");
+                String fix = currentPower == null || currentPower.isNull("fix") ? "" : currentPower.optString("fix", "").trim();
+                if (currentPower == null) setToolPart(3, Kit.Status.IDLE, "Not known", "The Pi did not report on its power.");
+                else setToolPart(3, lowNow ? Kit.Status.BAD : lowEarlier ? Kit.Status.WARN : Kit.Status.GOOD,
+                    lowNow ? "Low power" : lowEarlier ? "Was low" : "Ready",
+                    (lowNow ? "The Pi is short of power right now. The picture may stop."
+                        : lowEarlier ? "The Pi ran short of power at least once since it started."
+                        : "The Pi has had enough power since it started.") + (fix.isEmpty() ? "" : " " + fix));
+                int connected = 0, known = listed == null ? 0 : listed.length();
+                StringBuilder names = new StringBuilder();
+                for (int i = 0; i < known; i++) {
+                    JSONObject drive = listed.optJSONObject(i);
+                    if (drive == null) continue;
+                    if (drive.optBoolean("online")) connected++;
+                    names.append(names.length() == 0 ? "" : "\n").append(drive.optString("label", "Drive")).append(": ")
+                        .append(drive.optBoolean("online") ? "connected" : "not connected");
                 }
-                boolean lowNow = currentPower.optBoolean("underVoltageNow");
-                boolean lowEarlier = currentPower.optBoolean("underVoltageSinceBoot");
-                headline.setText(lowNow ? "One issue to check" : "Pi services are ready");
-                detail.setText(lowNow ? "Undervoltage is happening now; recheck power before playback." :
-                    lowEarlier ? "Undervoltage was recorded since boot" : "No undervoltage reported");
-                String fix = currentPower.isNull("fix") ? "" : currentPower.optString("fix", "").trim();
-                String powerSummary = lowNow ? "Undervoltage now" :
-                    lowEarlier ? "Past undervoltage" : "No undervoltage reported by Pi";
-                powerStatus.setText(fix.isEmpty() ? powerSummary : powerSummary + " · " + fix);
-                ((android.widget.ImageView) pageTools.findViewById(R.id.tools_power_icon))
-                    .setColorFilter(col(lowNow || lowEarlier ? R.color.warn : R.color.online));
+                setToolPart(4, listed == null ? Kit.Status.IDLE : connected == known && known > 0 ? Kit.Status.GOOD : Kit.Status.WARN,
+                    listed == null ? "Not known" : connected + (known == connected ? " connected" : " of " + known + " connected"),
+                    listed == null ? "The Pi did not list its drives." : names.toString());
+                boolean reached = mediaUp || assistantUp;
+                boolean allGood = mediaUp && assistantUp && !lowNow && listed != null && connected == known;
+                setToolsLead(!reached ? Kit.Status.BAD : lowNow ? Kit.Status.BAD : allGood ? Kit.Status.GOOD : Kit.Status.WARN,
+                    !reached ? "The Pi cannot be reached" : lowNow ? "Power is low" : allGood ? "Everything is ready" : "One thing needs a look");
             });
         }, "csync-tools-health").start();
     }
