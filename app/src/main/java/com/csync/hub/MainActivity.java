@@ -1148,15 +1148,15 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     private void ensureShizuku() {
         if (!Shizuku.pingBinder()) {
-            sysStatus.setText("Shizuku is not running.\nStart it via ADB, then reopen this app.");
+            sysStatus.setText("Live readings need Shizuku to be running on this phone.");
             return;
         }
         if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) startSysLoop();
-        else { sysStatus.setText("Requesting Shizuku permission"); Shizuku.requestPermission(SHIZUKU_REQ); }
+        else { sysStatus.setText("Asking Shizuku for permission"); Shizuku.requestPermission(SHIZUKU_REQ); }
     }
 
     private void startSysLoop() {
-        sysStatus.setText("Live: top CPU and memory users, refreshing every 3s");
+        sysStatus.setText("What is using the processor and memory, read every 3 seconds");
         if (!sysLooping) { sysLooping = true; sysLoop(); }
     }
 
@@ -2128,20 +2128,53 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         chatHistoryList.setVisibility(tools ? View.GONE : View.VISIBLE);
         chatToolsList.setVisibility(tools ? View.VISIBLE : View.GONE);
         TextView heading = pageChat.findViewById(R.id.chat_recent_heading);
-        heading.setText(showArchived ? "Archived" : showFavOnly ?
-            "Favorites" : tools ? "Assistant tools" : "Recent");
+        heading.setText(showArchived ? "Archived" : showFavOnly ? "Favorites" : "Recent");
+        // The tools come in named groups of their own, so the list heading steps aside.
+        heading.setVisibility(tools ? View.GONE : View.VISIBLE);
         if (tools) refreshChatTools();
         else renderHistoryList();
         chatHistory.post(() -> chatHistory.smoothScrollTo(0, 0));
     }
 
-    private void refreshChatTools() {
+    /** Say one thing in the tools view when there is no list to show. */
+    private void sayChatTools(String title, String words) {
         chatToolsList.removeAllViews();
-        addChatToolRow("Assistant tools", "Checking declared Pi tools");
+        Kit.bindRow(Kit.addRow(Kit.group(chatToolsList)), Kit.Icon.TOOLS, title, words, null, false).setClickable(false);
+    }
+
+    /**
+     * Where a tool the assistant declares is listed: its group, the name it goes by and what it does.
+     * Several tools that do one job, such as pause, seek and stop, share one line.
+     */
+    private static String[] chatToolLine(String name) {
+        switch (name) {
+            case "media_search": return new String[]{"Media", "Find media", "Search the drives by name"};
+            case "media_play": case "media_cast_youtube":
+                return new String[]{"Media", "Play media", "Play a file or a YouTube link on the Pi screen"};
+            case "media_pause": case "media_seek": case "media_resume": case "media_stop": case "media_volume": case "media_speed":
+                return new String[]{"Media", "Control playback", "Pause, resume, seek, stop, volume and speed"};
+            case "media_status": return new String[]{"Media", "Playback status", "What the Pi screen is playing now"};
+            case "media_drives": case "media_diagnose":
+                return new String[]{"Media", "Check media", "Drives, power and the screen connection"};
+            case "camera": return new String[]{"Camera", "Camera", "Check the camera, take a photo or record a clip"};
+            case "home_health": case "pi_vitals": case "top_processes":
+                return new String[]{"Devices and files", "Pi health", "Storage, memory, temperature, power and what is busy"};
+            case "list_peers": return new String[]{"Devices and files", "Your devices", "Named devices and whether each is online"};
+            case "send_to_peer": return new String[]{"Devices and files", "Send to a device", "Send text to a named device"};
+            case "send_file": return new String[]{"Devices and files", "Share a Pi file", "Bring a file from the Pi into the conversation"};
+            case "notes": return new String[]{"Notes", "Notes", "Read, write and delete notes on the Pi"};
+            case "list_skills": case "load_skill":
+                return new String[]{"Skills and commands", "Saved skills", "List and read saved skills"};
+            case "run_command": return new String[]{"Skills and commands", "Pi commands", "Run a command on the Pi when the Pi allows it"};
+            default: return null;
+        }
+    }
+
+    private void refreshChatTools() {
+        sayChatTools("Asking the Pi assistant", "What it can use is read from the Pi");
         final String ip = Prefs.assistIp(this), token = Prefs.token(this);
         if (ip.isEmpty() || token.isEmpty()) {
-            chatToolsList.removeAllViews();
-            addChatToolRow("Assistant unavailable", "Set the Pi and token in Settings");
+            sayChatTools("The Pi is not connected", "Set its address and token in Settings");
             return;
         }
         new Thread(() -> {
@@ -2150,71 +2183,29 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             final JSONArray observed = tools;
             ui.post(() -> {
                 if (!"Tools".equals(chatFilter) || chatConvoMode) return;
+                if (observed == null) { sayChatTools("The Pi assistant did not answer", "Check Tools under More"); return; }
+                if (observed.length() == 0) { sayChatTools("The assistant has no tools", "It can still answer questions"); return; }
                 chatToolsList.removeAllViews();
-                if (observed == null) {
-                    addChatToolRow("Pi tools unavailable", "Check the assistant connection");
-                    return;
-                }
-                if (observed.length() == 0) {
-                    addChatToolRow("No tools advertised", "The Pi assistant is reachable");
-                    return;
-                }
-                for (int i = 0; i < observed.length(); i++) {
-                    JSONObject tool = observed.optJSONObject(i);
-                    if (tool != null) addChatToolRow(tool.optString("name"), chatToolSummary(tool.optString("name")));
+                String[] order = {"Media", "Camera", "Devices and files", "Notes", "Skills and commands", "Other"};
+                int[] icons = {Kit.Icon.MEDIA, Kit.Icon.CAMERA, Kit.Icon.DEVICE, Kit.Icon.NOTES, Kit.Icon.TOOLS, Kit.Icon.TOOLS};
+                for (int g = 0; g < order.length; g++) {
+                    LinearLayout group = null;
+                    java.util.Set<String> listed = new java.util.HashSet<>();
+                    for (int i = 0; i < observed.length(); i++) {
+                        JSONObject tool = observed.optJSONObject(i);
+                        if (tool == null) continue;
+                        String[] line = chatToolLine(tool.optString("name"));
+                        if (line == null) line = new String[]{"Other", chatToolTitle(tool.optString("name")), "Available through the Pi assistant"};
+                        if (!line[0].equals(order[g]) || !listed.add(line[1])) continue;
+                        if (group == null) {
+                            Kit.label(chatToolsList, order[g]);
+                            group = Kit.group(chatToolsList);
+                        }
+                        Kit.bindRow(Kit.addRow(group), icons[g], line[1], line[2], null, false).setClickable(false);
+                    }
                 }
             });
         }, "chat-tools").start();
-    }
-
-    private void addChatToolRow(String name, String description) {
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(13), dp(11), dp(13), dp(11));
-        card.setBackgroundResource(R.drawable.card_bg);
-        TextView title = new TextView(this);
-        title.setText(chatToolTitle(name));
-        title.setTextColor(col(R.color.text));
-        title.setTypeface(null, android.graphics.Typeface.BOLD);
-        title.setTextSize(13);
-        card.addView(title);
-        TextView sub = new TextView(this);
-        sub.setText(description);
-        sub.setTextColor(col(R.color.dim));
-        sub.setTextSize(11);
-        card.addView(sub);
-        LinearLayout.LayoutParams layout = new LinearLayout.LayoutParams(-1, -2);
-        layout.bottomMargin = dp(7);
-        chatToolsList.addView(card, layout);
-    }
-
-    private String chatToolSummary(String name) {
-        switch (name) {
-            case "home_health": return "Check the Pi's storage, memory, uptime, and services";
-            case "list_peers": return "See your connected devices";
-            case "send_to_peer": return "Send text to a named device";
-            case "run_command": return "Run a Pi command when the owner allows it";
-            case "camera": return "Check the camera, take a photo, or record a clip";
-            case "send_file": return "Bring a Pi file into the conversation";
-            case "list_skills": return "See saved assistant skills";
-            case "load_skill": return "Read a saved assistant skill";
-            case "top_processes": return "See which Pi processes use the most resources";
-            case "pi_vitals": return "Check Pi temperature and power health";
-            case "media_drives": return "See connected media drives";
-            case "media_search": return "Find files on connected drives";
-            case "media_status": return "Check current playback";
-            case "media_play": return "Play a found item on the Pi";
-            case "media_cast_youtube": return "Play a YouTube video on the Pi";
-            case "media_pause": return "Pause playback";
-            case "media_seek": return "Move to another point in playback";
-            case "media_resume": return "Resume playback";
-            case "media_stop": return "Stop playback";
-            case "media_volume": return "Change playback volume";
-            case "media_speed": return "Change playback speed";
-            case "media_diagnose": return "Check media service, drives, power, and display";
-            case "notes": return "Read or manage Pi notes";
-            default: return "Available through the Pi assistant";
-        }
     }
 
     private String chatToolTitle(String name) {

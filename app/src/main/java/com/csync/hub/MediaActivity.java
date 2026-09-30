@@ -508,7 +508,13 @@ public final class MediaActivity extends AppCompatActivity {
         if (ending) readable = readable.substring(0, dot);
         // Only a file name written without spaces uses dots in their place; shown words keep their full stops.
         if (ending && readable.indexOf(' ') < 0) readable = readable.replace('.', ' ');
-        return readable.replace('_', ' ').trim();
+        readable = readable.replace('_', ' ').trim();
+        // A downloaded film carries its picture size and encoder after the title; the title ends where they begin.
+        java.util.regex.Matcher release = java.util.regex.Pattern.compile(
+            "(?i)[ .(\\[]+(2160p|1080p|720p|480p|bluray|blu-ray|bdrip|brrip|web-?dl|webrip|hdtv|dvdrip|x26[45]|h ?26[45]|hevc)\\b")
+            .matcher(readable);
+        if (release.find() && release.start() > 2) readable = readable.substring(0, release.start()).trim();
+        return readable;
     }
 
     /** Where a file lives, said shortly: the drive and the folder it sits in. */
