@@ -46,13 +46,24 @@ public class ChatService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent == null) { stopSelf(); return START_NOT_STICKY; }
-        final String assist = intent.getStringExtra("assist");
-        final String token = intent.getStringExtra("token");
         final String session = intent.getStringExtra("session");
-        final String message = intent.getStringExtra("message");
-        final String model = intent.getStringExtra("model");
-        final String effort = intent.getStringExtra("effort");
         final String attached = intent.getStringExtra("attachments");
+        // An answer typed in the notification arrives with only the conversation it belongs to,
+        // so the rest is looked up here and the message is added to the conversation first.
+        android.os.Bundle typed = android.app.RemoteInput.getResultsFromIntent(intent);
+        CharSequence answered = typed == null ? null : typed.getCharSequence(TYPED_REPLY);
+        final boolean fromShade = answered != null && answered.toString().trim().length() > 0;
+        JSONObject saved = fromShade ? conversation(session) : null;
+        final String assist = fromShade ? Prefs.assistIp(this) : intent.getStringExtra("assist");
+        final String token = fromShade ? Prefs.token(this) : intent.getStringExtra("token");
+        final String message = fromShade ? answered.toString().trim() : intent.getStringExtra("message");
+        final String model = fromShade ? (saved == null ? "" : saved.optString("model")) : intent.getStringExtra("model");
+        final String effort = fromShade ? (saved == null ? "" : saved.optString("effort")) : intent.getStringExtra("effort");
+        if (fromShade) {
+            try { ChatStore.append(this, session, null, new JSONObject().put("role", "user").put("text", message)); }
+            catch (Exception ignored) { }
+            ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancel(REPLY_ID);
+        }
 
         active.incrementAndGet();
         running.add(session);
@@ -146,14 +157,38 @@ public class ChatService extends Service {
                     .putExtra("destination", "chat").putExtra("open_conversation", session), piFlags);
         Notification.Builder b = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 ? new Notification.Builder(this, CHANNEL) : new Notification.Builder(this);
+        // Reply from the shade: the typed answer comes straight back to this service.
+        int replyFlags = PendingIntent.FLAG_UPDATE_CURRENT
+                | (Build.VERSION.SDK_INT >= 31 ? PendingIntent.FLAG_MUTABLE : 0);
+        Intent again = new Intent(this, ChatService.class).putExtra("session", session);
+        PendingIntent send = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                ? PendingIntent.getForegroundService(this, session.hashCode(), again, replyFlags)
+                : PendingIntent.getService(this, session.hashCode(), again, replyFlags);
+        Notification.Action reply = new Notification.Action.Builder(
+                android.graphics.drawable.Icon.createWithResource(this, R.drawable.csi_send), "Reply", send)
+            .addRemoteInput(new android.app.RemoteInput.Builder(TYPED_REPLY).setLabel("Message the Pi").build())
+            .build();
         Notification note = b.setContentTitle("Assistant replied")
                 .setContentText(preview)
                 .setStyle(new Notification.BigTextStyle().bigText(preview))
                 .setSmallIcon(android.R.drawable.stat_notify_chat)
                 .setContentIntent(pi)
+                .addAction(reply)
                 .setAutoCancel(true).build();
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         nm.notify(REPLY_ID, note);
+    }
+
+    private static final String TYPED_REPLY = "typed_reply";
+
+    /** The saved entry for a conversation, which holds the model and effort it was set to. */
+    private JSONObject conversation(String session) {
+        JSONArray index = ChatStore.index(this);
+        for (int i = 0; i < index.length(); i++) {
+            JSONObject entry = index.optJSONObject(i);
+            if (entry != null && session.equals(entry.optString("id"))) return entry;
+        }
+        return null;
     }
 
     private void ensureChannel() {
