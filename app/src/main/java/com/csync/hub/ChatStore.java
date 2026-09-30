@@ -36,6 +36,8 @@ public final class ChatStore {
     /** Append one entry (a user message or an assistant turn) and touch the index. */
     static synchronized void append(Context c, String id, String title, JSONObject entry) {
         if (id == null || entry == null) return;
+        // When it was said, for the day headings and the time inside each message.
+        if (!entry.has("at")) try { entry.put("at", System.currentTimeMillis()); } catch (Throwable ignore) { }
         JSONArray t = transcript(c, id);
         t.put(entry);
         p(c).edit()

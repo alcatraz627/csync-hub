@@ -351,6 +351,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     @Override
     protected void onPause() {
         super.onPause();
+        keepDraft();
         resumed = false;
         cameraController.hide();
         miniPlayer.stop();
@@ -2014,7 +2015,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     // ---------------- chat page (assistant on the Pi) ----------------
 
     private EditText chatInput, chatSearch, chatTitleEdit;
-    private TextView chatSubtitle, chatTitle, chatBack, chatToggleFav, chatToggleArchived;
+    private TextView chatSubtitle, chatTitle, chatBack;
     private android.widget.ImageView chatEdit, chatFavorite, chatArchive;
     private LinearLayout chatList, chatHistoryList, chatToolsList, chatConvo, chatFilterbar;
     private ScrollView chatScroll, chatHistory;
@@ -2083,8 +2084,6 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         chatConvo = pageChat.findViewById(R.id.chat_convo);
         chatFilterbar = pageChat.findViewById(R.id.chat_filterbar);
         chatSearch = pageChat.findViewById(R.id.chat_search);
-        chatToggleFav = pageChat.findViewById(R.id.chat_toggle_fav);
-        chatToggleArchived = pageChat.findViewById(R.id.chat_toggle_archived);
         markwon = buildMarkwon();
         chatFind = new ChatFind(pageChat, chatList, chatScroll);
         chatSuggest = new ChatSuggest(pageChat, chatInput);
@@ -2157,31 +2156,31 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             public void onTextChanged(CharSequence s, int a, int b, int c) {}
             public void afterTextChanged(android.text.Editable s) { renderHistoryList(); }
         });
-        pageChat.findViewById(R.id.chat_filter_all).setOnClickListener(v -> selectChatFilter("All"));
-        chatToggleFav.setOnClickListener(v -> selectChatFilter("Favorites"));
-        chatToggleArchived.setOnClickListener(v -> selectChatFilter("Archived"));
-        pageChat.findViewById(R.id.chat_filter_tools).setOnClickListener(v -> selectChatFilter("Tools"));
         showChatList();
+    }
+
+    // Whether the search box is open on the conversation list. The top bar's search button turns it.
+    private boolean chatSearchOpen;
+
+    private void toggleChatSearch() {
+        chatSearchOpen = !chatSearchOpen;
+        android.view.inputmethod.InputMethodManager keys =
+            (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (chatSearchOpen) { if (!"Tools".equals(chatFilter)) { chatSearch.requestFocus(); keys.showSoftInput(chatSearch, 0); } }
+        else { chatSearch.setText(""); keys.hideSoftInputFromWindow(chatSearch.getWindowToken(), 0); }
+        selectChatFilter(chatFilter);
     }
 
     private void selectChatFilter(String filter) {
         chatFilter = filter;
         showArchived = "Archived".equals(filter);
         showFavOnly = "Favorites".equals(filter);
-        int[] ids = {R.id.chat_filter_all, R.id.chat_toggle_fav,
-            R.id.chat_toggle_archived, R.id.chat_filter_tools};
-        String[] names = {"All", "Favorites", "Archived", "Tools"};
-        for (int i = 0; i < ids.length; i++) {
-            TextView tab = pageChat.findViewById(ids[i]);
-            boolean selected = names[i].equals(filter);
-            tab.setTextColor(selected ? Kit.accentText(this) : col(R.color.dim));
-            tab.setCompoundDrawableTintList(android.content.res.ColorStateList.valueOf(
-                selected ? accent() : col(R.color.dim)));
-            tab.setBackground(selected ? Kit.underline(this, accent()) : null);
-            tab.setSelected(selected);
-        }
+        final String[] names = {"All", "Favorites", "Archived", "Tools"};
+        Kit.tabs(pageChat.findViewById(R.id.chat_tabs),
+            new int[]{R.drawable.csi_menu, R.drawable.csi_favorite, R.drawable.csi_archive, R.drawable.csi_clipboard},
+            names, java.util.Arrays.asList(names).indexOf(filter), index -> selectChatFilter(names[index]));
         boolean tools = "Tools".equals(filter);
-        pageChat.findViewById(R.id.chat_search_wrap).setVisibility(tools ? View.GONE : View.VISIBLE);
+        pageChat.findViewById(R.id.chat_search_wrap).setVisibility(chatSearchOpen && !tools ? View.VISIBLE : View.GONE);
         chatHistoryList.setVisibility(tools ? View.GONE : View.VISIBLE);
         chatToolsList.setVisibility(tools ? View.VISIBLE : View.GONE);
         TextView heading = pageChat.findViewById(R.id.chat_recent_heading);
@@ -2318,6 +2317,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         }
         chatFind.close();
         Kit.pageTop(top, "chat", this::openPlace);
+        Kit.topAction(top, R.drawable.csi_search, "Search conversations", v -> toggleChatSearch());
         Kit.topAction(top, R.drawable.csi_sliders, "Model for new conversations", v -> openModelSheet("default"));
         Kit.topAction(top, R.drawable.csi_plus, "New chat", v -> newConversation());
     }
@@ -2580,7 +2580,23 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     // ---- chat: history list vs one open conversation ----
 
+    /** Remember what is typed for the conversation on screen, so leaving it and coming back loses nothing. */
+    private void keepDraft() {
+        if (chatInput == null || chatSession == null || !chatConvoMode) return;
+        android.content.SharedPreferences drafts = getSharedPreferences("csync_drafts", MODE_PRIVATE);
+        String typed = chatInput.getText().toString();
+        if (typed.trim().isEmpty()) drafts.edit().remove(chatSession).apply();
+        else drafts.edit().putString(chatSession, typed).apply();
+    }
+
+    /** Put back what was being written in this conversation, or clear the box when there was nothing. */
+    private void restoreDraft() {
+        chatInput.setText(getSharedPreferences("csync_drafts", MODE_PRIVATE).getString(chatSession, ""));
+        chatInput.setSelection(chatInput.length());
+    }
+
     private void showChatList() {
+        keepDraft();
         searchResultChat = false;
         chatConvoMode = false;
         syncChatHeading(false);
@@ -2648,12 +2664,19 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             row.setOnLongClickListener(v -> { chatOptions(id, title, fav, archived); return true; });
             shown++;
         }
-        if (shown == 0) {
-            TextView e = new TextView(this);
-            e.setText(showArchived ? "No archived chats." : (idx.length() == 0 ? "No chats yet. Tap New." : "No matches."));
-            e.setTextColor(col(R.color.dim)); e.setTextSize(13); e.setPadding(dp(6), dp(12), 0, 0);
-            chatHistoryList.addView(e);
-        }
+        // With nothing to list, the heading that would name the list leaves and the page says what belongs here.
+        pageChat.findViewById(R.id.chat_recent_heading).setVisibility(shown == 0 ? View.GONE : View.VISIBLE);
+        if (shown > 0) return;
+        View showAll = Kit.button(this, R.drawable.csi_menu, "Show all conversations", R.color.text, () -> selectChatFilter("All"));
+        if (!q.isEmpty()) Kit.empty(chatHistoryList, R.drawable.csi_search,
+            "No conversation matches \"" + chatSearch.getText().toString().trim() + "\"", null, null);
+        else if (showFavOnly) Kit.empty(chatHistoryList, R.drawable.csi_favorite, "No favorites yet",
+            "Open a conversation and tap the heart to keep it here.", showAll);
+        else if (showArchived) Kit.empty(chatHistoryList, R.drawable.csi_archive, "Nothing archived",
+            "Archived conversations leave the main list and wait here.", showAll);
+        else Kit.empty(chatHistoryList, Kit.Icon.CHAT, "No conversations yet",
+            "Ask the Pi assistant to find, play or check something.",
+            Kit.tonalButton(this, R.drawable.csi_plus, "New chat", this::newConversation));
     }
 
     /** The words around the first place a conversation says this, cut at whole words, or null when it never does. */
@@ -2689,6 +2712,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     }
 
     private void openConversation(String id, String title) {
+        keepDraft();
         chatFind.close();
         chatSession = id;
         chatConvoMode = true;
@@ -2706,12 +2730,17 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         updateConfigSubtitle();
         refreshChatConfigSubtitle();
         renderTranscript(ChatStore.transcript(this, id));
+        restoreDraft();
         scrollDown();
         syncChatHeading(keyboardUp());
     }
 
     private void newConversation() {
+        keepDraft();
         chatFind.close();
+        // Something typed before a conversation was open starts the new one; a draft left in another does not follow.
+        if (chatConvoMode) chatInput.setText("");
+        chatDay = null;
         chatSession = Prefs.deviceName(this) + "-" + System.currentTimeMillis();
         chatConvoMode = true;
         chatHistory.setVisibility(View.GONE);
@@ -2738,12 +2767,15 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         chatList.removeAllViews(); chatPending = null;
         writingBox = null; writingText = null; queuedViews.clear(); workBody = null;
         selectedMessageActions = null; selectedMessageBubble = null;
+        chatDay = null;
+        drawingStored = true;
         for (int i = 0; i < tr.length(); i++) {
             org.json.JSONObject o = tr.optJSONObject(i);
             if (o == null) continue;
-            if ("user".equals(o.optString("role"))) addUserBubble(o.optString("text"), i);
+            if ("user".equals(o.optString("role"))) addUserBubble(o.optString("text"), i, o.optLong("at"));
             else renderSingleTurn(o, i);
         }
+        drawingStored = false;
         // Opened while its reply is still coming: show how far the answer has got, and offer Stop.
         if (chatSession != null && ChatService.running.contains(chatSession)) {
             if (ChatService.writing.containsKey(chatSession)) showWriting();
@@ -2752,6 +2784,56 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         renderQueued();
         updateSendButton();
         chatFind.refresh();
+    }
+
+    // The day the last drawn message belongs to, so each new day is named above its first message.
+    private String chatDay;
+    // True while a saved conversation is being drawn. A saved message with no time recorded shows none;
+    // one arriving now is stamped with the present.
+    private boolean drawingStored;
+
+    /** Name the day above the first message of that day. A message with no time recorded gets no name. */
+    private void markDay(long at) {
+        if (at <= 0) return;
+        String day = dayName(at);
+        if (day.equals(chatDay)) return;
+        chatDay = day;
+        TextView label = new TextView(this);
+        label.setText(day);
+        label.setTextColor(col(R.color.dim));
+        label.setTextSize(12);
+        addTo(label, android.view.Gravity.CENTER_HORIZONTAL, 16);
+    }
+
+    private String dayName(long at) {
+        java.util.Calendar then = java.util.Calendar.getInstance(), now = java.util.Calendar.getInstance();
+        then.setTimeInMillis(at);
+        long days = java.util.concurrent.TimeUnit.MILLISECONDS.toDays(startOfDay(now) - startOfDay(then));
+        if (days == 0) return "Today";
+        if (days == 1) return "Yesterday";
+        boolean thisYear = then.get(java.util.Calendar.YEAR) == now.get(java.util.Calendar.YEAR);
+        return new java.text.SimpleDateFormat(thisYear ? "EEEE d MMMM" : "d MMMM yyyy", java.util.Locale.getDefault())
+            .format(then.getTime());
+    }
+
+    private static long startOfDay(java.util.Calendar day) {
+        java.util.Calendar start = (java.util.Calendar) day.clone();
+        start.set(java.util.Calendar.HOUR_OF_DAY, 0);
+        start.set(java.util.Calendar.MINUTE, 0);
+        start.set(java.util.Calendar.SECOND, 0);
+        start.set(java.util.Calendar.MILLISECOND, 0);
+        return start.getTimeInMillis();
+    }
+
+    /** The small time written inside a message, in the phone's own 12 or 24 hour style. */
+    private TextView timeLine(long at, int color) {
+        TextView time = new TextView(this);
+        time.setText(android.text.format.DateFormat.getTimeFormat(this).format(new java.util.Date(at)));
+        time.setTextColor(color);
+        time.setTextSize(11);
+        time.setGravity(android.view.Gravity.END);
+        time.setPadding(0, dp(4), 0, 0);
+        return time;
     }
 
     private void refreshAgentStatus() {
@@ -2807,6 +2889,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         chatAttachments.clear();
         renderChatAttachments();
         chatInput.setText("");
+        keepDraft();
         // A message sent while a reply is still being written waits its turn.
         if (ChatService.running.contains(chatSession)) {
             queued(chatSession).add(ask);
@@ -2821,7 +2904,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private void startReply(String session, JSONObject ask) {
         boolean open = chatConvoMode && session.equals(chatSession);
         String shown = ask.optString("shown"), title = ask.optString("title");
-        if (open) addUserBubble(shown, ChatStore.transcript(this, session).length());
+        if (open) addUserBubble(shown, ChatStore.transcript(this, session).length(), System.currentTimeMillis());
         try { ChatStore.append(this, session, title, new JSONObject().put("role", "user").put("text", shown)); }
         catch (Throwable ignore) {}
         org.json.JSONObject ce = convEntry(session);
@@ -2924,6 +3007,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         send.setImageTintList(android.content.res.ColorStateList.valueOf(col(stop ? R.color.text : R.color.onAccent)));
         if (stop) send.setBackground(bg(col(R.color.surface2), 22));
         else send.setBackgroundResource(R.drawable.chat_send_bg);
+        // Send is filled only when there is something to send.
+        boolean ready = stop || !chatInput.getText().toString().trim().isEmpty() || !chatAttachments.isEmpty();
+        send.setAlpha(ready ? 1f : 0.45f);
     }
 
     // ---- the answer while it is still being written ----
@@ -3028,8 +3114,12 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             else addResultCard(toolName, res);
         } else if ("text".equals(type)) {
             closeWork();
+            long at = t.optLong("at");
+            if (at == 0 && !drawingStored) at = System.currentTimeMillis();
             // A reply stopped before its first word has nothing to show but the note that it was stopped.
-            if (!t.optString("text").isEmpty()) addMarkdown(t.optString("text"), transcriptIndex);
+            if (!t.optString("text").isEmpty()) addMarkdown(t.optString("text"), transcriptIndex, at);
+            // The line under the title counts messages, and one has just arrived.
+            if (!drawingStored) updateConfigSubtitle();
             if (t.optBoolean("stopped")) {
                 TextView note = new TextView(this);
                 note.setText("Stopped before it finished");
@@ -3206,6 +3296,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         toast("New conversation");
     }
 
+    // Colours the words of a code block by its language. A language it does not know comes back plain.
+    private io.noties.markwon.syntax.Prism4jSyntaxHighlight codeColours;
+
     // Markwon with code syntax highlighting, themed light or dark to match the app.
     private io.noties.markwon.Markwon buildMarkwon() {
         io.noties.prism4j.Prism4j prism = new io.noties.prism4j.Prism4j(new GrammarLocatorDef());
@@ -3214,6 +3307,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         io.noties.markwon.syntax.Prism4jTheme theme = night
                 ? io.noties.markwon.syntax.Prism4jThemeDarkula.create()
                 : io.noties.markwon.syntax.Prism4jThemeDefault.create();
+        codeColours = io.noties.markwon.syntax.Prism4jSyntaxHighlight.create(prism, theme);
         return io.noties.markwon.Markwon.builder(this)
                 .usePlugin(io.noties.markwon.syntax.SyntaxHighlightPlugin.create(prism, theme))
                 .build();
@@ -3265,22 +3359,30 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         });
     }
 
-    private void addUserBubble(String text, int transcriptIndex) {
+    private void addUserBubble(String text, int transcriptIndex, long at) {
         workBody = null;
         // Sending, or opening a conversation, always lands on the newest message.
         chatFollowing = true;
         if (chatJump != null) chatJump.setVisibility(View.GONE);
+        markDay(at);
         TextView tv = new TextView(this); markwon.setMarkdown(tv, text);
         ChatFind.mark(tv);
         tv.setTextColor(col(R.color.onAccent)); tv.setTextIsSelectable(true);
         tv.setLinkTextColor(col(R.color.onAccent));
         tv.setMovementMethod(android.text.method.LinkMovementMethod.getInstance());
-        tv.setTextSize(14); tv.setPadding(dp(13), dp(10), dp(13), dp(10)); tv.setBackground(bg(Kit.accentFill(this), 16));
+        tv.setTextSize(14);
         tv.setMaxWidth(Math.min(dp(260), getResources().getDisplayMetrics().widthPixels - dp(80)));
+        // The bubble holds the words and, under them, when they were sent.
+        LinearLayout bubble = new LinearLayout(this);
+        bubble.setOrientation(LinearLayout.VERTICAL);
+        bubble.setPadding(dp(13), dp(10), dp(13), dp(at > 0 ? 7 : 10));
+        bubble.setBackground(bg(Kit.accentFill(this), 16));
+        bubble.addView(tv);
+        if (at > 0) bubble.addView(timeLine(at, androidx.core.graphics.ColorUtils.setAlphaComponent(col(R.color.onAccent), 200)));
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(android.view.Gravity.BOTTOM);
-        row.addView(tv);
+        row.addView(bubble);
         onMessageTap(tv, () -> showMessageActions(row, text, transcriptIndex, true));
         addTo(row, android.view.Gravity.END, 12); scrollDown();
     }
@@ -3289,8 +3391,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         tv.setTextSize(13); tv.setPadding(dp(12), dp(9), dp(12), dp(9)); tv.setBackground(bg(col(R.color.surface2), 14));
         addTo(tv, android.view.Gravity.START, 12); scrollDown(); return tv;
     }
-    private void addMarkdown(String md, int transcriptIndex) {
+    private void addMarkdown(String md, int transcriptIndex, long at) {
         final String text = md == null ? "" : md;
+        markDay(at);
         LinearLayout box = new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL);
         box.setBackground(bg(col(R.color.surface2), 16)); box.setPadding(dp(13), dp(11), dp(13), dp(11));
         // Prose and code are drawn apart: code keeps its line breaks, scrolls sideways and has its own Copy.
@@ -3309,6 +3412,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             box.addView(tv);
             onMessageTap(tv, () -> showMessageActions(box, text, transcriptIndex, false));
         }
+        if (at > 0) box.addView(timeLine(at, col(R.color.dim)));
         box.setOnClickListener(v -> showMessageActions(box, text, transcriptIndex, false));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         lp.gravity = android.view.Gravity.START; lp.topMargin = dp(12); box.setLayoutParams(lp); chatList.addView(box);
@@ -3350,8 +3454,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         body.setTextColor(col(R.color.text));
         body.setTextIsSelectable(true);
         body.setPadding(dp(12), 0, dp(12), dp(12));
-        // Set as plain text: the block is its own card, and the markdown renderer would draw a second box inside it.
-        body.setText(code);
+        // Coloured here and not by the markdown renderer: the block is its own card, and the renderer would draw a second box inside it.
+        body.setText(language.isEmpty() ? code : codeColours.highlight(language, code));
         ChatFind.mark(body);
         across.addView(body);
         block.addView(across);
