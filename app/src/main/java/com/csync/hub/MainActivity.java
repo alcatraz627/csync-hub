@@ -1912,17 +1912,18 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         }
         // Another app shared a file into a conversation: it waits beside a new message, ready to send.
         android.net.Uri shared = intent.getParcelableExtra("chat_attach_uri");
-        if (shared != null) {
-            intent.removeExtra("chat_attach_uri");
-            newConversation();
-            attachToChat(shared);
-        }
         String draft = intent.getStringExtra("chat_prefill");
-        if (draft == null || draft.isEmpty()) return;
+        if (shared == null && (draft == null || draft.isEmpty())) return;
+        // Into the conversation that was picked, or a new one when none was.
         String id = intent.getStringExtra("chat_session");
         org.json.JSONObject entry = id == null ? null : convEntry(id);
         if (entry == null) newConversation();
         else openConversation(id, entry.optString("title"));
+        if (shared != null) {
+            intent.removeExtra("chat_attach_uri");
+            attachToChat(shared);
+        }
+        if (draft == null || draft.isEmpty()) return;
         chatInput.setText(draft);
         chatInput.setSelection(chatInput.length());
         intent.removeExtra("chat_prefill");
@@ -2557,7 +2558,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             new Kit.Action(R.drawable.csi_trash, "Delete", null, () -> Kit.sheet(this, "Delete this conversation?", title,
                 new Kit.Action(R.drawable.csi_back, "Keep it", null, () -> { }),
                 new Kit.Action(R.drawable.csi_trash, "Delete", "It is removed from this phone",
-                    () -> { ChatStore.delete(this, id); renderHistoryList(); toast("Deleted"); }))));
+                    () -> { ChatStore.delete(this, id); ChatShortcuts.gone(this, id); renderHistoryList(); toast("Deleted"); }))));
     }
 
     private void openConversation(String id, String title) {
@@ -2705,6 +2706,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         ChatService.running.add(session);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(svc);
         else startService(svc);
+        org.json.JSONObject named = convEntry(session);
+        ChatShortcuts.used(this, session, named == null ? title : named.optString("title", title));
         if (!open) return;
         updateConversationActions();
         if ("New chat".contentEquals(chatTitle.getText())) chatTitle.setText(title);

@@ -28,4 +28,9 @@
             <extra android:name="destination" android:value="camera"/>
         </intent>
     </shortcut>
+    <!-- Recent conversations show in other apps' share menus as places to send straight to. ChatShortcuts adds them. -->
+    <share-target android:targetClass="com.csync.hub.ShareActivity">
+        <data android:mimeType="*/*"/>
+        <category android:name="com.csync.hub.category.CONVERSATION"/>
+    </share-target>
 </shortcuts>

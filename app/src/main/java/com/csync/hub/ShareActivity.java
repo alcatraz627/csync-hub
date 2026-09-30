@@ -44,6 +44,8 @@ public class ShareActivity extends AppCompatActivity {
     private final Handler main = new Handler(Looper.getMainLooper());
     private final List<Uri> files = new ArrayList<>();
     private String text;
+    // The conversation picked in the share menu, when one was.
+    private String conversation;
     private Kind kind;
     private LinearLayout body;
     private TextView progress;
@@ -75,6 +77,9 @@ public class ShareActivity extends AppCompatActivity {
         }
         kind = kindOf();
 
+        // A conversation picked straight from the share menu needs no question.
+        conversation = ChatShortcuts.picked(intent);
+        if (conversation != null && kind != Kind.FILES) { toConversation(); return; }
         String entry = intent.getComponent() == null ? "" : intent.getComponent().getClassName();
         if (entry.endsWith(".SharePiScreen") && playOnPi()) return;
         render();
@@ -215,6 +220,7 @@ public class ShareActivity extends AppCompatActivity {
 
     private void toConversation() {
         Intent chat = new Intent(this, MainActivity.class).putExtra("destination", "chat");
+        if (conversation != null) chat.putExtra("chat_session", conversation);
         if (text != null) chat.putExtra("chat_prefill", text);
         if (files.size() == 1) {
             Uri file = files.get(0);
