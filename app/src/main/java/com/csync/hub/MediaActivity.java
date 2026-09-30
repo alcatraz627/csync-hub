@@ -105,6 +105,8 @@ public final class MediaActivity extends AppCompatActivity {
         Appearance.edgeToEdge(this, findViewById(R.id.media_bottom_nav));
         getOnBackPressedDispatcher().addCallback(this, backInApp);
         Kit.pullToRefresh(findViewById(R.id.media_list), () -> openTab(activeTab));
+        // The list stays one column on a wide screen; the player page beside it uses the width.
+        Appearance.column(this, findViewById(R.id.media_list));
         findViewById(R.id.media_full_player).getViewTreeObserver().addOnPreDrawListener(() -> {
             backInApp.setEnabled(videoMode || fullPlayer);
             return true;

@@ -108,6 +108,12 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         cameraController = new CameraController(this, pageCamera);
         miniPlayer = new MediaMiniPlayer(this);
         getOnBackPressedDispatcher().addCallback(this, backInApp);
+        // A conversation uses the whole width; every other page stays one column on a wide screen.
+        Appearance.column(this, pageHome.findViewById(R.id.home_refresh), pageShare.findViewById(R.id.share_refresh),
+            pageTools.findViewById(R.id.tools_refresh), pageSettings.findViewById(R.id.settings_scroll),
+            pageCamera.findViewById(R.id.camera_page), pageCamera.findViewById(R.id.captures_page),
+            pageMore.findViewById(R.id.more_overview), pageMore.findViewById(R.id.more_guide),
+            pageMore.findViewById(R.id.more_help), pageChat.findViewById(R.id.chat_history));
         Kit.pullToRefresh(pageHome.findViewById(R.id.home_refresh), this::refreshHome);
         Kit.pullToRefresh(pageShare.findViewById(R.id.share_refresh), this::refreshShare);
         Kit.pullToRefresh(pageTools.findViewById(R.id.tools_refresh), () -> {

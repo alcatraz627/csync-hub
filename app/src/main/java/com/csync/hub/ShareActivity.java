@@ -62,6 +62,7 @@ public class ShareActivity extends AppCompatActivity {
         setContentView(R.layout.activity_share);
         Appearance.edgeToEdge(this, null);
         body = findViewById(R.id.share_body);
+        Appearance.column(this, body);
         final Intent intent = getIntent();
         final String place = intent.getStringExtra(PLACE);
         Kit.pageTop(findViewById(R.id.share_top), this::finish,

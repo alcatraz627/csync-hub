@@ -157,6 +157,7 @@ public final class NotesActivity extends AppCompatActivity {
         nav.setMinimumHeight(dp(64));
         root.addView(nav, new LinearLayout.LayoutParams(-1, -2));
         Appearance.edgeToEdge(this, nav);
+        Appearance.column(this, scroll, heading, status, tabsHost, search);
         String host = Prefs.assistIp(this), token = Prefs.token(this);
         if (host.isEmpty() || token.isEmpty()) {
             Kit.pageTop(topBar, this::finish, moreCrumb(), new Kit.Crumb(Kit.Icon.NOTES, "Notes", null));

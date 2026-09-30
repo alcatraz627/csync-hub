@@ -61,6 +61,33 @@ final class Appearance {
      * root takes the keyboard's height instead, so nothing rides above the keys. Call after
      * setContentView, with the page's bottom bar or null.
      */
+    // On a wide screen a page of rows stays one readable column in the middle; wider than this it is padded.
+    private static final int COLUMN_DP = 640;
+
+    /**
+     * Keep a page's lists one column on a wide screen (landscape, a tablet): each given view is
+     * padded at the sides so its content is at most {@link #COLUMN_DP} wide and centred. The
+     * player page and a conversation are not given, since they use the width.
+     */
+    static void column(Activity activity, View... contents) {
+        View root = ((android.view.ViewGroup) activity.findViewById(android.R.id.content)).getChildAt(0);
+        if (root == null) return;
+        // Each view keeps the inset it was drawn with; the column's share is added on top of it.
+        int[][] own = new int[contents.length][];
+        for (int i = 0; i < contents.length; i++)
+            own[i] = contents[i] == null ? null : new int[]{contents[i].getPaddingLeft(), contents[i].getPaddingRight()};
+        root.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+            int width = r - l - v.getPaddingLeft() - v.getPaddingRight();
+            int cap = Math.round(COLUMN_DP * activity.getResources().getDisplayMetrics().density);
+            int side = Math.max(0, (width - cap) / 2);
+            for (int i = 0; i < contents.length; i++) {
+                View content = contents[i];
+                if (content != null && content.getPaddingLeft() != side + own[i][0])
+                    content.setPadding(side + own[i][0], content.getPaddingTop(), side + own[i][1], content.getPaddingBottom());
+            }
+        });
+    }
+
     static void edgeToEdge(Activity activity, View bottomBar) {
         android.view.Window window = activity.getWindow();
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false);
