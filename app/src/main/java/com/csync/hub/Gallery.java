@@ -25,7 +25,7 @@ final class Gallery {
         return begin(c, name, mime, null);
     }
 
-    /** As above; a file that is not a photo or video goes in {@code folder} inside Downloads/csync when one is named. */
+    /** As above, inside {@code folder} under csync when one is named, so a saved folder keeps its layout. */
     static Uri begin(Context c, String name, String mime, String folder) throws Exception {
         if (android.os.Build.VERSION.SDK_INT < 29) throw new Exception("Saving needs Android 10 or newer");
         boolean picture = mime != null && mime.startsWith("image/");
@@ -34,7 +34,7 @@ final class Gallery {
             : video ? MediaStore.Video.Media.EXTERNAL_CONTENT_URI : MediaStore.Downloads.EXTERNAL_CONTENT_URI;
         String root = picture ? Environment.DIRECTORY_PICTURES : video ? Environment.DIRECTORY_MOVIES
             : Environment.DIRECTORY_DOWNLOADS;
-        String inside = folder == null || folder.isEmpty() || picture || video ? ""
+        String inside = folder == null || folder.isEmpty() ? ""
             : "/" + folder.replaceAll("[\\\\:*?\"<>|]", "_").replaceAll("^/+|/+$", "");
         ContentValues values = new ContentValues();
         values.put(MediaStore.MediaColumns.DISPLAY_NAME, name);

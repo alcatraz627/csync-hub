@@ -23,6 +23,8 @@ final class PhoneSave {
     /** One file to save: its name, its type, and how to read it. */
     static final class Entry {
         final String name, mime; final Opener opener;
+        // A folder below the save's own folder, for a file deeper inside a saved folder.
+        String within;
         Entry(String name, String mime, Opener opener) { this.name = name; this.mime = mime; this.opener = opener; }
     }
 
@@ -38,8 +40,9 @@ final class PhoneSave {
     }
 
     /**
-     * Save the entries as one piece of background work. {@code folder} names a folder inside
-     * Downloads/csync for files that are not photos or videos, or null for Downloads/csync itself.
+     * Save the entries as one piece of background work. {@code folder} names a folder under each
+     * kind's csync folder, or null for the csync folder itself. An entry's own folder, when set,
+     * goes beneath it.
      */
     static void save(Context c, String what, String folder, List<Entry> entries) {
         if (entries.isEmpty()) return;
@@ -54,7 +57,9 @@ final class PhoneSave {
                 Uri target = null;
                 try (InputStream in = entry.opener.open()) {
                     if (in == null) throw new Exception("It could not be read");
-                    target = Gallery.begin(c, entry.name, entry.mime, folder);
+                    String place = entry.within == null || entry.within.isEmpty() ? folder
+                        : (folder == null ? "" : folder + "/") + entry.within;
+                    target = Gallery.begin(c, entry.name, entry.mime, place);
                     try (OutputStream out = c.getContentResolver().openOutputStream(target)) {
                         if (out == null) throw new Exception("The phone's storage is not available");
                         byte[] buffer = new byte[65536];

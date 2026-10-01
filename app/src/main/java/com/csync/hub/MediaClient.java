@@ -28,6 +28,19 @@ final class MediaClient {
 
     String url(String path) { return "http://" + host + ":8792" + path; }
 
+    /** A file on the Pi as a stream to read from, such as one file of a folder being saved. Close it when done. */
+    InputStream openItem(String itemId) throws Exception {
+        HttpURLConnection connection = (HttpURLConnection) new URL(url("/v1/items/" + enc(itemId) + "/stream")).openConnection();
+        connection.setConnectTimeout(5000);
+        connection.setReadTimeout(60000);
+        connection.setRequestProperty("X-Csync-Token", token);
+        if (connection.getResponseCode() >= 400) {
+            connection.disconnect();
+            throw new Exception("The Pi did not hand the file over");
+        }
+        return connection.getInputStream();
+    }
+
     String token() { return token; }
 
     static String enc(String value) {

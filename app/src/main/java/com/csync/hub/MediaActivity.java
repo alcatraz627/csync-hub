@@ -1407,8 +1407,41 @@ public final class MediaActivity extends AppCompatActivity {
                 new Kit.Action(Kit.Icon.FOLDER, "Open", null, open),
                 new Kit.Action(Kit.Icon.DISPLAY, "Photos as a slideshow", "Every image in this folder, in turn, on the Pi screen",
                     () -> slideshow(item.optString("driveId"), item.optString("relativePath"), name)),
+                new Kit.Action(R.drawable.csi_download, "Save on this phone", "Every file in it, keeping its folders",
+                    () -> saveFolder(item.optString("driveId"), item.optString("relativePath"))),
                 new Kit.Action(R.drawable.csi_copy, "Copy path", item.optString("relativePath"),
                     () -> copy(item.optString("relativePath")))));
+    }
+
+    /** Save a whole folder from the Pi onto this phone, in the same layout, as one piece of background work. */
+    private void saveFolder(String drive, String folder) {
+        new Thread(() -> {
+            JSONObject tree = null;
+            String problem = null;
+            try {
+                tree = client.get("/v1/items/tree?driveId=" + MediaClient.enc(drive) + "&path=" + MediaClient.enc(folder));
+            } catch (Exception error) { problem = friendlyError(error); }
+            JSONObject listed = tree;
+            String failure = problem;
+            ui.post(() -> {
+                if (failure != null) { Kit.failed(this, "The folder could not be listed. " + failure, () -> saveFolder(drive, folder)); return; }
+                JSONArray files = listed.optJSONArray("files");
+                if (files == null || files.length() == 0) { Kit.failed(this, "There is nothing in this folder to save.", null); return; }
+                java.util.List<PhoneSave.Entry> entries = new java.util.ArrayList<>();
+                for (int i = 0; i < files.length(); i++) {
+                    JSONObject file = files.optJSONObject(i);
+                    if (file == null) continue;
+                    String id = file.optString("id");
+                    PhoneSave.Entry entry = new PhoneSave.Entry(file.optString("name"),
+                        file.optString("mime", "application/octet-stream"), () -> client.openItem(id));
+                    entry.within = file.optString("within");
+                    entries.add(entry);
+                }
+                String name = listed.optString("name", "Folder");
+                PhoneSave.save(this, files.length() + " files from " + name, name, entries);
+                if (listed.optBoolean("truncated")) Kit.failed(this, "Only the first " + files.length() + " files are being saved.", null);
+            });
+        }, "media-folder-save").start();
     }
 
     /** Show a folder's photos on the Pi screen one after another. The Pi says so when the folder has none. */
