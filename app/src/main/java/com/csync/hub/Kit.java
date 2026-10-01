@@ -49,6 +49,21 @@ final class Kit {
 
     static void setStatus(View dot, Status s) {
         dot.setBackgroundTintList(ColorStateList.valueOf(statusColor(dot.getContext(), s)));
+        // A live thing breathes; everything else holds still.
+        dot.animate().cancel();
+        if (s == Status.GOOD) {
+            android.animation.ObjectAnimator breath = android.animation.ObjectAnimator.ofFloat(dot, View.ALPHA, 1f, 0.35f);
+            breath.setDuration(1400);
+            breath.setRepeatMode(android.animation.ValueAnimator.REVERSE);
+            breath.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+            breath.setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator());
+            dot.setTag(R.id.kit_dot, breath);
+            breath.start();
+        } else {
+            Object held = dot.getTag(R.id.kit_dot);
+            if (held instanceof android.animation.Animator) ((android.animation.Animator) held).cancel();
+            dot.setAlpha(1f);
+        }
     }
 
     // ---- rows ----
@@ -632,6 +647,19 @@ final class Kit {
 
     /** Fill a large action tile: its icon, its one word, and what it says to a screen reader. */
     static View bindAction(View tile, int icon, CharSequence word, CharSequence spoken, View.OnClickListener click) {
+        // The primary actions are the one place the accent may wash a surface: a diagonal tint
+        // that fades into the card, under an accent hairline.
+        Context c = tile.getContext();
+        int accent = com.google.android.material.color.MaterialColors.getColor(c,
+            com.google.android.material.R.attr.colorPrimary, ContextCompat.getColor(c, R.color.coral));
+        int surface = ContextCompat.getColor(c, R.color.surface);
+        android.graphics.drawable.GradientDrawable wash = new android.graphics.drawable.GradientDrawable(
+            android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+            new int[]{androidx.core.graphics.ColorUtils.blendARGB(surface, accent, 0.16f), surface});
+        wash.setCornerRadius(dp(c, 14));
+        wash.setStroke(dp(c, 1), androidx.core.graphics.ColorUtils.blendARGB(surface, accent, 0.35f));
+        tile.setBackground(new android.graphics.drawable.RippleDrawable(
+            ColorStateList.valueOf(androidx.core.graphics.ColorUtils.setAlphaComponent(accent, 40)), wash, null));
         ((ImageView) tile.findViewById(R.id.kit_icon)).setImageResource(icon);
         ((TextView) tile.findViewById(R.id.kit_title)).setText(word);
         tile.setContentDescription(spoken);

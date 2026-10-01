@@ -873,9 +873,27 @@ public final class MediaActivity extends AppCompatActivity {
             cover.setBackgroundResource(R.drawable.player_poster_bg);
             cover.setClipToOutline(true);
             cover.setContentDescription("The cover image on the Pi screen");
-            LinearLayout.LayoutParams frame = new LinearLayout.LayoutParams(-1, dp(170));
+            // The cover is the page's picture: a scrim rises from its foot and a small reading names it.
+            android.widget.FrameLayout picture = new android.widget.FrameLayout(this);
+            picture.setBackgroundResource(R.drawable.player_poster_bg);
+            picture.setClipToOutline(true);
+            picture.addView(cover, new android.widget.FrameLayout.LayoutParams(-1, -1));
+            View scrim = new View(this);
+            scrim.setBackground(new android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.BOTTOM_TOP,
+                new int[]{0xB3000000, 0x00000000}));
+            picture.addView(scrim, new android.widget.FrameLayout.LayoutParams(-1, dp(72), android.view.Gravity.BOTTOM));
+            TextView caption = new TextView(this);
+            caption.setTextAppearance(R.style.Kit_Text_Section);
+            caption.setTextColor(0xFFFFFFFF);
+            caption.setAlpha(0.9f);
+            caption.setText("Cover · on the Pi screen");
+            android.widget.FrameLayout.LayoutParams at = new android.widget.FrameLayout.LayoutParams(-2, -2, android.view.Gravity.BOTTOM | android.view.Gravity.START);
+            at.setMargins(dp(14), 0, 0, dp(12));
+            picture.addView(caption, at);
+            LinearLayout.LayoutParams frame = new LinearLayout.LayoutParams(-1, dp(190));
             frame.topMargin = dp(12);
-            host.addView(cover, frame);
+            host.addView(picture, frame);
         }
         java.util.List<Kit.Section> sections = new java.util.ArrayList<>();
         // Films and shows are chosen from Media itself, one step up the path, so no row points there.
