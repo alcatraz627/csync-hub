@@ -551,17 +551,17 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         java.util.List<Kit.Stat> stats = new java.util.ArrayList<>();
         if (reading.has("cpuPercent")) {
             double cpu = reading.optDouble("cpuPercent");
-            stats.add(new Kit.Stat("Processor", Math.round(cpu) + "%", cpu));
+            stats.add(new Kit.Stat(R.drawable.csi_cpu, "CPU", Math.round(cpu) + "%", cpu));
         }
         JSONObject memory = reading.optJSONObject("memory");
         if (memory != null && memory.optLong("totalBytes") > 0) {
             double share = memory.optLong("usedBytes") * 100.0 / memory.optLong("totalBytes");
-            stats.add(new Kit.Stat("Memory", Math.round(share) + "%", share));
+            stats.add(new Kit.Stat(R.drawable.csi_ram, "RAM", Math.round(share) + "%", share));
         }
         if (reading.has("temperatureC")) {
             double temp = reading.optDouble("temperatureC");
             // 85 C is where the Pi slows itself, so the meter reads against that.
-            stats.add(new Kit.Stat("Heat", Math.round(temp) + "°C", temp * 100 / 85));
+            stats.add(new Kit.Stat(R.drawable.csi_temp, "Temp", Math.round(temp) + "°C", temp * 100 / 85));
         }
         if (!stats.isEmpty()) Kit.statCards(piBusy, stats);
         JSONArray processes = reading.optJSONArray("processes");
@@ -794,19 +794,69 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         hero.addView(stack, new android.widget.FrameLayout.LayoutParams(-1, -2));
         page.addView(hero, new LinearLayout.LayoutParams(-1, -2));
 
+        // An update to install is something to tap, so it is a card; being up to date is only a fact.
         Kit.label(page, "This app");
-        LinearLayout group = Kit.group(page);
-        View update = Kit.addRow(group);
-        Kit.bindRow(update, R.drawable.csi_download, stagedUpdate == null ? "Up to date" : "csync " + stagedUpdate + " is ready",
-            stagedUpdate == null ? "Version " + appVersion() + ", from the Pi" : "Tap to install", null, stagedUpdate != null);
-        if (stagedUpdate != null) update.setOnClickListener(v -> { AppUpdater.start(this, null); stagedUpdate = null; renderHelp(); });
-        else update.setClickable(false);
+        if (stagedUpdate != null) {
+            View update = Kit.addRow(Kit.group(page));
+            Kit.bindRow(update, R.drawable.csi_download, "csync " + stagedUpdate + " is ready", "Tap to install", null, true);
+            update.setOnClickListener(v -> { AppUpdater.start(this, null); stagedUpdate = null; renderHelp(); });
+        } else {
+            Kit.facts(page, java.util.Arrays.asList(new String[]{"Version", appVersion()}, new String[]{"Updates", "Up to date"}));
+        }
+
         Kit.label(page, "Your Pi");
-        group = Kit.group(page);
         String pi = Prefs.assistIp(this);
-        View address = Kit.addRow(group);
-        Kit.bindRow(address, R.drawable.csi_system, "Raspberry Pi", null, pi.isEmpty() ? "Not set" : pi, true);
+        View address = Kit.addRow(Kit.group(page));
+        Kit.bindRow(address, R.drawable.csi_system, "Raspberry Pi", "Health, processes and the screen", pi.isEmpty() ? "Not set" : pi, true);
         address.setOnClickListener(v -> openPlace("pi"));
+        LinearLayout facts = new LinearLayout(this);
+        facts.setOrientation(LinearLayout.VERTICAL);
+        page.addView(facts, new LinearLayout.LayoutParams(-1, -2));
+        if (pi.isEmpty() || Prefs.token(this).isEmpty()) return;
+        final MediaClient client = new MediaClient(pi, Prefs.token(this));
+        new Thread(() -> {
+            JSONObject reading = null;
+            try { reading = client.get("/v1/system"); } catch (Exception ignored) { }
+            final JSONObject got = reading;
+            ui.post(() -> { if (current == 6 && moreDetail == 2) showPiFacts(facts, got); });
+        }, "about-pi").start();
+    }
+
+    /** What the Pi is and how it is doing, as plain facts under its row on About. */
+    private void showPiFacts(LinearLayout host, JSONObject reading) {
+        host.removeAllViews();
+        if (reading == null) {
+            Kit.facts(host, java.util.Collections.singletonList(new String[]{"Status", "Not answering"}));
+            return;
+        }
+        JSONObject about = reading.optJSONObject("about");
+        if (about == null) about = new JSONObject();
+        java.util.List<String[]> pairs = new java.util.ArrayList<>();
+        if (about.has("model")) pairs.add(new String[]{"Board", about.optString("model").replace("Raspberry Pi", "Pi")});
+        if (about.has("os")) pairs.add(new String[]{"System", about.optString("os").replace("Debian GNU/Linux", "Debian")});
+        if (about.has("kernel")) pairs.add(new String[]{"Kernel", about.optString("kernel")});
+        if (about.has("hostname")) pairs.add(new String[]{"Name", about.optString("hostname")});
+        if (about.has("uptimeSeconds")) pairs.add(new String[]{"Up for", span(about.optLong("uptimeSeconds"))});
+        if (about.has("cores")) pairs.add(new String[]{"Cores", String.valueOf(about.optInt("cores"))});
+        JSONArray load = about.optJSONArray("load");
+        if (load != null && load.length() == 3)
+            pairs.add(new String[]{"Load", load.optDouble(0) + " · " + load.optDouble(1) + " · " + load.optDouble(2)});
+        JSONObject memory = reading.optJSONObject("memory");
+        if (memory != null) pairs.add(new String[]{"Memory", used(memory)});
+        JSONObject disk = about.optJSONObject("disk");
+        if (disk != null) pairs.add(new String[]{"Storage", used(disk)});
+        if (reading.has("temperatureC")) pairs.add(new String[]{"Temp", Math.round(reading.optDouble("temperatureC")) + "°C"});
+        Kit.facts(host, pairs);
+    }
+
+    private static String used(JSONObject amount) {
+        double gb = 1024.0 * 1024 * 1024;
+        return String.format(java.util.Locale.US, "%.1f of %.1f GB", amount.optLong("usedBytes") / gb, amount.optLong("totalBytes") / gb);
+    }
+
+    private static String span(long seconds) {
+        long days = seconds / 86400, hours = seconds % 86400 / 3600, minutes = seconds % 3600 / 60;
+        return days > 0 ? days + "d " + hours + "h" : hours > 0 ? hours + "h " + minutes + "m" : minutes + "m";
     }
 
     private void showToolsDetail(int detail) {
@@ -1353,6 +1403,42 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     }
 
     // home_health -> "Home health"; list_devices -> "List devices".
+    /**
+     * The icon for each thinking level a provider may offer. A level missing here falls back to
+     * the plain bars, so a provider can add one and it still draws; add its icon here when it does.
+     */
+    private static final java.util.Map<String, Integer> EFFORT_ICONS = new java.util.HashMap<>();
+    static {
+        EFFORT_ICONS.put("minimal", R.drawable.csi_effort_low);
+        EFFORT_ICONS.put("low", R.drawable.csi_effort_low);
+        EFFORT_ICONS.put("medium", R.drawable.csi_effort_medium);
+        EFFORT_ICONS.put("high", R.drawable.csi_effort_high);
+        EFFORT_ICONS.put("xhigh", R.drawable.csi_effort_xhigh);
+        EFFORT_ICONS.put("max", R.drawable.csi_effort_max);
+        EFFORT_ICONS.put("ultra", R.drawable.csi_effort_ultra);
+    }
+
+    private static int effortIcon(String level) {
+        Integer icon = EFFORT_ICONS.get(level == null ? "" : level.toLowerCase(java.util.Locale.US));
+        return icon == null ? R.drawable.csi_bars : icon;
+    }
+
+    /** A square, icon-only choice: tinted with the accent when chosen, outlined otherwise. */
+    private View effortChip(int icon, boolean on) {
+        android.widget.FrameLayout chip = new android.widget.FrameLayout(this);
+        android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
+        shape.setCornerRadius(dp(14));
+        if (on) shape.setColor(androidx.core.graphics.ColorUtils.blendARGB(col(R.color.surface), Kit.accentText(this), 0.16f));
+        else { shape.setColor(col(R.color.surface)); shape.setStroke(dp(1), col(R.color.border)); }
+        chip.setBackground(shape);
+        chip.setForeground(androidx.core.content.ContextCompat.getDrawable(this, Kit.outValue(this)));
+        android.widget.ImageView symbol = new android.widget.ImageView(this);
+        symbol.setImageResource(icon);
+        symbol.setImageTintList(android.content.res.ColorStateList.valueOf(on ? Kit.accentText(this) : col(R.color.dim)));
+        chip.addView(symbol, new android.widget.FrameLayout.LayoutParams(dp(20), dp(20), android.view.Gravity.CENTER));
+        return chip;
+    }
+
     private String prettyName(String raw) {
         if (raw == null || raw.isEmpty()) return "(tool)";
         String s = raw.replace('_', ' ');
@@ -1367,7 +1453,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private void setupSettingsPage() {
         renderThemeChoice();
         String size = Prefs.textSize(this);
-        Kit.segmented(pageSettings.findViewById(R.id.set_text_size_group), null,
+        Kit.segmented(pageSettings.findViewById(R.id.set_text_size_group),
+            new int[]{R.drawable.csi_text, R.drawable.csi_text, R.drawable.csi_text},
             new String[]{"Small", "Medium", "Large"}, Math.max(0, java.util.Arrays.asList(TEXT_SIZES).indexOf(size)),
             i -> { Prefs.saveTextSize(this, TEXT_SIZES[i]); recreate(); });
         wireAccent(R.id.set_accent_coral, "coral", R.color.coral);
@@ -1394,7 +1481,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         java.util.List<org.json.JSONObject> rail = RailActions.rail(this);
         StringBuilder names = new StringBuilder();
         for (org.json.JSONObject item : rail) names.append(names.length() == 0 ? "" : ", ").append(item.optString("label"));
-        Kit.bindRow(Kit.addRow(group), R.drawable.csi_menu, "Bar 1, top left",
+        Kit.bindRow(Kit.addRow(group), R.drawable.csi_plus, "Bar 1, from Quick",
             rail.isEmpty() ? "Nothing yet. The first item is one tap; the rest open on a pull down" : names,
             rail.isEmpty() ? null : rail.size() + (rail.size() == 1 ? " item" : " items"), true)
             .setOnClickListener(v -> railSheet());
@@ -1604,42 +1691,72 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     private void showCustomAccentPicker() {
         int initial = Prefs.customAccent(this);
+        // The mixer is one card: the colour as it will look (a swatch like the ones above, with its
+        // code), three sliders in the page's own style, and a small Use beside the swatch.
         LinearLayout rows = new LinearLayout(this);
         rows.setOrientation(LinearLayout.VERTICAL);
-        rows.setPadding(dp(20), dp(8), dp(20), dp(4));
-        View preview = new View(this);
-        rows.addView(preview, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        rows.setBackgroundResource(R.drawable.card_bg);
+        rows.setPadding(dp(16), dp(8), dp(12), dp(10));
         int[] channels = {android.graphics.Color.red(initial),
             android.graphics.Color.green(initial), android.graphics.Color.blue(initial)};
-        String[] labels = {"Red", "Green", "Blue"};
-        for (int i = 0; i < channels.length; i++) {
-            final int channel = i;
-            TextView label = new TextView(this);
-            label.setText(labels[i]);
-            rows.addView(label);
-            android.widget.SeekBar slider = new android.widget.SeekBar(this);
-            slider.setMax(255);
-            slider.setProgress(channels[i]);
-            slider.setContentDescription(labels[i] + " color channel");
-            slider.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
-                @Override public void onProgressChanged(android.widget.SeekBar bar, int value, boolean user) {
-                    channels[channel] = value;
-                    preview.setBackgroundColor(android.graphics.Color.rgb(channels[0], channels[1], channels[2]));
-                }
-                @Override public void onStartTrackingTouch(android.widget.SeekBar bar) {}
-                @Override public void onStopTrackingTouch(android.widget.SeekBar bar) {}
-            });
-            rows.addView(slider);
-        }
-        preview.setBackgroundColor(initial);
-        LinearLayout actions = new LinearLayout(this);
-        actions.setGravity(android.view.Gravity.END);
-        actions.setPadding(0, dp(8), 0, 0);
-        actions.addView(Kit.tonalButton(this, R.drawable.csi_check, "Use this colour", () -> {
+
+        LinearLayout head = new LinearLayout(this);
+        head.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        View preview = new View(this);
+        head.addView(preview, new LinearLayout.LayoutParams(dp(36), dp(36)));
+        TextView code = new TextView(this);
+        code.setTextAppearance(R.style.Kit_Text_RowSub);
+        code.setTypeface(android.graphics.Typeface.MONOSPACE);
+        code.setPadding(dp(12), 0, 0, 0);
+        head.addView(code, new LinearLayout.LayoutParams(0, -2, 1));
+        head.addView(Kit.compactButton(this, R.drawable.csi_check, "Use", true, () -> {
             Prefs.saveCustomAccent(this, android.graphics.Color.rgb(channels[0], channels[1], channels[2]));
             recreate();
         }));
-        rows.addView(actions);
+        rows.addView(head);
+        Runnable show = () -> {
+            int now = android.graphics.Color.rgb(channels[0], channels[1], channels[2]);
+            paintAccentSwatch(preview, now, false);
+            code.setText(String.format("#%06X", now & 0xFFFFFF));
+        };
+
+        String[] labels = {"Red", "Green", "Blue"};
+        int[] tints = {0xFFE5484D, 0xFF30A46C, 0xFF3E7BFA};
+        for (int i = 0; i < channels.length; i++) {
+            final int channel = i;
+            LinearLayout line = new LinearLayout(this);
+            line.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            TextView label = new TextView(this);
+            label.setText(labels[i].substring(0, 1));
+            label.setTextAppearance(R.style.Kit_Text_RowSub);
+            label.setTypeface(android.graphics.Typeface.MONOSPACE, android.graphics.Typeface.BOLD);
+            line.addView(label, new LinearLayout.LayoutParams(dp(18), -2));
+            com.google.android.material.slider.Slider slider = new com.google.android.material.slider.Slider(this);
+            slider.setValueFrom(0);
+            slider.setValueTo(255);
+            slider.setStepSize(1);
+            slider.setValue(channels[i]);
+            slider.setTickVisible(false);
+            slider.setLabelBehavior(com.google.android.material.slider.LabelFormatter.LABEL_GONE);
+            slider.setTrackActiveTintList(android.content.res.ColorStateList.valueOf(tints[i]));
+            slider.setThumbTintList(android.content.res.ColorStateList.valueOf(tints[i]));
+            slider.setTrackInactiveTintList(android.content.res.ColorStateList.valueOf(col(R.color.surface2)));
+            slider.setContentDescription(labels[i]);
+            TextView value = new TextView(this);
+            value.setTextAppearance(R.style.Kit_Text_RowSub);
+            value.setTypeface(android.graphics.Typeface.MONOSPACE);
+            value.setGravity(android.view.Gravity.END);
+            value.setText(String.valueOf(channels[i]));
+            slider.addOnChangeListener((s, v, fromUser) -> {
+                channels[channel] = Math.round(v);
+                value.setText(String.valueOf(channels[channel]));
+                show.run();
+            });
+            line.addView(slider, new LinearLayout.LayoutParams(0, dp(48), 1));
+            line.addView(value, new LinearLayout.LayoutParams(dp(34), -2));
+            rows.addView(line);
+        }
+        show.run();
         // The mixer opens in place under the swatches, and a second tap on the swatch folds it away.
         // The swatches scroll sideways, so the mixer goes under the scroller, in the page itself.
         View swatches = (View) pageSettings.findViewById(R.id.set_accent_custom).getParent();
@@ -1648,8 +1765,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         View open = holder.findViewWithTag("accent-mixer");
         if (open != null) { holder.removeView(open); return; }
         rows.setTag("accent-mixer");
-        rows.setPadding(dp(4), dp(8), dp(4), dp(4));
-        holder.addView(rows, holder.indexOfChild(swatches) + 1);
+        LinearLayout.LayoutParams gap = new LinearLayout.LayoutParams(-1, -2);
+        gap.topMargin = dp(10);
+        holder.addView(rows, holder.indexOfChild(swatches) + 1, gap);
     }
 
     // ---------------- system page (Shizuku top) ----------------
@@ -1719,12 +1837,12 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             String value = cpu.replace("CPU ", "").trim();
             double share = 0;
             try { share = Double.parseDouble(value.replace("%", "")); } catch (NumberFormatException ignored) { }
-            stats.add(new Kit.Stat("Processor", value, share));
+            stats.add(new Kit.Stat(R.drawable.csi_cpu, "CPU", value, share));
         }
         long total = matchMB(memLine, "total"), used = matchMB(memLine, "used");
-        if (total > 0) stats.add(new Kit.Stat("Memory", Math.round(used * 100.0 / total) + "%", used * 100.0 / total));
+        if (total > 0) stats.add(new Kit.Stat(R.drawable.csi_ram, "RAM", Math.round(used * 100.0 / total) + "%", used * 100.0 / total));
         String tasks = matchOne(tasksLine, "Tasks:\\s+(\\d+)");
-        if (!tasks.isEmpty()) stats.add(new Kit.Stat("Running", tasks, -1));
+        if (!tasks.isEmpty()) stats.add(new Kit.Stat(R.drawable.csi_menu, "Running", tasks, -1));
         if (!stats.isEmpty()) Kit.statCards(body, stats);
         Kit.label(body, "Busiest apps");
         LinearLayout busiest = Kit.group(body);
@@ -2039,7 +2157,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     /**
      * Everything sent from this phone, newest first. A row opens what it can do with the item; a
-     * failed one has Retry at its end; a file that can no longer be opened here says so quietly,
+     * failed one has Retry at its end; a file no longer on this phone says Missing quietly,
      * apart from whether it was delivered.
      */
     private void renderSentHistory() {
@@ -2061,9 +2179,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             View row = Kit.addRow(group);
             CharSequence sub = item.optString("target") + " · " + relTime(item.optLong("at"));
             if (gone) {
-                android.text.SpannableStringBuilder words = new android.text.SpannableStringBuilder(sub).append("\n");
+                android.text.SpannableStringBuilder words = new android.text.SpannableStringBuilder(sub).append(" · ");
                 int from = words.length();
-                words.append("Can no longer be opened from this phone");
+                words.append("Missing");
                 words.setSpan(new android.text.style.ForegroundColorSpan(Kit.statusColor(this, Kit.Status.WARN)),
                     from, words.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 sub = words;
@@ -2606,13 +2724,12 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                 final String value = k < 0 ? "" : levels.optString(k);
                 boolean on = value.equals(choice[1]);
                 String words = k < 0 ? "Default" : prettyName(value);
-                View chip = on ? Kit.tonalButton(this, R.drawable.csi_bars, words, () -> { })
-                    : Kit.button(this, R.drawable.csi_bars, words, R.color.dim, () -> { });
-                // Narrower than a page button, so three levels and Save fit one row without cutting a word.
-                chip.setPadding(dp(11), 0, dp(12), 0);
+                // Each level is its icon alone; holding it says its name.
+                View chip = effortChip(k < 0 ? R.drawable.csi_speed : effortIcon(value), on);
                 chip.setOnClickListener(v -> { choice[1] = value; render[0].run(); });
                 chip.setContentDescription("Thinking " + words + (on ? ", chosen" : ""));
-                LinearLayout.LayoutParams gap = new LinearLayout.LayoutParams(-2, -2);
+                chip.setTooltipText(words);
+                LinearLayout.LayoutParams gap = new LinearLayout.LayoutParams(dp(48), dp(48));
                 gap.setMarginEnd(dp(6));
                 chips.addView(chip, gap);
             }
@@ -3414,7 +3531,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         // With favourites the list labels its own two sections, so the page's single heading steps aside.
         pageChat.findViewById(R.id.chat_recent_heading).setVisibility(shown == 0 || favourites > 0 ? View.GONE : View.VISIBLE);
         if (shown > 0) return;
-        View showAll = Kit.button(this, R.drawable.csi_menu, "Show all conversations", R.color.text, () -> selectChatFilter("All"));
+        View showAll = Kit.button(this, R.drawable.csi_menu, "View All", R.color.text, () -> selectChatFilter("All"));
         if (!q.isEmpty()) Kit.empty(chatHistoryList, R.drawable.csi_search,
             "No conversation matches \"" + chatSearch.getText().toString().trim() + "\"", null, null);
         else if (showFavOnly) Kit.empty(chatHistoryList, R.drawable.csi_favorite, "No favorites yet",

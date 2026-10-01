@@ -133,8 +133,7 @@ public final class NotesActivity extends AppCompatActivity {
         rows.setOrientation(LinearLayout.VERTICAL);
         rows.setPadding(dp(20), 0, dp(20), dp(16));
         scroll.addView(rows);
-        com.google.android.material.bottomnavigation.BottomNavigationView nav =
-            new com.google.android.material.bottomnavigation.BottomNavigationView(this);
+        com.google.android.material.bottomnavigation.BottomNavigationView nav = new SixTabNavigationView(this);
         nav.inflateMenu(R.menu.nav_menu);
         nav.setLabelVisibilityMode(com.google.android.material.navigation.NavigationBarView.LABEL_VISIBILITY_UNLABELED);
         nav.setItemIconSize(dp(24));

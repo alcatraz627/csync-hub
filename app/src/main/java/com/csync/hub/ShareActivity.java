@@ -126,9 +126,14 @@ public class ShareActivity extends AppCompatActivity {
         String post = files.isEmpty() && !step ? InstagramSave.link(text) : null;
         if (post != null) {
             // An Instagram post is saved from its own page; sending the link stays below it.
+            // Sending the link is four short choices, so they are small cards rather than a list.
             instagram = new InstagramSave(this, body, post, () -> {
                 Kit.label(body, "Or send the link");
-                renderActions();
+                Kit.tileGrid(body, java.util.Arrays.asList(
+                    new Kit.Action(Kit.Icon.DEVICE, "Device", null, this::chooseDevice),
+                    new Kit.Action(Kit.Icon.CHAT, "Chat", null, this::toConversation),
+                    new Kit.Action(Kit.Icon.NOTES, "Note", null, this::toNote),
+                    new Kit.Action(R.drawable.ic_pin, "Pin", null, this::toPin)));
             });
             instagram.show();
             return;

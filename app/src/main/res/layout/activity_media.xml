@@ -227,7 +227,7 @@
                 android:src="@drawable/csi_speed" android:contentDescription="Playback settings"/>
         </LinearLayout>
     </LinearLayout>
-    <com.google.android.material.bottomnavigation.BottomNavigationView
+    <com.csync.hub.SixTabNavigationView
         android:id="@+id/media_bottom_nav" android:layout_width="match_parent"
         android:layout_height="wrap_content" android:minHeight="64dp" android:background="@color/surface"
         app:labelVisibilityMode="unlabeled" app:itemIconSize="24dp"

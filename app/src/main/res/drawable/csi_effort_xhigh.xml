@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generated from the clickthrough mock icons.js by icons_to_vectors.py; edit the mock, not this file. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path android:fillColor="#FF000000" android:fillType="evenOdd" android:pathData="M12 2c1 4 6 6.5 6 12a6 6 0 0 1-12 0c0-3 1.8-5 3-6 0 2 .8 3.3 2 3.5 0-4-1-6.5 1-9.5z"/>
+</vector>

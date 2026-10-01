@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Not a place: tapping it opens the quick rail upward over the bar (Rail.java). -->
+    <item android:id="@+id/nav_rail" android:icon="@drawable/csi_plus" android:title="Quick"/>
     <item android:id="@+id/nav_home" android:icon="@drawable/csi_home" android:title="Home"/>
     <item android:id="@+id/nav_media" android:icon="@drawable/csi_media" android:title="Media"/>
     <item android:id="@+id/nav_share" android:icon="@drawable/csi_share" android:title="Share"/>

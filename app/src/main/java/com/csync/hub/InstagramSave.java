@@ -60,6 +60,7 @@ final class InstagramSave {
     private LinearLayout page;
     private View saveButton;
     private TextView pickAll;
+    private ImageView pickMark;
 
     /** The Instagram post link inside shared words, or null when there is none. */
     static String link(String shared) {
@@ -146,7 +147,21 @@ final class InstagramSave {
         chosen.clear();
         for (int i = 0; i < count; i++) if (!isSaved(items.optJSONObject(i).optInt("index"))) chosen.add(i + 1);
 
-        Kit.label(page, count > 1 ? "Choose what to keep" : "Keep it");
+        // The heading and the select-all mark share a line, so choosing every part is one small tap.
+        LinearLayout head = new LinearLayout(a);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        page.addView(head, new LinearLayout.LayoutParams(-1, -2));
+        TextView title = Kit.label(head, count > 1 ? "Select Media" : "Media");
+        title.setLayoutParams(new LinearLayout.LayoutParams(0, -2, 1));
+        pickAll = null;
+        pickMark = null;
+        if (count > 1) {
+            pickMark = new ImageView(a);
+            int pad = Kit.dp(a, 12);
+            pickMark.setPadding(pad, pad, pad, pad);
+            pickMark.setOnClickListener(v -> toggleAll());
+            head.addView(pickMark, new LinearLayout.LayoutParams(Kit.dp(a, 48), Kit.dp(a, 48)));
+        }
         GridLayout grid = new GridLayout(a);
         int columns = count == 1 ? 1 : count == 2 || count == 4 ? 2 : 3;
         grid.setColumnCount(columns);
@@ -155,14 +170,10 @@ final class InstagramSave {
         for (int i = 0; i < count; i++) tiles.add(tile(grid, items.optJSONObject(i), columns));
 
         LinearLayout actions = actionRow();
-        if (count > 1) {
-            View all = Kit.tonalButton(a, R.drawable.csi_check, "Select all", this::toggleAll);
-            pickAll = findText(all);
-            actions.addView(all);
-            View spacer = new View(a);
-            actions.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1));
-        }
-        saveButton = Kit.primaryButton(a, R.drawable.csi_download, "", this::save);
+        actions.addView(Kit.compactButton(a, Kit.Icon.DISPLAY, "Pi screen", false, this::showOnPi));
+        View between = new View(a);
+        actions.addView(between, new LinearLayout.LayoutParams(Kit.dp(a, 8), 1));
+        saveButton = Kit.compactButton(a, R.drawable.csi_download, "Save", true, this::save);
         actions.addView(saveButton);
         refresh();
         drawOthers();
@@ -201,7 +212,14 @@ final class InstagramSave {
         load(item.optString("thumbnail"), picture, columns == 1 ? 900 : 360);
 
         if (video) tile.addView(badge(R.drawable.csi_video, null), corner(Gravity.BOTTOM | Gravity.START));
-        if (isSaved(index)) tile.addView(badge(R.drawable.csi_download, "Saved"), corner(Gravity.BOTTOM | Gravity.END));
+        long size = item.optLong("size");
+        if (size > 0) tile.addView(badge(0, readableSize(size)), corner(Gravity.BOTTOM | Gravity.END));
+        // Already in the gallery: a small mark, not a word, so the picture stays the subject.
+        if (isSaved(index)) {
+            View saved = badge(R.drawable.csi_download, null);
+            saved.setContentDescription("Saved");
+            tile.addView(saved, corner(Gravity.TOP | Gravity.START));
+        }
         ImageView check = new ImageView(a);
         check.setImageResource(R.drawable.csi_check);
         check.setPadding(Kit.dp(a, 4), Kit.dp(a, 4), Kit.dp(a, 4), Kit.dp(a, 4));
@@ -226,24 +244,33 @@ final class InstagramSave {
     private View badge(int icon, String words) {
         LinearLayout badge = new LinearLayout(a);
         badge.setGravity(Gravity.CENTER_VERTICAL);
-        badge.setPadding(Kit.dp(a, 6), Kit.dp(a, 3), Kit.dp(a, 8), Kit.dp(a, 3));
+        boolean iconOnly = words == null;
+        badge.setPadding(Kit.dp(a, iconOnly ? 4 : 6), Kit.dp(a, iconOnly ? 4 : 2), Kit.dp(a, iconOnly ? 4 : 6), Kit.dp(a, iconOnly ? 4 : 2));
         GradientDrawable shape = new GradientDrawable();
         shape.setColor(0x99000000);
         shape.setCornerRadius(Kit.dp(a, 10));
         badge.setBackground(shape);
-        ImageView symbol = new ImageView(a);
-        symbol.setImageResource(icon);
-        symbol.setImageTintList(ColorStateList.valueOf(0xFFFFFFFF));
-        badge.addView(symbol, new LinearLayout.LayoutParams(Kit.dp(a, 14), Kit.dp(a, 14)));
+        if (icon != 0) {
+            ImageView symbol = new ImageView(a);
+            symbol.setImageResource(icon);
+            symbol.setImageTintList(ColorStateList.valueOf(0xFFFFFFFF));
+            badge.addView(symbol, new LinearLayout.LayoutParams(Kit.dp(a, 12), Kit.dp(a, 12)));
+        }
         if (words != null) {
             TextView label = new TextView(a);
             label.setText(words);
             label.setTextColor(0xFFFFFFFF);
-            label.setTextSize(12);
-            label.setPadding(Kit.dp(a, 4), 0, 0, 0);
+            label.setTextSize(11);
+            label.setTypeface(androidx.core.content.res.ResourcesCompat.getFont(a, R.font.mono));
+            label.setPadding(icon != 0 ? Kit.dp(a, 4) : 0, 0, 0, 0);
             badge.addView(label);
         }
         return badge;
+    }
+
+    private static String readableSize(long bytes) {
+        if (bytes >= 1024L * 1024) return String.format(java.util.Locale.US, "%.1f MB", bytes / (1024.0 * 1024));
+        return Math.max(1, bytes / 1024) + " KB";
     }
 
     /** Redraw what depends on the choice: the tiles' marks, Select all, and the Save button. */
@@ -268,13 +295,28 @@ final class InstagramSave {
             tile.setContentDescription("Part " + index + (on ? ", chosen" : ", not chosen"));
         }
         int total = tiles.size();
-        if (pickAll != null) pickAll.setText(chosen.size() == total ? "Clear" : "Select all");
+        if (pickMark != null) {
+            // None is an empty ring, some a ring with a dash, all a check in a filled disc.
+            boolean all = chosen.size() == total, none = chosen.isEmpty();
+            pickMark.setImageResource(all ? R.drawable.csi_check : none ? R.drawable.csi_pick_none : R.drawable.csi_pick_some);
+            pickMark.setImageTintList(ColorStateList.valueOf(all ? accent : ContextCompat.getColor(a, R.color.dim)));
+            if (all) {
+                GradientDrawable disc = new GradientDrawable();
+                disc.setShape(GradientDrawable.OVAL);
+                disc.setColor(androidx.core.graphics.ColorUtils.blendARGB(ContextCompat.getColor(a, R.color.surface), accent, 0.2f));
+                android.graphics.drawable.InsetDrawable inset = new android.graphics.drawable.InsetDrawable(disc, Kit.dp(a, 7));
+                pickMark.setBackground(inset);
+                pickMark.setPadding(Kit.dp(a, 14), Kit.dp(a, 14), Kit.dp(a, 14), Kit.dp(a, 14));
+            } else {
+                pickMark.setBackground(null);
+                pickMark.setPadding(Kit.dp(a, 12), Kit.dp(a, 12), Kit.dp(a, 12), Kit.dp(a, 12));
+            }
+            pickMark.setContentDescription(all ? "All selected, tap to clear" : none ? "None selected, tap to select all"
+                : chosen.size() + " of " + total + " selected, tap to select all");
+        }
         // Save shows only when it can act, and names how many it keeps.
         saveButton.setVisibility(chosen.isEmpty() ? View.GONE : View.VISIBLE);
-        TextView words = findText(saveButton);
-        if (words != null) words.setText(total == 1 ? "Save to the gallery"
-            : chosen.size() == total ? "Save all " + total : "Save " + chosen.size());
-        saveButton.setContentDescription(words == null ? "Save" : words.getText());
+        Kit.compactButtonText(saveButton, total == 1 || chosen.size() == 1 ? "Save" : "Save " + chosen.size());
     }
 
     private void toggleAll() {
@@ -334,6 +376,55 @@ final class InstagramSave {
                 into.animate().alpha(1f).setDuration(180).start();
             });
         }, "instagram-thumb").start();
+    }
+
+    /**
+     * Put the first chosen part on the Pi screen: a picture is shown, a video plays. The Pi
+     * fetches the part, the phone hands it straight back the way it shows any picture or video.
+     */
+    private void showOnPi() {
+        MediaClient client = client();
+        JSONArray items = post == null ? null : post.optJSONArray("items");
+        if (client == null || items == null || items.length() == 0) return;
+        int index = chosen.isEmpty() ? items.optJSONObject(0).optInt("index") : chosen.iterator().next();
+        String url = post.optString("url", link), code = post.optString("code");
+        Toast.makeText(a, "Sending it to the Pi screen", Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            try {
+                java.io.File folder = new java.io.File(a.getCacheDir(), "share");
+                //noinspection ResultOfMethodCallIgnored
+                folder.mkdirs();
+                java.io.File file = new java.io.File(folder, "instagram-" + code + "-" + index);
+                String type;
+                try (OutputStream out = new java.io.FileOutputStream(file)) {
+                    type = client.stream("/v1/instagram/item?url=" + MediaClient.enc(url) + "&index=" + index,
+                        out, 600000, (done, total) -> { }, () -> false);
+                }
+                String mime = type == null ? "image/jpeg" : type.split(";")[0].trim();
+                if (mime.startsWith("video/")) {
+                    Uri shared = androidx.core.content.FileProvider.getUriForFile(a, a.getPackageName() + ".share", file);
+                    main.post(() -> {
+                        Intent cast = new Intent(a, MediaActivity.class).setAction(Intent.ACTION_SEND)
+                            .setType(mime).putExtra(Intent.EXTRA_STREAM, shared)
+                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        cast.setClipData(android.content.ClipData.newUri(a.getContentResolver(), "Instagram video", shared));
+                        a.startActivity(cast);
+                    });
+                    return;
+                }
+                Bitmap picture = BitmapFactory.decodeFile(file.getPath());
+                if (picture == null) throw new Exception("The picture could not be read");
+                ByteArrayOutputStream jpeg = new ByteArrayOutputStream();
+                try { picture.compress(Bitmap.CompressFormat.JPEG, 88, jpeg); } finally { picture.recycle(); }
+                //noinspection ResultOfMethodCallIgnored
+                file.delete();
+                boolean lit = client.showImage(jpeg.toByteArray(), "Instagram").optBoolean("sentToDisplay");
+                main.post(() -> Toast.makeText(a, lit ? "Showing on the Pi screen" : "Sent. The Pi screen is off",
+                    Toast.LENGTH_SHORT).show());
+            } catch (Exception failed) {
+                main.post(() -> Kit.failed(a, "It was not shown. " + failed.getMessage(), this::showOnPi));
+            }
+        }, "instagram-pi").start();
     }
 
     /** Save the chosen parts as background work, then hand the screen back. */

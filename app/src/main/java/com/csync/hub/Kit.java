@@ -380,6 +380,54 @@ final class Kit {
         return button;
     }
 
+    /**
+     * A small pill for an action that sits beside other content, such as Use under a colour
+     * or Save under a picker. It looks compact but its touch area stays 48dp tall. Filled with
+     * the accent when it is the page's main action, tinted otherwise.
+     */
+    static View compactButton(Context c, int icon, String words, boolean main, Runnable click) {
+        android.widget.FrameLayout touch = new android.widget.FrameLayout(c);
+        touch.setMinimumHeight(dp(c, 48));
+        LinearLayout pill = new LinearLayout(c);
+        pill.setOrientation(LinearLayout.HORIZONTAL);
+        pill.setGravity(android.view.Gravity.CENTER);
+        pill.setPadding(dp(c, 12), 0, dp(c, 14), 0);
+        int ink = main ? ContextCompat.getColor(c, R.color.onAccent) : accentText(c);
+        android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
+        shape.setColor(main ? accentFill(c) : androidx.core.graphics.ColorUtils.blendARGB(
+            ContextCompat.getColor(c, R.color.surface), accentText(c), 0.16f));
+        shape.setCornerRadius(dp(c, 18));
+        pill.setBackground(shape);
+        pill.setForeground(ContextCompat.getDrawable(c, outValue(c)));
+        pill.setClipToOutline(true);
+        if (icon != 0) {
+            ImageView symbol = new ImageView(c);
+            symbol.setImageResource(icon);
+            symbol.setImageTintList(ColorStateList.valueOf(ink));
+            pill.addView(symbol, new LinearLayout.LayoutParams(dp(c, 16), dp(c, 16)));
+        }
+        TextView label = new TextView(c);
+        label.setText(words);
+        label.setSingleLine();
+        label.setTextColor(ink);
+        label.setTextSize(13.5f);
+        label.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
+        label.setPadding(icon != 0 ? dp(c, 6) : 0, 0, 0, 0);
+        pill.addView(label);
+        touch.addView(pill, new android.widget.FrameLayout.LayoutParams(-2, dp(c, 36), android.view.Gravity.CENTER_VERTICAL));
+        touch.setContentDescription(words);
+        touch.setOnClickListener(v -> click.run());
+        touch.setTag("kit-action");
+        return touch;
+    }
+
+    /** Change the words on a compact button made by {@link #compactButton}. */
+    static void compactButtonText(View button, String words) {
+        LinearLayout pill = (LinearLayout) ((ViewGroup) button).getChildAt(0);
+        ((TextView) pill.getChildAt(pill.getChildCount() - 1)).setText(words);
+        button.setContentDescription(words);
+    }
+
     interface Pick { void at(int index); }
 
     /**
@@ -764,10 +812,90 @@ final class Kit {
         return track;
     }
 
+    /**
+     * Short choices as small cards, two to a row: an icon in a disc and a one-word name, the
+     * same look as Home's secondary cards. For a handful of sends or destinations, not long lists.
+     */
+    static void tileGrid(ViewGroup parent, java.util.List<Action> actions) {
+        Context c = parent.getContext();
+        LinearLayout row = null;
+        for (int i = 0; i < actions.size(); i++) {
+            if (i % 2 == 0) {
+                row = new LinearLayout(c);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                LinearLayout.LayoutParams rowAt = new LinearLayout.LayoutParams(-1, -2);
+                rowAt.setMargins(-dp(c, 4), 0, -dp(c, 4), 0);
+                parent.addView(row, rowAt);
+            }
+            Action action = actions.get(i);
+            LinearLayout card = new LinearLayout(c);
+            card.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            card.setPadding(dp(c, 14), dp(c, 10), dp(c, 12), dp(c, 10));
+            card.setMinimumHeight(dp(c, 56));
+            android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
+            shape.setColor(ContextCompat.getColor(c, R.color.surface));
+            shape.setCornerRadius(dp(c, 16));
+            shape.setStroke(dp(c, 1), ContextCompat.getColor(c, R.color.border));
+            card.setBackground(new android.graphics.drawable.RippleDrawable(ColorStateList.valueOf(
+                androidx.core.graphics.ColorUtils.setAlphaComponent(accentText(c), 40)), shape, null));
+            ImageView icon = new ImageView(c);
+            icon.setImageResource(action.icon);
+            icon.setPadding(dp(c, 6), dp(c, 6), dp(c, 6), dp(c, 6));
+            android.graphics.drawable.GradientDrawable disc = new android.graphics.drawable.GradientDrawable();
+            disc.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+            disc.setColor(ContextCompat.getColor(c, R.color.surface2));
+            icon.setBackground(disc);
+            icon.setImageTintList(ColorStateList.valueOf(ContextCompat.getColor(c, R.color.dim)));
+            card.addView(icon, new LinearLayout.LayoutParams(dp(c, 30), dp(c, 30)));
+            TextView title = new TextView(c);
+            title.setTextAppearance(R.style.Kit_Text_RowTitle);
+            title.setTextSize(14.5f);
+            title.setText(action.label);
+            title.setPadding(dp(c, 10), 0, 0, 0);
+            card.addView(title);
+            card.setContentDescription(action.label);
+            card.setOnClickListener(v -> { tick(v); action.run.run(); });
+            LinearLayout.LayoutParams at = new LinearLayout.LayoutParams(0, -1, 1);
+            at.setMargins(dp(c, 4), dp(c, 4), dp(c, 4), dp(c, 4));
+            row.addView(card, at);
+        }
+        if (row != null && row.getChildCount() == 1) row.addView(new View(c), new LinearLayout.LayoutParams(0, 1, 1));
+    }
+
+    /**
+     * Facts to read, not act on: a quiet name on the left and its value on the right, with no
+     * card around them, so they never look like something to tap.
+     */
+    static void facts(ViewGroup parent, java.util.List<String[]> pairs) {
+        Context c = parent.getContext();
+        LinearLayout list = new LinearLayout(c);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(dp(c, 4), dp(c, 2), dp(c, 4), 0);
+        for (String[] pair : pairs) {
+            LinearLayout line = new LinearLayout(c);
+            line.setPadding(0, dp(c, 7), 0, dp(c, 7));
+            TextView name = new TextView(c);
+            name.setTextAppearance(R.style.Kit_Text_RowSub);
+            name.setText(pair[0]);
+            line.addView(name, new LinearLayout.LayoutParams(dp(c, 104), -2));
+            TextView value = new TextView(c);
+            value.setTextAppearance(R.style.Kit_Text_RowSub);
+            value.setTextColor(ContextCompat.getColor(c, R.color.text));
+            value.setTypeface(androidx.core.content.res.ResourcesCompat.getFont(c, R.font.mono));
+            value.setText(pair[1]);
+            line.addView(value, new LinearLayout.LayoutParams(0, -2, 1));
+            line.setContentDescription(pair[0] + ", " + pair[1]);
+            list.addView(line);
+        }
+        parent.addView(list, new LinearLayout.LayoutParams(-1, -2));
+    }
+
     /** One headline reading: a small label, the value large, and a meter when it is a share. */
     static final class Stat {
-        final String label, value; final double percent;
-        Stat(String label, String value, double percent) { this.label = label; this.value = value; this.percent = percent; }
+        final int icon; final String label, value; final double percent;
+        Stat(int icon, String label, String value, double percent) {
+            this.icon = icon; this.label = label; this.value = value; this.percent = percent;
+        }
     }
 
     /** Headline readings as cards, three to a row, so a dense page leads with what matters. */
@@ -783,10 +911,19 @@ final class Kit {
             card.setOrientation(LinearLayout.VERTICAL);
             card.setPadding(dp(c, 12), dp(c, 12), dp(c, 12), dp(c, 12));
             card.setBackgroundResource(R.drawable.card_bg);
+            LinearLayout head = new LinearLayout(c);
+            head.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            ImageView symbol = new ImageView(c);
+            symbol.setImageResource(stat.icon);
+            symbol.setImageTintList(ColorStateList.valueOf(ContextCompat.getColor(c, R.color.dim)));
+            head.addView(symbol, new LinearLayout.LayoutParams(dp(c, 14), dp(c, 14)));
             TextView label = new TextView(c);
             label.setTextAppearance(R.style.Kit_Text_Section);
+            label.setAllCaps(true);
             label.setText(stat.label);
-            card.addView(label);
+            label.setPadding(dp(c, 6), 0, 0, 0);
+            head.addView(label);
+            card.addView(head);
             TextView value = new TextView(c);
             value.setTextAppearance(R.style.Kit_Text_RowTitle);
             value.setTextSize(22);
@@ -1235,7 +1372,7 @@ final class Kit {
         return Math.round(value * c.getResources().getDisplayMetrics().density);
     }
 
-    private static int outValue(Context c) {
+    static int outValue(Context c) {
         android.util.TypedValue v = new android.util.TypedValue();
         c.getTheme().resolveAttribute(android.R.attr.selectableItemBackground, v, true);
         return v.resourceId;
