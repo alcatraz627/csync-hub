@@ -308,7 +308,23 @@ public class ShareActivity extends AppCompatActivity {
         return true;
     }
 
+    /** Which conversation the item goes to: a new one, or one of the recent ones, unless the share menu already chose. */
     private void toConversation() {
+        if (conversation != null) { toConversation(null); return; }
+        org.json.JSONArray recent = ChatStore.index(this);
+        List<Kit.Action> choices = new ArrayList<>();
+        choices.add(new Kit.Action(R.drawable.csi_plus, "A new conversation", null, go(() -> toConversation(null))));
+        for (int i = 0; i < Math.min(recent.length(), 8); i++) {
+            org.json.JSONObject entry = recent.optJSONObject(i);
+            if (entry == null || entry.optString("id").isEmpty()) continue;
+            String id = entry.optString("id");
+            choices.add(new Kit.Action(Kit.Icon.CHAT, entry.optString("title", "Conversation"), null, go(() -> toConversation(id))));
+        }
+        endsStep(Kit.sheet(this, "Send to a conversation", itemTitle(), choices.toArray(new Kit.Action[0])));
+    }
+
+    private void toConversation(String picked) {
+        if (picked != null) conversation = picked;
         Intent chat = new Intent(this, MainActivity.class).putExtra("destination", "chat");
         if (conversation != null) chat.putExtra("chat_session", conversation);
         if (text != null) chat.putExtra("chat_prefill", text);
