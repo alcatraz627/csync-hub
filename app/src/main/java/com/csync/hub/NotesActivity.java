@@ -560,8 +560,7 @@ public final class NotesActivity extends AppCompatActivity {
             } catch (Exception error) {
                 ui.post(() -> {
                     say(null);
-                    Kit.sheet(this, "The pin was not saved", error.getMessage(),
-                        new Kit.Action(R.drawable.csi_refresh, "Try again", null, () -> pinFile(source, givenName)));
+                    Kit.failed(this, "The pin was not saved. " + error.getMessage(), () -> pinFile(source, givenName));
                 });
             }
         }, "csync-pin-file").start();
@@ -1120,8 +1119,7 @@ public final class NotesActivity extends AppCompatActivity {
             boolean shown = lit;
             ui.post(() -> {
                 say(null);
-                if (failure != null) Kit.sheet(this, "It was not shown", failure,
-                    new Kit.Action(R.drawable.csi_refresh, "Try again", null, () -> showOnPi(note)));
+                if (failure != null) Kit.failed(this, "It was not shown. " + failure, () -> showOnPi(note));
                 else toast(shown ? "Showing on the Pi screen" : "Sent. The Pi screen is off");
             });
         }, "csync-note-show").start();

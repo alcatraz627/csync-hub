@@ -307,7 +307,7 @@ final class CameraController {
             String failure = problem;
             boolean shown = lit;
             ui.post(() -> {
-                if (failure != null) { Kit.sheet(activity, "It was not shown", failure); return; }
+                if (failure != null) { Kit.failed(activity, "It was not shown. " + failure, this::showOnPiScreen); return; }
                 android.widget.Toast.makeText(activity, shown ? "Showing the camera on the Pi screen" : "Sent. The Pi screen is off",
                     android.widget.Toast.LENGTH_SHORT).show();
                 activity.startActivity(new android.content.Intent(activity, MediaActivity.class).putExtra("player_target", "pi"));
@@ -460,8 +460,7 @@ final class CameraController {
             ui.post(() -> {
                 if (failure == null) { loadCaptures(); return; }
                 loadedCapturesWords();
-                Kit.sheet(activity, "It was not deleted", failure,
-                    new Kit.Action(R.drawable.csi_refresh, "Try again", null, () -> deleteCapture(name)));
+                Kit.failed(activity, "It was not deleted. " + failure, () -> deleteCapture(name));
             });
         }, "pi-camera-delete").start();
     }

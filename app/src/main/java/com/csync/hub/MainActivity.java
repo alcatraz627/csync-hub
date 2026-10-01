@@ -617,7 +617,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             Kit.rowStatus(row, added ? Kit.Status.GOOD : Kit.Status.IDLE, added ? "Added" : "Not added");
             row.setOnClickListener(v -> {
                 if (widgets.isRequestPinAppWidgetSupported()) widgets.requestPinAppWidget(provider, null, null);
-                else Kit.sheet(this, (String) w[1], "Press and hold an empty part of the home screen, choose Widgets, then csync.");
+                // This launcher cannot place it for us, so the row itself says how.
+                else Kit.bindRow(row, (Integer) w[0], (String) w[1],
+                    "Press and hold an empty part of the home screen, choose Widgets, then csync", null, false);
             });
         }
 
@@ -637,7 +639,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                         new android.content.ComponentName(this, (Class<?>) t[3]), (String) t[1],
                         android.graphics.drawable.Icon.createWithResource(this, (Integer) t[4]), getMainExecutor(), result -> { });
                 } else {
-                    Kit.sheet(this, (String) t[1], "Pull down Quick Settings, tap the pencil, and drag this tile into place.");
+                    Kit.bindRow(row, (Integer) t[0], (String) t[1],
+                        "Pull down Quick Settings, tap the pencil, and drag this tile into place", null, false);
                 }
             });
         }
@@ -1402,6 +1405,30 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     /** Every action the catalog knows, ticked when it is on bar 1; a tap adds it at the end or takes it out. */
     private void railSheet() {
+        // The drives are asked for first, so each one is its own row and no drive drawer opens in between.
+        String host = Prefs.assistIp(this), token = Prefs.token(this);
+        new Thread(() -> {
+            java.util.List<org.json.JSONObject> drives = new java.util.ArrayList<>();
+            if (!host.isEmpty() && !token.isEmpty()) {
+                try {
+                    org.json.JSONArray listed = new MediaClient(host, token).get("/v1/drives").getJSONArray("drives");
+                    for (int i = 0; i < listed.length(); i++) drives.add(listed.getJSONObject(i));
+                } catch (Exception unreachable) { }
+            }
+            ui.post(() -> {
+                if (isFinishing()) return;
+                railDrives = drives;
+                Kit.toggleSheet(this, "Bar 1", "Tap to add at the end, or to take out. The order is the order you added them.",
+                    this::railSections);
+            });
+        }, "rail-drives").start();
+    }
+
+    /** The Pi's drives as last listed for the bar 1 drawer; empty when the Pi did not answer. */
+    private java.util.List<org.json.JSONObject> railDrives = new java.util.ArrayList<>();
+
+    /** The rows of the bar 1 drawer as they stand now; each tap saves, and the drawer redraws from here. */
+    private java.util.List<Kit.Section> railSections() {
         java.util.List<org.json.JSONObject> rail = RailActions.rail(this);
         java.util.List<Kit.Section> sections = new java.util.ArrayList<>();
         String group = null;
@@ -1420,7 +1447,6 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                 if (here >= 0) now.remove(here); else now.add(action);
                 RailActions.saveRail(this, now);
                 renderRailSettings();
-                railSheet();
             }).value(at >= 0 ? "On, " + (at + 1) : null));
         }
         if (rows != null) sections.add(new Kit.Section(group, rows));
@@ -1433,43 +1459,33 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                     if (here >= 0) now.remove(here);
                     RailActions.saveRail(this, now);
                     renderRailSettings();
-                    railSheet();
                 }).value("On, " + (indexOf(rail, item) + 1)));
-        more.add(new Kit.Action(Kit.Icon.FOLDER, "A folder on a drive", "Opens Media inside that folder", this::railFolderSheet, true));
+        for (org.json.JSONObject drive : railDrives) {
+            String id = drive.optString("id"), label = drive.optString("label", id);
+            more.add(new Kit.Action(Kit.Icon.FOLDER, "A folder on " + label,
+                (drive.optBoolean("online") ? "Connected" : "Not connected") + ". Opens Media inside that folder",
+                () -> railFolderField(id, label), true));
+        }
+        if (railDrives.isEmpty())
+            more.add(new Kit.Action(Kit.Icon.FOLDER, "A folder on a drive", "The Pi did not list its drives. Tap to ask again",
+                this::railSheet, true));
         if (!rail.isEmpty()) more.add(new Kit.Action(R.drawable.csi_trash, "Clear bar 1", null, () -> {
             RailActions.saveRail(this, new java.util.ArrayList<>());
             renderRailSettings();
         }));
         sections.add(new Kit.Section("Folders and more", more));
-        Kit.sheet(this, "Bar 1", "Tap to add at the end, or to take out. The order is the order you added them.", sections);
+        return sections;
     }
 
-    /** Pick the drive, then type the folder's path inside it. */
-    private void railFolderSheet() {
-        String host = Prefs.assistIp(this), token = Prefs.token(this);
-        if (host.isEmpty() || token.isEmpty()) { toast("Connect the Pi first"); return; }
-        new Thread(() -> {
-            java.util.List<Kit.Action> drives = new java.util.ArrayList<>();
-            try {
-                org.json.JSONArray listed = new MediaClient(host, token).get("/v1/drives").getJSONArray("drives");
-                for (int i = 0; i < listed.length(); i++) {
-                    org.json.JSONObject drive = listed.getJSONObject(i);
-                    String id = drive.optString("id"), label = drive.optString("label", id);
-                    drives.add(new Kit.Action(Kit.Icon.FOLDER, label, drive.optBoolean("online") ? "Connected" : "Not connected", () ->
-                        Kit.fieldSheet(this, "Folder on " + label, "The path inside the drive, or nothing for its top", "media/films", null,
-                            Kit.Icon.FOLDER, "Add", path -> {
-                                java.util.List<org.json.JSONObject> now = RailActions.rail(this);
-                                now.add(RailActions.folder(id, label, path.trim().replaceAll("^/+|/+$", "")));
-                                RailActions.saveRail(this, now);
-                                renderRailSettings();
-                            }), true));
-                }
-            } catch (Exception unreachable) { }
-            ui.post(() -> {
-                if (drives.isEmpty()) { toast("The Pi did not list its drives"); return; }
-                Kit.sheet(this, "Which drive", null, java.util.Collections.singletonList(new Kit.Section(null, drives)));
+    /** Type the path of a folder on the chosen drive, and add it to the end of bar 1. */
+    private void railFolderField(String id, String label) {
+        Kit.fieldSheet(this, "Folder on " + label, "The path inside the drive, or nothing for its top", "media/films", null,
+            Kit.Icon.FOLDER, "Add", path -> {
+                java.util.List<org.json.JSONObject> now = RailActions.rail(this);
+                now.add(RailActions.folder(id, label, path.trim().replaceAll("^/+|/+$", "")));
+                RailActions.saveRail(this, now);
+                renderRailSettings();
             });
-        }, "rail-drives").start();
     }
 
     /** The one action on the right: any fixed action, the theme switch by default. */
@@ -2312,30 +2328,18 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         host.removeAllViews();
         LinearLayout playback = Kit.group(host);
         final android.content.SharedPreferences how = getSharedPreferences("player_controls", MODE_PRIVATE);
-        final MediaClient pi = new MediaClient(Prefs.assistIp(this), Prefs.token(this));
-        final View volume = Kit.addRow(playback);
-        Kit.bindRow(volume, Kit.Icon.VOLUME, "Starting volume", "On the Pi screen", null, true);
-        volume.setOnClickListener(v -> DisplaySheet.startVolume(this, this::renderPlaybackSettings));
         View resume = Kit.addRow(playback);
         Kit.bindRow(resume, Kit.Icon.HISTORY, "Resume where I stopped", null, null, false);
         Kit.rowToggle(resume, how.getBoolean("resume", true), on -> how.edit().putBoolean("resume", on).apply());
         View loop = Kit.addRow(playback);
         Kit.bindRow(loop, Kit.Icon.LOOP, "Loop", null, null, false);
         Kit.rowToggle(loop, how.getBoolean("loop", false), on -> how.edit().putBoolean("loop", on).apply());
-        // The screen the Pi is plugged into and how loud it starts, written in once the Pi has answered.
-        final View display = Kit.addRow(playback);
-        Kit.bindRow(display, Kit.Icon.DISPLAY, "Display", "What the Pi is plugged into", null, true);
-        display.setOnClickListener(v -> DisplaySheet.open(this));
-        new Thread(() -> {
-            final JSONObject screen = DisplaySheet.screenInUse(pi);
-            if (screen == null) return;
-            final JSONObject kept = screen.optJSONObject("settings");
-            final int starts = kept == null ? 0 : kept.optInt("startVolume");
-            ui.post(() -> {
-                Kit.bindRow(display, Kit.Icon.DISPLAY, "Display", "What the Pi is plugged into", screen.optString("name"), true);
-                Kit.bindRow(volume, Kit.Icon.VOLUME, "Starting volume", "On the Pi screen", starts == 0 ? "Muted" : starts + "%", true);
-            });
-        }, "display-name").start();
+        // Every screen the Pi has known, each with its own starting volume and turn, set in place.
+        Kit.label(host, "Screens the Pi has been plugged into");
+        LinearLayout screens = new LinearLayout(this);
+        screens.setOrientation(LinearLayout.VERTICAL);
+        host.addView(screens, new LinearLayout.LayoutParams(-1, -2));
+        DisplaySheet.inline(this, screens);
 
         // Four lengths are a choice made in place, not a drawer.
         Kit.label(host, "Skip length, back and forward");
@@ -2727,7 +2731,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             catch (Throwable e) { failed = e.getMessage(); }
             final String problem = failed;
             ui.post(() -> {
-                if (problem != null) Kit.sheet(this, "The model was not saved", problem);
+                if (problem != null) Kit.failed(this, "The model was not saved. " + problem, () -> saveDefaultModel(model, effort));
                 else { toast("Saved"); chatDefaultModel = model; chatDefaultEffort = effort; }
                 refreshAssistant();
             });
@@ -3069,7 +3073,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             picture = android.graphics.Bitmap.createBitmap(Math.round(chatList.getWidth() * scale) + dp(28),
                 Math.round(chatList.getHeight() * scale) + dp(28), android.graphics.Bitmap.Config.ARGB_8888);
         } catch (OutOfMemoryError tooLarge) {
-            Kit.sheet(this, "The picture could not be made", "This conversation is too long for one picture. Markdown still works.");
+            Kit.failed(this, "This conversation is too long for one picture. Markdown still works.", null);
             return;
         }
         android.graphics.Canvas canvas = new android.graphics.Canvas(picture);
@@ -3092,7 +3096,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                     .putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 ui.post(() -> startActivity(Intent.createChooser(send, "Save this conversation")));
             } catch (Exception error) {
-                ui.post(() -> Kit.sheet(this, "The conversation could not be saved", "The picture could not be written on this phone."));
+                ui.post(() -> Kit.failed(this, "The picture could not be written on this phone.", null));
             }
         }, "chat-export").start();
     }
@@ -3128,7 +3132,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                 .putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             startActivity(Intent.createChooser(send, "Save this conversation"));
         } catch (Exception error) {
-            Kit.sheet(this, "The conversation could not be saved", "The file could not be written on this phone.");
+            Kit.failed(this, "The file could not be written on this phone.", this::exportMarkdown);
         }
     }
 
@@ -4327,7 +4331,10 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             catch (Throwable e) { failed = e.getMessage(); }
             final String problem = failed;
             ui.post(() -> {
-                if (problem != null) { Kit.sheet(this, "The conversation could not be rewound", "The Pi assistant did not answer. Nothing was changed."); return; }
+                if (problem != null) {
+                    Kit.failed(this, "The Pi assistant did not answer. Nothing was changed.", () -> rewindTo(transcriptIndex, resend));
+                    return;
+                }
                 if (!session.equals(chatSession)) return;
                 ChatStore.truncate(this, session, keep);
                 renderTranscript(ChatStore.transcript(this, session));

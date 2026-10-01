@@ -249,6 +249,48 @@ final class Kit {
         return dialog;
     }
 
+    /**
+     * A drawer of choices that are switched on and off, like a checklist. A tap changes the
+     * choice and redraws the rows where they are, so the list stays open and does not jump to
+     * its top. A choice that leads to another question still closes the drawer first.
+     */
+    static com.google.android.material.bottomsheet.BottomSheetDialog toggleSheet(
+            Context c, CharSequence title, CharSequence sub,
+            java.util.function.Supplier<java.util.List<Section>> build) {
+        com.google.android.material.bottomsheet.BottomSheetDialog dialog =
+            new com.google.android.material.bottomsheet.BottomSheetDialog(c);
+        View body = LayoutInflater.from(c).inflate(R.layout.kit_sheet, null, false);
+        ((TextView) body.findViewById(R.id.kit_title)).setText(title);
+        setOptional(body.findViewById(R.id.kit_sub), sub);
+        LinearLayout rows = body.findViewById(R.id.kit_rows);
+        Runnable[] draw = new Runnable[1];
+        draw[0] = () -> {
+            rows.removeAllViews();
+            boolean first = true;
+            for (Section section : build.get()) {
+                if (section.actions.isEmpty()) continue;
+                if (section.label != null) label(rows, section.label);
+                else if (!first) rows.addView(new View(c), new LinearLayout.LayoutParams(-1, dp(c, 16)));
+                first = false;
+                LinearLayout group = group(rows);
+                for (Action action : section.actions) {
+                    View row = addRow(group);
+                    bindRow(row, action.icon, action.label, action.sub, action.value, action.opens);
+                    row.setOnClickListener(v -> {
+                        if (action.opens) { dialog.dismiss(); action.run.run(); return; }
+                        action.run.run();
+                        draw[0].run();
+                    });
+                }
+            }
+        };
+        draw[0].run();
+        dialog.setContentView(scrolling(body));
+        openFully(dialog);
+        dialog.show();
+        return dialog;
+    }
+
     /** Open a tall drawer at its full height, so its last rows are not hidden behind a half-open edge. */
     private static void openFully(com.google.android.material.bottomsheet.BottomSheetDialog dialog) {
         dialog.getBehavior().setSkipCollapsed(true);
@@ -615,6 +657,48 @@ final class Kit {
     /** An information drawer: a title and a message, closed by dragging down or tapping outside. */
     static com.google.android.material.bottomsheet.BottomSheetDialog sheet(Context c, CharSequence title, CharSequence message) {
         return sheet(c, title, message, new Action[0]);
+    }
+
+    /**
+     * Say that something did not work, without covering the page. A short bar rises above the
+     * bottom bar and leaves by itself; when the step can be tried again it carries Retry.
+     * A page that cannot show anything at all says so in place instead (see {@link #notice}).
+     */
+    static void failed(android.app.Activity a, CharSequence what, Runnable retry) {
+        if (a == null || a.isFinishing()) return;
+        View root = a.findViewById(android.R.id.content);
+        com.google.android.material.snackbar.Snackbar bar = com.google.android.material.snackbar.Snackbar.make(
+            root, what, retry == null ? com.google.android.material.snackbar.Snackbar.LENGTH_LONG : 6000);
+        View nav = find(root, com.google.android.material.bottomnavigation.BottomNavigationView.class);
+        if (nav != null && nav.isShown()) bar.setAnchorView(nav);
+        if (retry != null) bar.setAction("Retry", v -> retry.run());
+        // Drawn in the app's own colours, a raised card with the accent on Retry, not Material's default.
+        bar.setBackgroundTint(ContextCompat.getColor(a, R.color.surface2));
+        bar.setTextColor(ContextCompat.getColor(a, R.color.text));
+        bar.setActionTextColor(com.google.android.material.color.MaterialColors.getColor(a,
+            com.google.android.material.R.attr.colorPrimary, ContextCompat.getColor(a, R.color.coral)));
+        bar.show();
+    }
+
+    /**
+     * A notice that sits at the top of what a page is showing: why it is empty or out of date,
+     * and the one thing to do about it. It replaces the page's rows, so it never stacks.
+     */
+    static void notice(ViewGroup host, int icon, String title, String why, String go, Runnable action) {
+        host.removeAllViews();
+        empty(host, icon, title, why,
+            action == null ? null : button(host.getContext(), R.drawable.csi_refresh, go, R.color.text, action));
+    }
+
+    private static View find(View v, Class<?> kind) {
+        if (kind.isInstance(v)) return v;
+        if (!(v instanceof ViewGroup)) return null;
+        ViewGroup g = (ViewGroup) v;
+        for (int i = 0; i < g.getChildCount(); i++) {
+            View hit = find(g.getChildAt(i), kind);
+            if (hit != null) return hit;
+        }
+        return null;
     }
 
     interface Format { String of(float value); }

@@ -920,9 +920,14 @@ public final class MediaActivity extends AppCompatActivity {
             new Kit.Action(R.drawable.csi_screen, "This phone's screen", "Everything on it, or one app; Android asks which",
                 this::shareScreen, true))));
         sections.add(new Kit.Section("This screen", java.util.Arrays.asList(
-            new Kit.Action(R.drawable.csi_image, "Cover image", "Shown when nothing is playing", this::coverSheet, true),
-            new Kit.Action(Kit.Icon.DISPLAY, "Display", null, () -> DisplaySheet.open(this), true).value(displayName))));
+            new Kit.Action(R.drawable.csi_image, "Cover image", "Shown when nothing is playing", this::coverSheet, true))));
         Kit.sections(host, sections, null);
+        // The screens themselves, each opening its settings in place, rather than a row that opens a list.
+        Kit.label(host, "Screens the Pi has been plugged into");
+        LinearLayout screens = new LinearLayout(this);
+        screens.setOrientation(LinearLayout.VERTICAL);
+        host.addView(screens, new LinearLayout.LayoutParams(-1, -2));
+        DisplaySheet.inline(this, screens);
         loadIdleFacts();
     }
 
@@ -994,8 +999,8 @@ public final class MediaActivity extends AppCompatActivity {
             String failure = problem;
             ui.post(() -> {
                 if (!screenActive) return;
-                if (failure != null) Kit.sheet(this, "Photos as a slideshow", failure);
-                else if (folders.isEmpty()) Kit.sheet(this, "Photos as a slideshow", "No connected drive has a folder to show.");
+                if (failure != null) Kit.failed(this, "The folders could not be listed. " + failure, this::chooseSlideshow);
+                else if (folders.isEmpty()) Kit.failed(this, "No connected drive has a folder to show.", null);
                 else Kit.sheet(this, "Photos as a slideshow", "Choose a folder. Its photos show in turn on the Pi screen.",
                     folders.toArray(new Kit.Action[0]));
             });
@@ -1018,8 +1023,8 @@ public final class MediaActivity extends AppCompatActivity {
             String failure = problem;
             ui.post(() -> {
                 if (!screenActive) return;
-                if (failure != null) Kit.sheet(this, "Show a note", failure);
-                else if (notes.isEmpty()) Kit.sheet(this, "Show a note", "There are no notes on the Pi yet.");
+                if (failure != null) Kit.failed(this, "The notes could not be listed. " + failure, this::chooseNote);
+                else if (notes.isEmpty()) Kit.failed(this, "There are no notes on the Pi yet.", null);
                 else Kit.sheet(this, "Show a note", "On the Pi screen", notes.toArray(new Kit.Action[0]));
             });
         }, "media-note-list").start();
@@ -1036,7 +1041,7 @@ public final class MediaActivity extends AppCompatActivity {
             boolean shown = lit;
             ui.post(() -> {
                 if (!screenActive) return;
-                if (failure != null) Kit.sheet(this, "It was not shown", failure);
+                if (failure != null) Kit.failed(this, "It was not shown. " + failure, this::showCamera);
                 else toast(shown ? "Showing the camera on the Pi screen" : "Sent. The Pi screen is off");
             });
         }, "media-camera-show").start();
@@ -1057,7 +1062,7 @@ public final class MediaActivity extends AppCompatActivity {
             boolean shown = lit;
             ui.post(() -> {
                 if (!screenActive) return;
-                if (failure != null) Kit.sheet(this, "It was not shown", failure);
+                if (failure != null) Kit.failed(this, "It was not shown. " + failure, () -> showNote(id));
                 else toast(shown ? "Showing on the Pi screen" : "Sent. The Pi screen is off");
             });
         }, "media-note-show").start();
@@ -1132,7 +1137,7 @@ public final class MediaActivity extends AppCompatActivity {
             ui.post(() -> {
                 if (!screenActive) return;
                 sheet.dialog.dismiss();
-                if (saved == null) Kit.sheet(this, "It was not saved", "The Pi did not take the change. Nothing was altered.");
+                if (saved == null) Kit.failed(this, "The Pi did not take the change. Nothing was altered.", this::coverSheet);
                 else drawCoverSheet(saved);
             });
         }, "media-cover-save").start();
@@ -1199,7 +1204,7 @@ public final class MediaActivity extends AppCompatActivity {
             JSONArray drives = found;
             ui.post(() -> {
                 if (!screenActive) return;
-                if (drives == null) { Kit.sheet(this, "Choose a source", "The Pi cannot be reached, so its drives are not known."); return; }
+                if (drives == null) { Kit.failed(this, "The Pi cannot be reached, so its drives are not known.", this::chooseSource); return; }
                 java.util.List<Kit.Action> choices = new java.util.ArrayList<>();
                 for (int i = 0; i < drives.length(); i++) {
                     JSONObject drive = drives.optJSONObject(i);
@@ -1405,8 +1410,8 @@ public final class MediaActivity extends AppCompatActivity {
             String failure = problem;
             boolean shown = lit;
             runOnUiThread(() -> {
-                // The line above the list names the list, so what happened is said in a toast instead.
-                if (failure != null) Kit.sheet(this, "The slideshow did not start", failure);
+                // The line above the list names the list, so what happened is said in a passing bar instead.
+                if (failure != null) Kit.failed(this, "The slideshow did not start. " + failure, () -> slideshow(drive, folder, name));
                 else toast(shown ? "Showing the photos in " + name + " on the Pi screen" : "Sent. The Pi screen is off");
             });
         }, "media-slideshow").start();
