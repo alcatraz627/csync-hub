@@ -478,7 +478,8 @@ public final class MediaActivity extends AppCompatActivity {
         final String fileName = name;
         final long fileSize = size;
         final long intent = ++outputIntent;
-        stopPhoneForNewPlayback();
+        // Both outputs play at once (owner ruling D2): the phone keeps playing; only its video view steps aside.
+        exitVideoMode();
         target = "pi";
         selected = null;
         say("Sending " + fileName + " to the Pi: 0%");
@@ -516,7 +517,7 @@ public final class MediaActivity extends AppCompatActivity {
 
     private void startYoutube(String url) {
                 final long intent = ++outputIntent;
-                stopPhoneForNewPlayback();
+                exitVideoMode();
                 target = "pi";
                 selected = null;
                 say("Opening the link on the Pi screen");
@@ -851,6 +852,8 @@ public final class MediaActivity extends AppCompatActivity {
     private int[] shownPages;
     private Bitmap coverPicture;
     private String displayName;
+    // What the Pi screen is playing at the last check, for "replaces" on Play rows; null when nothing.
+    private String piNowName;
 
     /**
      * Swap the player's controls for the page an output shows with no session, or back.
@@ -1442,8 +1445,15 @@ public final class MediaActivity extends AppCompatActivity {
         file.own.put(ItemActions.Act.PLAY_PI, () -> playPi(item, onPi));
         file.own.put(ItemActions.Act.PLAY_PHONE, () -> playPhone(item, onPhone));
         file.own.put(ItemActions.Act.VLC, () -> playVlc(item));
-        file.notes.put(ItemActions.Act.PLAY_PI, onPi > 0 ? "From " + playbackTime(onPi) + ", muted" : "Starts muted");
-        if (onPhone > 0) file.notes.put(ItemActions.Act.PLAY_PHONE, "From " + playbackTime(onPhone));
+        // Each output plays on its own (D2), so a row names only what it replaces on that output.
+        PhonePlaybackService phone = PhonePlaybackService.current;
+        String phoneNow = phone != null && phone.playing() && phone.item() != null
+            ? displayMediaName(phone.item().optString("name")) : null;
+        file.notes.put(ItemActions.Act.PLAY_PI, (onPi > 0 ? "From " + playbackTime(onPi) + ", muted" : "Starts muted")
+            + (piNowName == null ? "" : " · replaces " + piNowName));
+        String onPhoneNote = (onPhone > 0 ? "From " + playbackTime(onPhone) : "")
+            + (phoneNow == null ? "" : (onPhone > 0 ? " · " : "") + "Replaces " + phoneNow);
+        if (!onPhoneNote.isEmpty()) file.notes.put(ItemActions.Act.PLAY_PHONE, onPhoneNote);
         file.notes.put(ItemActions.Act.VLC, "Hands the file to VLC on this phone");
         if (kind == ItemActions.Kind.IMAGE) {
             file.own.put(ItemActions.Act.SHOW_PI, () -> playPi(item));
@@ -1499,7 +1509,7 @@ public final class MediaActivity extends AppCompatActivity {
 
     private void playPi(JSONObject item, int resumeMs) {
         final long intent = ++outputIntent;
-        stopPhoneForNewPlayback();
+        exitVideoMode();
         target = "pi";
         selected = item;
         // The Loop setting is a wish for every new playback; the Pi takes it once the file is playing.
@@ -1540,17 +1550,8 @@ public final class MediaActivity extends AppCompatActivity {
         final long intent = ++outputIntent;
         target = "phone";
         selected = item;
-        new Thread(() -> {
-            try {
-                JSONObject state = client.get("/v1/player/pi");
-                if (intent == outputIntent && state.has("itemId") && !state.isNull("itemId"))
-                    client.post("/v1/player/pi/commands", new JSONObject().put("action", "stop")
-                        .put("expectedRevision", state.getInt("revision")));
-            } catch (Exception ignored) { }
-            ui.post(() -> {
-                if (intent == outputIntent && screenActive) startPhone(item, resumeMs, intent);
-            });
-        }, "phone-output-handoff").start();
+        // The Pi screen keeps whatever it is playing; starting here never stops it.
+        if (screenActive) startPhone(item, resumeMs, intent);
     }
 
     private void startPhone(JSONObject item, int resumeMs, long intent) {
@@ -1605,9 +1606,11 @@ public final class MediaActivity extends AppCompatActivity {
             pendingLoop = null;
             loopWhenPlaying = false;
             ++outputIntent;
-            // Stop also dismisses a failure on this phone, so the page goes back to its empty state.
-            phoneProblem = null;
-            stopPhoneForNewPlayback();
+            // Stop ends only the output it was pressed for; the other one keeps playing.
+            if ("phone".equals(target)) {
+                phoneProblem = null;
+                stopPhoneForNewPlayback();
+            }
         }
         if ("phone".equals(target)) {
             PhonePlaybackService playback = PhonePlaybackService.current;
@@ -2080,6 +2083,9 @@ public final class MediaActivity extends AppCompatActivity {
                 try {
                     JSONObject state = client.get("/v1/player/pi");
                     ui.post(() -> {
+                        String now = state.optString("state");
+                        piNowName = now.equals("playing") || now.equals("paused") || now.equals("loading")
+                            ? displayMediaName(state.optString("name")) : null;
                         if (!screenActive || !"pi".equals(target)) return;
                         String playerState = state.optString("state");
                         boolean active = playerState.equals("playing") || playerState.equals("paused") ||
