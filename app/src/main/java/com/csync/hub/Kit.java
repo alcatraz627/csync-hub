@@ -78,7 +78,11 @@ final class Kit {
         ((ImageView) row.findViewById(R.id.kit_icon)).setImageResource(icon);
         ((TextView) row.findViewById(R.id.kit_title)).setText(title);
         setOptional(row.findViewById(R.id.kit_sub), sub);
-        setOptional(row.findViewById(R.id.kit_end), end);
+        TextView reading = row.findViewById(R.id.kit_end);
+        // The mono face is set on the view itself: named in the layout's style it was not taken up.
+        reading.setTextAppearance(R.style.Kit_Text_Meta);
+        reading.setTypeface(androidx.core.content.res.ResourcesCompat.getFont(row.getContext(), R.font.mono));
+        setOptional(reading, end);
         row.findViewById(R.id.kit_chevron).setVisibility(opens ? View.VISIBLE : View.GONE);
         // The row is spoken as one thing, so everything written on it goes into what is said.
         row.setContentDescription(spokenRow(title, sub, end));

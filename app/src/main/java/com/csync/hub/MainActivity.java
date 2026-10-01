@@ -899,7 +899,10 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             checking ? Kit.Status.WARN : piUp ? Kit.Status.GOOD : Kit.Status.BAD);
         ((TextView) pageHome.findViewById(R.id.home_status_words)).setText(
             checking ? "Checking the Pi" : piUp ? "The Pi is online" : "The Pi cannot be reached");
-        ((TextView) pageHome.findViewById(R.id.home_status_version)).setText("csync " + appVersion());
+        TextView version = pageHome.findViewById(R.id.home_status_version);
+        version.setTextAppearance(R.style.Kit_Text_Meta);
+        version.setTypeface(androidx.core.content.res.ResourcesCompat.getFont(this, R.font.mono));
+        version.setText("csync " + appVersion());
         pageHome.findViewById(R.id.home_status).setContentDescription(
             (checking ? "Checking the Pi" : piUp ? "The Pi is online" : "The Pi cannot be reached") + ". Open Tools");
 
