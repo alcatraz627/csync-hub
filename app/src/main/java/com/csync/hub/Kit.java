@@ -842,12 +842,14 @@ final class Kit {
     /** The 150 ms fade-through a page makes when it takes another's place; nothing else moves. */
     static void fadeThrough(View page) {
         if (page == null) return;
+        // A place arrives: it rises a little as it fades in, long enough to be felt, short enough not to wait for.
         page.animate().cancel();
         page.setAlpha(0f);
-        page.setScaleX(0.98f);
-        page.setScaleY(0.98f);
-        page.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(150)
-            .setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
+        page.setTranslationY(dp(page.getContext(), 10));
+        page.setScaleX(1f);
+        page.setScaleY(1f);
+        page.animate().alpha(1f).translationY(0f).setDuration(240)
+            .setInterpolator(new androidx.interpolator.view.animation.FastOutSlowInInterpolator()).start();
     }
 
     /** Draw a page the way Android's back preview does: it shrinks a little as the gesture goes on, and springs back at 0. */
