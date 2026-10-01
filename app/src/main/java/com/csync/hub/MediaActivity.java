@@ -483,10 +483,11 @@ public final class MediaActivity extends AppCompatActivity {
         selected = null;
         say("Sending " + fileName + " to the Pi: 0%");
         request(intent, () -> {
-            try (InputStream input = getContentResolver().openInputStream(uri)) {
+            long tail = CastOrder.tailBytes(this, uri, fileName, fileSize);
+            try (InputStream input = CastOrder.stream(this, uri, fileSize, tail)) {
                 if (input == null) throw new Exception("Could not open selected media");
                 // No drive named: the Pi keeps the copy in the cache folder of whichever drive has room.
-                return client.uploadMedia("", fileName, fileSize, input, sent -> {
+                return client.uploadMedia("", fileName, fileSize, input, tail, sent -> {
                     int percent = (int) (sent * 100 / fileSize);
                     ui.post(() -> { if (screenActive && intent == outputIntent)
                         say("Sending " + fileName + " to the Pi: " + percent + "%"); });

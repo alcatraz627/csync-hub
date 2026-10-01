@@ -98,6 +98,12 @@ final class MediaClient {
 
     JSONObject uploadMedia(String driveId, String name, long size, InputStream input,
                            java.util.function.LongConsumer progress) throws Exception {
+        return uploadMedia(driveId, name, size, input, 0, progress);
+    }
+
+    /** As above, where the stream starts with the file's last tailBytes (see CastOrder). */
+    JSONObject uploadMedia(String driveId, String name, long size, InputStream input, long tailBytes,
+                           java.util.function.LongConsumer progress) throws Exception {
         if (size < 1 || size > 16L * 1024 * 1024 * 1024)
             throw new Exception("Choose a media file under 16 GB");
         // play=1 lets the Pi start the file once enough has arrived, instead of after the whole copy.
@@ -108,6 +114,7 @@ final class MediaClient {
         connection.setReadTimeout(30000);
         connection.setRequestProperty("X-Csync-Token", token);
         connection.setRequestProperty("Content-Type", "application/octet-stream");
+        if (tailBytes > 0) connection.setRequestProperty("X-Csync-Tail-Bytes", String.valueOf(tailBytes));
         connection.setDoOutput(true);
         connection.setFixedLengthStreamingMode(size);
         try {
