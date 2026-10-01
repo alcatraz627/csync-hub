@@ -210,6 +210,50 @@ final class MediaClient {
         } finally { connection.disconnect(); }
     }
 
+    /** How far a stream has come: bytes so far and the total, or -1 when the Pi did not say. */
+    interface Progress { void at(long done, long total); }
+
+    /** True when whoever asked for the stream no longer wants it. */
+    interface Stop { boolean now(); }
+
+    /**
+     * Copy a file from the Pi into {@code to} as it arrives, saying how far it has come.
+     * Returns the type the Pi named. A Pi refusal arrives as a MediaException with its code.
+     */
+    String stream(String path, OutputStream to, int readTimeoutMs, Progress progress, Stop stop) throws Exception {
+        HttpURLConnection connection = (HttpURLConnection) new URL(url(path)).openConnection();
+        connection.setConnectTimeout(5000);
+        connection.setReadTimeout(readTimeoutMs);
+        connection.setRequestProperty("X-Csync-Token", token);
+        try {
+            int status = connection.getResponseCode();
+            if (status != 200) {
+                JSONObject error;
+                try (InputStream input = connection.getErrorStream()) {
+                    ByteArrayOutputStream body = new ByteArrayOutputStream();
+                    byte[] buffer = new byte[4096];
+                    int count;
+                    while (input != null && (count = input.read(buffer)) != -1 && body.size() < 65536) body.write(buffer, 0, count);
+                    error = new JSONObject(body.size() == 0 ? "{}" : body.toString("UTF-8"));
+                } catch (Exception unreadable) { error = new JSONObject(); }
+                throw new MediaException(error.optString("code", "MEDIA_ERROR"),
+                    error.optString("message", "The Pi answered " + status));
+            }
+            long total = connection.getContentLengthLong(), done = 0;
+            try (InputStream input = connection.getInputStream()) {
+                byte[] buffer = new byte[65536];
+                int count;
+                while ((count = input.read(buffer)) != -1) {
+                    if (stop != null && stop.now()) throw new Exception("Stopped");
+                    to.write(buffer, 0, count);
+                    done += count;
+                    if (progress != null) progress.at(done, total);
+                }
+            }
+            return connection.getContentType();
+        } finally { connection.disconnect(); }
+    }
+
     JSONObject uploadNoteImage(String path, byte[] png) throws Exception {
         if (png.length < 8 || png.length > 1024 * 1024) throw new Exception("Choose a PNG under 1 MB");
         HttpURLConnection connection = (HttpURLConnection) new URL(url(path)).openConnection();
@@ -241,6 +285,7 @@ final class MediaClient {
         connection.setConnectTimeout(5000);
         connection.setReadTimeout(path.equals("/v1/camera/record/stop") ? 120000 :
             path.equals("/v1/cast/youtube") ? 40000 :
+            path.equals("/v1/instagram/inspect") ? 150000 :
             path.equals("/v1/player/pi/commands") ? 40000 :
             (path.equals("/v1/player/pi") || path.equals("/v1/player/pi/immediate")) ? 5000 : 15000);
         connection.setRequestProperty("X-Csync-Token", token);

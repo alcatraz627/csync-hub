@@ -69,6 +69,12 @@ public class ShareActivity extends AppCompatActivity {
     // one action asked for, and a drawer closed without a pick puts the item's own page back.
     private boolean step;
     private boolean continuing;
+    private InstagramSave instagram;
+
+    @Override protected void onActivityResult(int request, int result, Intent data) {
+        super.onActivityResult(request, result, data);
+        if (request == InstagramSave.SIGN_IN && instagram != null) instagram.signedIn(result == RESULT_OK);
+    }
 
     /** In a step, a drawer closed without choosing ends the page; a choice sets {@code continuing} first. */
     private void endsStep(android.app.Dialog drawer) {
@@ -117,6 +123,16 @@ public class ShareActivity extends AppCompatActivity {
         if (conversation != null && kind != ItemActions.Kind.FILES) { toConversation(); return; }
         String entry = intent.getComponent() == null ? "" : intent.getComponent().getClassName();
         if (entry.endsWith(".SharePiScreen") && playOnPi()) return;
+        String post = files.isEmpty() && !step ? InstagramSave.link(text) : null;
+        if (post != null) {
+            // An Instagram post is saved from its own page; sending the link stays below it.
+            instagram = new InstagramSave(this, body, post, () -> {
+                Kit.label(body, "Or send the link");
+                renderActions();
+            });
+            instagram.show();
+            return;
+        }
         render();
         String last = PeerStore.selected(this);
         if (entry.endsWith(".ShareLastDevice") && !last.isEmpty()) sendToPeer(last, 0);
@@ -179,7 +195,10 @@ public class ShareActivity extends AppCompatActivity {
         body.addView(progress);
         // A step already knows its action; the list it came from is not offered a second time.
         if (step) return;
+        renderActions();
+    }
 
+    private void renderActions() {
         // The same list every other place uses. This page does each choice itself, since the item is already here.
         ItemActions.Item shared = new ItemActions.Item(kind, itemTitle());
         shared.incoming = true;

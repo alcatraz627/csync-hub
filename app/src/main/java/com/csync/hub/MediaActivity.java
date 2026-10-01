@@ -493,7 +493,7 @@ public final class MediaActivity extends AppCompatActivity {
 
     private void castYoutube() {
         Kit.fieldSheet(this, "A link", "Plays on the Pi screen, muted to begin with", "Paste a YouTube link",
-            "From YouTube or Instagram, use Share and choose Send to Pi screen.",
+            "From YouTube, use Share and choose Pi screen.",
             Kit.Icon.DISPLAY, "Play on Pi screen", this::startYoutube);
     }
 
