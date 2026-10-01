@@ -2,6 +2,7 @@
 <resources>
     <!-- The quick rail's overlay, added over every page's content in code. -->
     <item name="rail_overlay" type="id"/>
+    <item name="rail_hub_dot" type="id"/>
     <!-- Kit.stagger: the parts a page's entrance moved, and each part's resting see-through level. -->
     <item name="kit_motion_parts" type="id"/>
     <item name="kit_motion_alpha" type="id"/>

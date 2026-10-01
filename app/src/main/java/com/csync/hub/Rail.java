@@ -34,6 +34,27 @@ final class Rail {
     private static final int CHIP_DP = 48;
     private static final int OPEN_DRAG_DP = 28;
 
+    // How the Pi was at the last check, shown as a dot on the left button on every page. Null until checked.
+    private static Kit.Status hub;
+
+    /** Record how the Pi is and repaint the dot on this screen's button. */
+    static void status(Activity a, Kit.Status now) {
+        hub = now;
+        View dot = a.findViewById(R.id.rail_hub_dot);
+        if (dot != null) paintDot(dot);
+    }
+
+    private static void paintDot(View dot) {
+        dot.setVisibility(hub == null ? View.GONE : View.VISIBLE);
+        if (hub == null) return;
+        GradientDrawable shape = new GradientDrawable();
+        shape.setShape(GradientDrawable.OVAL);
+        shape.setColor(Kit.statusColor(dot.getContext(), hub));
+        shape.setStroke(Kit.dp(dot.getContext(), 2), ContextCompat.getColor(dot.getContext(), R.color.bg));
+        dot.setBackground(shape);
+        dot.setContentDescription(hub == Kit.Status.GOOD ? "The Pi is online" : hub == Kit.Status.BAD ? "The Pi cannot be reached" : "The Pi needs a look");
+    }
+
     /** Draw the buttons over the page; called on create and on resume, so Settings' picks show at once. */
     static void attach(Activity a) {
         ViewGroup content = a.findViewById(android.R.id.content);
@@ -97,7 +118,15 @@ final class Rail {
         column.setOrientation(LinearLayout.VERTICAL);
         column.setClipChildren(false);
         ImageView button = button(a, R.drawable.csi_plus, "Quick rail");
-        column.addView(button);
+        // The Pi's status rides on this button, the one part of the frame every page has.
+        FrameLayout holder = new FrameLayout(a);
+        holder.setClipChildren(false);
+        holder.addView(button);
+        View dot = new View(a);
+        dot.setId(R.id.rail_hub_dot);
+        holder.addView(dot, new FrameLayout.LayoutParams(Kit.dp(a, 12), Kit.dp(a, 12), Gravity.TOP | Gravity.END));
+        paintDot(dot);
+        column.addView(holder);
         LinearLayout chain = new LinearLayout(a);
         chain.setOrientation(LinearLayout.VERTICAL);
         chain.setVisibility(View.GONE);

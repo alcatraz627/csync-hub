@@ -59,29 +59,64 @@ public final class ChatStore {
         }
     }
 
-    // Set a field on a conversation's index entry (title, favorite, archived).
+    /**
+     * Set a field on a conversation's index entry (title, favorite, archived). The change is
+     * marked waiting until the Pi confirms it, so a pull of the Pi's older copy cannot undo it.
+     */
     static synchronized void patch(Context c, String id, String key, Object val) {
         JSONArray idx = index(c);
         for (int i = 0; i < idx.length(); i++) {
             JSONObject o = idx.optJSONObject(i);
             if (o != null && id.equals(o.optString("id"))) {
-                try { o.put(key, val); } catch (Throwable ignore) {}
+                try {
+                    o.put(key, val);
+                    JSONObject waiting = o.optJSONObject("waiting");
+                    o.put("waiting", (waiting == null ? new JSONObject() : waiting).put(key, true));
+                } catch (Throwable ignore) {}
                 break;
             }
         }
         p(c).edit().putString(INDEX, idx.toString()).apply();
-        try { onPi(c, "POST", "/conversations/" + id, new JSONObject().put(key, val)); } catch (Throwable ignore) { }
+        try {
+            onPi(c, "POST", "/conversations/" + id, new JSONObject().put(key, val), () -> confirmed(c, id, key));
+        } catch (Throwable ignore) { }
+    }
+
+    /** The Pi has the change: the phone's copy no longer needs to hold it against a pull. */
+    private static synchronized void confirmed(Context c, String id, String key) {
+        JSONArray idx = index(c);
+        JSONObject o = find(idx, id);
+        if (o == null || o.optJSONObject("waiting") == null) return;
+        o.optJSONObject("waiting").remove(key);
+        p(c).edit().putString(INDEX, idx.toString()).apply();
     }
 
     // ---- the Pi owns the conversations; this phone keeps a copy for reading offline ----
 
-    /** Send one change to the Pi in the background. A change made while the Pi is away stays on this phone only. */
-    private static void onPi(Context c, String method, String path, JSONObject body) {
+    /**
+     * Send one change to the Pi in the background; {@code done} runs once the Pi has it. A change
+     * the Pi does not take stays waiting on this phone and is sent again on the next pull.
+     */
+    private static void onPi(Context c, String method, String path, JSONObject body, Runnable done) {
         final String ip = Prefs.assistIp(c), token = Prefs.token(c);
         if (ip.isEmpty() || token.isEmpty()) return;
         new Thread(() -> {
-            try { MeshClient.conversations(ip, token, method, path, body); } catch (Throwable ignore) { }
+            try {
+                MeshClient.conversations(ip, token, method, path, body);
+                if (done != null) done.run();
+            } catch (Throwable ignore) { }
         }, "chat-to-pi").start();
+    }
+
+    private static final String GONE = "deleted_waiting";
+
+    private static synchronized void forgetDeleted(Context c, String id) {
+        java.util.Set<String> gone = deletedWaiting(c);
+        if (gone.remove(id)) p(c).edit().putStringSet(GONE, gone).apply();
+    }
+
+    private static java.util.Set<String> deletedWaiting(Context c) {
+        return new java.util.HashSet<>(p(c).getStringSet(GONE, new java.util.HashSet<>()));
     }
 
     /** Cut a conversation's copy on this phone back to its first keep entries. */
@@ -101,11 +136,26 @@ public final class ChatStore {
         if (ip.isEmpty() || token.isEmpty()) return false;
         boolean changed = false;
         try {
+            // Changes the Pi has not taken yet go first, so the copies below already carry them.
+            java.util.Set<String> gone = deletedWaiting(c);
+            for (String id : gone) onPi(c, "DELETE", "/conversations/" + id, null, () -> forgetDeleted(c, id));
+            JSONArray idx = index(c);
+            for (int i = 0; i < idx.length(); i++) {
+                JSONObject o = idx.optJSONObject(i);
+                JSONObject waiting = o == null ? null : o.optJSONObject("waiting");
+                if (waiting == null) continue;
+                for (java.util.Iterator<String> keys = waiting.keys(); keys.hasNext(); ) {
+                    String key = keys.next(), id = o.optString("id");
+                    onPi(c, "POST", "/conversations/" + id, new JSONObject().put(key, o.opt(key)), () -> confirmed(c, id, key));
+                }
+            }
             JSONArray remote = MeshClient.conversations(ip, token, "GET", "/conversations", null).optJSONArray("conversations");
             for (int i = 0; remote != null && i < remote.length(); i++) {
                 JSONObject meta = remote.optJSONObject(i);
                 if (meta == null) continue;
                 String id = meta.optString("id");
+                // Deleted here and not yet gone from the Pi: it does not come back.
+                if (gone.contains(id)) continue;
                 JSONObject local = find(index(c), id);
                 if (local != null && local.optLong("synced") >= meta.optLong("updated")) continue;
                 JSONObject full = MeshClient.conversations(ip, token, "GET", "/conversations/" + id, null);
@@ -130,10 +180,17 @@ public final class ChatStore {
         JSONArray idx = index(c), next = new JSONArray();
         JSONObject entry = find(idx, id);
         if (entry == null) entry = new JSONObject().put("id", id);
+        JSONObject waiting = entry.optJSONObject("waiting");
+        JSONObject mine = new JSONObject(entry.toString());
         entry.put("title", full.optString("title")).put("updated", full.optLong("updated"))
             .put("synced", full.optLong("updated")).put("favorite", full.optBoolean("favorite"))
             .put("archived", full.optBoolean("archived")).put("model", full.optString("model"))
             .put("effort", full.optString("effort"));
+        // A change made here that the Pi has not confirmed keeps the phone's value.
+        if (waiting != null) for (java.util.Iterator<String> keys = waiting.keys(); keys.hasNext(); ) {
+            String key = keys.next();
+            if (mine.has(key)) entry.put(key, mine.get(key));
+        }
         next.put(entry);
         for (int i = 0; i < idx.length(); i++) {
             JSONObject o = idx.optJSONObject(i);
@@ -149,7 +206,10 @@ public final class ChatStore {
     }
 
     static synchronized void delete(Context c, String id) {
-        onPi(c, "DELETE", "/conversations/" + id, null);
+        java.util.Set<String> gone = deletedWaiting(c);
+        gone.add(id);
+        p(c).edit().putStringSet(GONE, gone).apply();
+        onPi(c, "DELETE", "/conversations/" + id, null, () -> forgetDeleted(c, id));
         JSONArray idx = index(c), keep = new JSONArray();
         for (int i = 0; i < idx.length(); i++) {
             JSONObject o = idx.optJSONObject(i);

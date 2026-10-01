@@ -345,6 +345,11 @@ final class Kit {
      * into {@code host}, replacing what was there, so a caller redraws it by calling again.
      */
     static void tabs(LinearLayout host, int[] icons, String[] labels, int selected, Pick pick) {
+        tabs(host, icons, labels, selected, -1, pick);
+    }
+
+    /** The same, with a green dot after the name of the tab at {@code marked}, the one holding the current choice. */
+    static void tabs(LinearLayout host, int[] icons, String[] labels, int selected, int marked, Pick pick) {
         Context c = host.getContext();
         host.removeAllViews();
         host.setOrientation(LinearLayout.VERTICAL);
@@ -369,10 +374,18 @@ final class Kit {
             label.setTypeface(null, chosen ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
             label.setPadding(dp(c, 7), 0, 0, 0);
             tab.addView(label);
+            if (i == marked) {
+                View dot = new View(c);
+                dot.setBackgroundResource(R.drawable.kit_dot);
+                dot.setBackgroundTintList(ColorStateList.valueOf(statusColor(c, Status.GOOD)));
+                LinearLayout.LayoutParams after = new LinearLayout.LayoutParams(dp(c, 7), dp(c, 7));
+                after.setMarginStart(dp(c, 6));
+                tab.addView(dot, after);
+            }
             tab.setPadding(dp(c, 10), 0, dp(c, 10), 0);
             if (chosen) tab.setBackground(underline(c, accent));
             else tab.setBackgroundResource(outValue(c));
-            tab.setContentDescription(labels[i] + (chosen ? ", selected" : ""));
+            tab.setContentDescription(labels[i] + (chosen ? ", selected" : "") + (i == marked ? ", holds your choice" : ""));
             int index = i;
             tab.setOnClickListener(v -> { if (index != selected) pick.at(index); });
             strip.addView(tab, new LinearLayout.LayoutParams(-2, -2, 1));
