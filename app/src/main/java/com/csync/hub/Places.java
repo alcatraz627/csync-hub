@@ -55,10 +55,41 @@ final class Places {
         add("settings", "Settings", R.drawable.csi_settings, "more");
         add("connection", "Connection", R.drawable.csi_wifi, "settings");
         add("guide", "Assistant guide", R.drawable.csi_help, "more");
-        add("help", "Help and about", R.drawable.csi_help, "more");
+        add("help", "About", R.drawable.csi_info, "more");
     }
 
     static Place of(String id) { return ALL.get(id); }
+
+    /** The places directly under this one, in map order. */
+    static List<Place> children(String id) {
+        List<Place> out = new ArrayList<>();
+        for (Place place : ALL.values()) if (id.equals(place.parent)) out.add(place);
+        return out;
+    }
+
+    /** What a place is for, in a few words, for the sheet of places beside the current one. */
+    static String purpose(String id) {
+        switch (id) {
+            case "home": return "Everything the app can do";
+            case "search": return "Films, chats, files";
+            case "pi": return "Screen, camera, health";
+            case "camera": return "Live picture and captures";
+            case "notes": return "Notes and pins on the Pi";
+            case "media": return "Drives, videos, history";
+            case "pi-screen": return "Play, show or share on the screen";
+            case "share": return "Send to your devices";
+            case "received": return "What your devices sent";
+            case "chat": return "The Pi assistant";
+            case "more": return "This phone, settings, reading";
+            case "process": return "What this phone is busy with";
+            case "widgets": return "Tiles and shortcuts";
+            case "settings": return "Connect, play, look";
+            case "connection": return "The Pi's address and token";
+            case "guide": return "What to ask the assistant";
+            case "help": return "Version and your Pi";
+            default: return null;
+        }
+    }
 
     /** The path from the bar place down to this place, bar place first. */
     static List<Place> path(String id) {

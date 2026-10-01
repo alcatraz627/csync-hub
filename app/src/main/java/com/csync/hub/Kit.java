@@ -858,6 +858,43 @@ final class Kit {
         crumbs.addAll(java.util.Arrays.asList(deeper));
         Runnable up = back != null ? back : crumbs.size() == 1 ? null : crumbs.get(crumbs.size() - 2).open;
         pageTop(top, up, crumbs.toArray(new Crumb[0]));
+        // The page's own name opens what sits beside it and inside it.
+        if (deeper.length == 0 && top.getContext() instanceof android.app.Activity) {
+            LinearLayout row = top.findViewById(R.id.kit_crumbs);
+            View current = row.getChildAt(row.getChildCount() - 1);
+            current.setBackgroundResource(outValue(top.getContext()));
+            current.setContentDescription(Places.of(placeId).label + ", show the places beside it");
+            current.setOnClickListener(v -> adjacent((android.app.Activity) top.getContext(), placeId));
+        }
+    }
+
+    // Places the sheet can open from any screen; the rest live inside a page and are reached there.
+    private static final java.util.Set<String> REACHABLE = new java.util.HashSet<>(java.util.Arrays.asList(
+        "home", "search", "pi", "camera", "notes", "media", "pi-screen", "share", "received", "chat", "more",
+        "process", "widgets", "settings", "connection", "guide", "help"));
+
+    /** A sheet of the places next to this one and inside it, each with its icon and what it is for. */
+    static void adjacent(android.app.Activity a, String placeId) {
+        Places.Place here = Places.of(placeId);
+        if (here == null) return;
+        java.util.List<Section> sections = new java.util.ArrayList<>();
+        java.util.List<Action> inside = new java.util.ArrayList<>(), beside = new java.util.ArrayList<>();
+        for (Places.Place child : Places.children(placeId)) if (REACHABLE.contains(child.id)) inside.add(placeAction(a, child));
+        // A bar place's neighbours are the bar itself, so only places under a parent list theirs.
+        if (here.parent != null)
+            for (Places.Place sibling : Places.children(here.parent))
+                if (!sibling.id.equals(placeId) && REACHABLE.contains(sibling.id)) beside.add(placeAction(a, sibling));
+        if (!inside.isEmpty()) sections.add(new Section("In " + here.label, inside));
+        if (!beside.isEmpty()) sections.add(new Section("Next to " + here.label, beside));
+        if (sections.isEmpty()) return;
+        sheet(a, here.label, Places.purpose(placeId), sections);
+    }
+
+    private static Action placeAction(android.app.Activity a, Places.Place place) {
+        String rail = "help".equals(place.id) ? "about" : place.id;
+        return new Action(place.icon, place.label, Places.purpose(place.id), () -> {
+            try { RailActions.run(a, new org.json.JSONObject().put("id", rail)); } catch (Exception ignored) { }
+        }, true);
     }
 
     /**

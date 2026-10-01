@@ -144,6 +144,8 @@ final class RailActions {
             case "widgets": main(a, "tools", "widgets"); return;
             case "connection": main(a, "settings", "connection"); return;
             case "rail-setup": main(a, "settings", null); return;
+            case "guide": main(a, "more", "guide"); return;
+            case "about": main(a, "more", "about"); return;
             case "update": main(a, "tools", "update"); return;
             case "search": jump(a, new Intent(a, SearchActivity.class)); return;
             case "notes": jump(a, new Intent(a, NotesActivity.class)); return;

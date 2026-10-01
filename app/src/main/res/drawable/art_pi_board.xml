@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- About's hero: a Raspberry Pi board seen from above, drawn in the app's own colours. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="240dp" android:height="150dp" android:viewportWidth="240" android:viewportHeight="150">
+    <!-- the board -->
+    <path android:fillColor="@color/surface2" android:strokeColor="@color/border" android:strokeWidth="1.5"
+        android:pathData="M18,14h196a10,10 0 0 1 10,10v102a10,10 0 0 1 -10,10h-196a10,10 0 0 1 -10,-10v-102a10,10 0 0 1 10,-10z"/>
+    <!-- mounting holes -->
+    <path android:fillColor="@color/bg" android:pathData="M24,28m-5,0a5,5 0 1,1 10,0a5,5 0 1,1 -10,0"/>
+    <path android:fillColor="@color/bg" android:pathData="M206,28m-5,0a5,5 0 1,1 10,0a5,5 0 1,1 -10,0"/>
+    <path android:fillColor="@color/bg" android:pathData="M24,122m-5,0a5,5 0 1,1 10,0a5,5 0 1,1 -10,0"/>
+    <path android:fillColor="@color/bg" android:pathData="M206,122m-5,0a5,5 0 1,1 10,0a5,5 0 1,1 -10,0"/>
+    <!-- the header pins along the top edge -->
+    <path android:fillColor="@color/dim"
+        android:pathData="M40,20h4v4h-4zM48,20h4v4h-4zM56,20h4v4h-4zM64,20h4v4h-4zM72,20h4v4h-4zM80,20h4v4h-4zM88,20h4v4h-4zM96,20h4v4h-4zM104,20h4v4h-4zM112,20h4v4h-4zM120,20h4v4h-4zM128,20h4v4h-4zM136,20h4v4h-4zM144,20h4v4h-4zM152,20h4v4h-4zM160,20h4v4h-4zM168,20h4v4h-4zM176,20h4v4h-4zM184,20h4v4h-4zM192,20h4v4h-4z"/>
+    <path android:fillColor="@color/dim"
+        android:pathData="M40,28h4v4h-4zM48,28h4v4h-4zM56,28h4v4h-4zM64,28h4v4h-4zM72,28h4v4h-4zM80,28h4v4h-4zM88,28h4v4h-4zM96,28h4v4h-4zM104,28h4v4h-4zM112,28h4v4h-4zM120,28h4v4h-4zM128,28h4v4h-4zM136,28h4v4h-4zM144,28h4v4h-4zM152,28h4v4h-4zM160,28h4v4h-4zM168,28h4v4h-4zM176,28h4v4h-4zM184,28h4v4h-4zM192,28h4v4h-4z"/>
+    <!-- the processor, in the accent -->
+    <path android:fillColor="@color/coral"
+        android:pathData="M70,56h40a4,4 0 0 1 4,4v40a4,4 0 0 1 -4,4h-40a4,4 0 0 1 -4,-4v-40a4,4 0 0 1 4,-4z"/>
+    <path android:fillColor="@color/bg" android:fillAlpha="0.35"
+        android:pathData="M80,66h20v20h-20z"/>
+    <!-- memory and the wireless chip -->
+    <path android:fillColor="@color/text" android:fillAlpha="0.75"
+        android:pathData="M126,60h30a3,3 0 0 1 3,3v18a3,3 0 0 1 -3,3h-30a3,3 0 0 1 -3,-3v-18a3,3 0 0 1 3,-3z"/>
+    <path android:fillColor="@color/dim"
+        android:pathData="M30,64h22v16h-22z"/>
+    <!-- ports along the right edge: two USB stacks and ethernet -->
+    <path android:fillColor="@color/text" android:fillAlpha="0.85"
+        android:pathData="M196,44h30v22h-30zM196,72h30v22h-30zM190,100h36v26h-36z"/>
+    <!-- power and two HDMI ports along the bottom edge -->
+    <path android:fillColor="@color/text" android:fillAlpha="0.7"
+        android:pathData="M40,128h18v10h-18zM72,128h22v10h-22zM104,128h22v10h-22z"/>
+    <!-- a status light -->
+    <path android:fillColor="@color/online" android:pathData="M30,104m-3,0a3,3 0 1,1 6,0a3,3 0 1,1 -6,0"/>
+</vector>

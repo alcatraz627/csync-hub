@@ -118,10 +118,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             pageMore.findViewById(R.id.more_help), pageChat.findViewById(R.id.chat_history));
         Kit.pullToRefresh(pageHome.findViewById(R.id.home_refresh), this::refreshHome);
         Kit.pullToRefresh(pageShare.findViewById(R.id.share_refresh), this::refreshShare);
-        Kit.pullToRefresh(pageTools.findViewById(R.id.tools_refresh), () -> {
-            refreshToolsHealth();
-            AppUpdater.refreshStatus(this, toolsUpdateStatus);
-        });
+        Kit.pullToRefresh(pageTools.findViewById(R.id.tools_refresh), this::refreshToolsHealth);
         // Whether Back has somewhere to go changes with many small state flips; reading it before each draw keeps it right.
         content.getViewTreeObserver().addOnPreDrawListener(() -> { backInApp.setEnabled(hasLevelAbove()); return true; });
 
@@ -303,8 +300,15 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             case "received": setShareMode(true); break;
             case "process": showToolsDetail(1); break;
             case "widgets": showToolsDetail(2); break;
-            case "update": showToolsDetail(0); AppUpdater.refreshStatus(this, toolsUpdateStatus); break;
+            // Checking asks the Pi which build it holds; About then says up to date or offers it.
+            case "update":
+                show(6);
+                showMoreDetail(2);
+                AppUpdater.check(this, newer -> { stagedUpdate = newer; if (current == 6 && moreDetail == 2) renderHelp(); });
+                break;
             case "connection": revealSettingsDetail(R.id.settings_connection_detail); break;
+            case "guide": showMoreDetail(1); break;
+            case "about": showMoreDetail(2); break;
             default:
         }
     }
@@ -346,7 +350,6 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         if (page == 3) {
             showToolsDetail(0);
             refreshToolsHealth();
-            AppUpdater.refreshStatus(this, toolsUpdateStatus);
         }
         if (page == 4) { closeSettingsDetail(); refreshConnection(); refreshAssistant(); }
         if (page == 5 && resumed) cameraController.show();
@@ -438,7 +441,6 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         }
         ((android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancel(7002);
         if (current == 3 && toolsDetail == 1) ensureShizuku();
-        if (current == 3) AppUpdater.refreshStatus(this, toolsUpdateStatus);
         if (current == 5) cameraController.show();
         miniPlayer.start();
     }
@@ -487,7 +489,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     // What a tap on each part's row explains, in a sentence.
     private final String[] toolFacts = new String[TOOL_PARTS.length];
     private View toolsLeadDot;
-    private TextView toolsLeadWords, toolsUpdateStatus;
+    private TextView toolsLeadWords;
 
     /**
      * The Raspberry Pi page: one line on how it is, what it can show and see, then each part's
@@ -688,10 +690,6 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
         Kit.label(page, "This app");
         group = Kit.group(page);
-        View update = Kit.addRow(group);
-        Kit.bindRow(update, R.drawable.csi_download, "Update csync from the Pi", "Installed: " + appVersion(), null, false);
-        toolsUpdateStatus = update.findViewById(R.id.kit_sub);
-        update.setOnClickListener(v -> AppUpdater.start(this, toolsUpdateStatus));
         Kit.bindRow(Kit.addRow(group), Kit.Icon.SETTINGS, "Settings", "How the app connects, plays and looks", null, true)
             .setOnClickListener(v -> show(4));
 
@@ -699,7 +697,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         group = Kit.group(page);
         Kit.bindRow(Kit.addRow(group), R.drawable.csi_help, "Assistant guide", "What you can ask the Pi assistant", null, true)
             .setOnClickListener(v -> showMoreDetail(1));
-        Kit.bindRow(Kit.addRow(group), R.drawable.csi_info, "Help and about", "Version " + appVersion(), null, true)
+        Kit.bindRow(Kit.addRow(group), R.drawable.csi_info, "About", "Version " + appVersion(), null, true)
             .setOnClickListener(v -> showMoreDetail(2));
     }
 
@@ -764,26 +762,48 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private void renderHelp() {
         LinearLayout page = pageMore.findViewById(R.id.help_rows);
         page.removeAllViews();
-        String[][] parts = {
-            {"Where things live", "Media browses the drives and plays on the Pi screen or this phone. Share sends to your devices. "
-                + "Chat talks to the Pi assistant. More holds the camera, notes, tools and settings."},
-            {"When something does not work", "Open More, then Tools. It shows how the Pi is doing right now. "
-                + "If the Pi cannot be reached at all, open Settings, then Connection."}};
-        for (String[] part : parts) {
-            Kit.label(page, part[0]);
-            TextView words = new TextView(this);
-            words.setTextColor(col(R.color.text));
-            words.setTextSize(14);
-            words.setLineSpacing(0, 1.25f);
-            words.setPadding(dp(2), 0, 0, 0);
-            words.setText(part[1]);
-            page.addView(words);
-        }
-        Kit.label(page, "About");
+        // A picture of the board, then the few facts worth knowing; nobody reads paragraphs here.
+        android.widget.FrameLayout hero = new android.widget.FrameLayout(this);
+        android.graphics.drawable.GradientDrawable wash = new android.graphics.drawable.GradientDrawable(
+            android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+            new int[]{androidx.core.graphics.ColorUtils.blendARGB(col(R.color.surface), accent(), 0.18f), col(R.color.surface)});
+        wash.setCornerRadius(dp(18));
+        hero.setBackground(wash);
+        hero.setPadding(dp(16), dp(22), dp(16), dp(18));
+        LinearLayout stack = new LinearLayout(this);
+        stack.setOrientation(LinearLayout.VERTICAL);
+        stack.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
+        android.widget.ImageView board = new android.widget.ImageView(this);
+        board.setImageResource(R.drawable.art_pi_board);
+        board.setContentDescription("A Raspberry Pi board");
+        stack.addView(board, new LinearLayout.LayoutParams(dp(240), dp(150)));
+        TextView name = new TextView(this);
+        name.setTextAppearance(R.style.Kit_Text_RowTitle);
+        name.setTextSize(26);
+        name.setText("csync");
+        name.setPadding(0, dp(14), 0, 0);
+        stack.addView(name);
+        TextView line = new TextView(this);
+        line.setTextAppearance(R.style.Kit_Text_Meta);
+        line.setTypeface(androidx.core.content.res.ResourcesCompat.getFont(this, R.font.mono));
+        line.setText("version " + appVersion());
+        stack.addView(line);
+        hero.addView(stack, new android.widget.FrameLayout.LayoutParams(-1, -2));
+        page.addView(hero, new LinearLayout.LayoutParams(-1, -2));
+
+        Kit.label(page, "This app");
         LinearLayout group = Kit.group(page);
+        View update = Kit.addRow(group);
+        Kit.bindRow(update, R.drawable.csi_download, stagedUpdate == null ? "Up to date" : "csync " + stagedUpdate + " is ready",
+            stagedUpdate == null ? "Version " + appVersion() + ", from the Pi" : "Tap to install", null, stagedUpdate != null);
+        if (stagedUpdate != null) update.setOnClickListener(v -> { AppUpdater.start(this, null); stagedUpdate = null; renderHelp(); });
+        else update.setClickable(false);
+        Kit.label(page, "Your Pi");
+        group = Kit.group(page);
         String pi = Prefs.assistIp(this);
-        Kit.bindRow(Kit.addRow(group), R.drawable.csi_info, "csync", null, appVersion(), false).setClickable(false);
-        Kit.bindRow(Kit.addRow(group), Kit.Icon.TOOLS, "Raspberry Pi", null, pi.isEmpty() ? "Not set" : pi, false).setClickable(false);
+        View address = Kit.addRow(group);
+        Kit.bindRow(address, R.drawable.csi_system, "Raspberry Pi", null, pi.isEmpty() ? "Not set" : pi, true);
+        address.setOnClickListener(v -> openPlace("pi"));
     }
 
     private void showToolsDetail(int detail) {
