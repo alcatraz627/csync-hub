@@ -256,6 +256,8 @@ public final class NotesActivity extends AppCompatActivity {
     /** Start a page: clear what the last one drew and set what stays the same on every page. */
     private void open(Page next, String title, String restingWords) {
         page = next;
+        // The page is filled after this returns, so its entrance waits for that.
+        root.post(() -> { if (hasWindowFocus()) Kit.arrive(this, place()); });
         rows.removeAllViews();
         tabsHost.removeAllViews();
         this.title = null;
@@ -1158,7 +1160,11 @@ public final class NotesActivity extends AppCompatActivity {
     @Override protected void onResume() {
         super.onResume();
         Rail.attach(this);
+        Kit.arrive(this, place());
     }
+
+    /** The place in the map on screen: the list, or one note or pin. */
+    private String place() { return page == Page.LIST ? "notes" : "note"; }
 
     private final androidx.activity.OnBackPressedCallback backInApp = new androidx.activity.OnBackPressedCallback(false) {
         @Override public void handleOnBackProgressed(androidx.activity.BackEventCompat event) {

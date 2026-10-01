@@ -267,6 +267,12 @@ public final class MediaActivity extends AppCompatActivity {
     @Override protected void onResume() {
         super.onResume();
         Rail.attach(this);
+        Kit.arrive(this, place());
+    }
+
+    /** The place in the map on screen: Media's views, or the player page for one output. */
+    private String place() {
+        return !fullPlayer ? "media" : "phone".equals(target) ? "phone-player" : "pi-screen";
     }
 
     @Override public void onConfigurationChanged(android.content.res.Configuration config) {
@@ -602,6 +608,7 @@ public final class MediaActivity extends AppCompatActivity {
         if ("phone".equals(target) && PhonePlaybackService.current == null && phoneProblem == null)
             updateFullPlayer("This phone", "stopped", "", 0, 0, 0, 1);
         if (phoneProblem == null) ((TextView) findViewById(R.id.player_feedback)).setText("");
+        if (hasWindowFocus()) Kit.arrive(this, place());
     }
 
     private void closeFullPlayer() {
@@ -610,6 +617,7 @@ public final class MediaActivity extends AppCompatActivity {
         findViewById(R.id.media_list).setVisibility(View.VISIBLE);
         if ("pi".equals(target)) findViewById(R.id.media_player_controls).setVisibility(View.VISIBLE);
         selectTab(activeTab);
+        Kit.arrive(this, place());
     }
 
     private static String playbackTime(int milliseconds) {

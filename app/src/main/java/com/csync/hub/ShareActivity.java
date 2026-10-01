@@ -142,6 +142,9 @@ public class ShareActivity extends AppCompatActivity {
     @Override protected void onResume() {
         super.onResume();
         Rail.attach(this);
+        // An item arriving from another app has no page of ours behind it, so it always fades through.
+        Kit.lastPlace = null;
+        Kit.arrive(this, "share-in");
     }
 
     /** Send the item to the place that was chosen before this page opened. */

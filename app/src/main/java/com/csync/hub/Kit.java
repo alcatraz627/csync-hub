@@ -183,6 +183,7 @@ final class Kit {
         TextView label = new TextView(c);
         label.setTextAppearance(R.style.Kit_Text_Section);
         label.setText(text);
+        label.setTag("kit-title");
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
         params.topMargin = dp(c, 16);
         params.bottomMargin = dp(c, 8);
@@ -323,6 +324,7 @@ final class Kit {
         button.addView(label);
         button.setContentDescription(words);
         button.setOnClickListener(v -> click.run());
+        button.setTag("kit-action");
         return button;
     }
 
@@ -379,6 +381,7 @@ final class Kit {
         android.widget.HorizontalScrollView scroller = new android.widget.HorizontalScrollView(c);
         scroller.setFillViewport(true);
         scroller.setHorizontalScrollBarEnabled(false);
+        scroller.setTag("kit-action");
         scroller.addView(strip, new ViewGroup.LayoutParams(-2, -2));
         host.addView(scroller, new LinearLayout.LayoutParams(-1, -2));
         View line = new View(c);
@@ -843,17 +846,118 @@ final class Kit {
 
     // ---- motion and touch ----
 
-    /** The 150 ms fade-through a page makes when it takes another's place; nothing else moves. */
-    static void fadeThrough(View page) {
-        if (page == null) return;
-        // A place arrives: it rises a little as it fades in, long enough to be felt, short enough not to wait for.
+    // ---- moving between pages (the motion guidebook is in docs/android-ui-system.md) ----
+
+    /** The place on screen last, so the next page can tell how it was reached. */
+    static String lastPlace = "home";
+
+    /**
+     * Animate a page arriving from {@code from}. A step to a direct child, or back to the parent,
+     * slides along one horizontal axis; every other move fades through. Then the page's parts
+     * arrive in four steps: the surface, then titles, then actions, then status and decoration.
+     */
+    static void move(View page, String from, String to) {
+        if (page == null || to == null) return;
+        Places.Place target = Places.of(to), origin = from == null ? null : Places.of(from);
+        boolean down = target != null && from != null && from.equals(target.parent);
+        boolean up = origin != null && to.equals(origin.parent);
+        Context c = page.getContext();
+        androidx.interpolator.view.animation.FastOutSlowInInterpolator ease =
+            new androidx.interpolator.view.animation.FastOutSlowInInterpolator();
         page.animate().cancel();
-        page.setAlpha(0f);
-        page.setTranslationY(dp(page.getContext(), 10));
         page.setScaleX(1f);
         page.setScaleY(1f);
-        page.animate().alpha(1f).translationY(0f).setDuration(240)
-            .setInterpolator(new androidx.interpolator.view.animation.FastOutSlowInInterpolator()).start();
+        page.setTranslationY(0f);
+        if (down || up) {
+            // Shared axis: forward comes in from the right, back from the left.
+            page.setAlpha(0f);
+            page.setTranslationX(dp(c, down ? 36 : -36));
+            page.animate().alpha(1f).translationX(0f).setDuration(260).setInterpolator(ease).start();
+        } else {
+            // Fade through: the new page grows a touch into place as it fades in.
+            page.setTranslationX(0f);
+            page.setAlpha(0f);
+            page.setScaleX(0.96f);
+            page.setScaleY(0.96f);
+            page.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(240).setStartDelay(40).setInterpolator(ease).start();
+        }
+        stagger(page);
+        lastPlace = to;
+    }
+
+    /**
+     * A screen of its own (Media, Notes, Search) arriving or coming back into view. It moves by the
+     * same rule as a page, measured from the place that was on screen last; staying put is no move.
+     */
+    static void arrive(android.app.Activity a, String place) {
+        if (place == null || place.equals(lastPlace)) return;
+        ViewGroup content = a.findViewById(android.R.id.content);
+        if (content == null || content.getChildCount() == 0) return;
+        View root = content.getChildAt(0);
+        String from = lastPlace;
+        // The bottom bar is the app's frame, the same on every page, so it holds still while the page moves.
+        if (root instanceof ViewGroup) {
+            ViewGroup parts = (ViewGroup) root;
+            for (int i = 0; i < parts.getChildCount(); i++) {
+                View part = parts.getChildAt(i);
+                if (!(part instanceof com.google.android.material.navigation.NavigationBarView)) move(part, from, place);
+            }
+        } else move(root, from, place);
+    }
+
+    /** A page arriving on its own, with no move to measure against: it fades through. */
+    static void fadeThrough(View page) { move(page, null, lastPlace); }
+
+    private static final long STEP_MS = 70;
+
+    /**
+     * Bring a page's parts in by tier. Titles (the crumbs, section labels) come second, actions
+     * (buttons, tabs, the top bar's icons) third, and status words, dots, chevrons and row icons
+     * last. A part keeps whatever see-through level it had, so a dimmed part stays dimmed.
+     */
+    static void stagger(View page) {
+        Object held = page.getTag(R.id.kit_motion_parts);
+        if (held instanceof java.util.List) {
+            for (Object old : (java.util.List<?>) held) {
+                View part = (View) old;
+                part.animate().cancel();
+                Object rest = part.getTag(R.id.kit_motion_alpha);
+                part.setAlpha(rest instanceof Float ? (Float) rest : 1f);
+                part.setTranslationY(0f);
+            }
+        }
+        java.util.List<View> moved = new java.util.ArrayList<>();
+        tiers(page, moved);
+        page.setTag(R.id.kit_motion_parts, moved);
+    }
+
+    private static void tiers(View view, java.util.List<View> moved) {
+        if (view.getVisibility() != View.VISIBLE) return;
+        int tier = tierOf(view);
+        if (tier > 1) {
+            Float rest = view.getAlpha();
+            view.setTag(R.id.kit_motion_alpha, rest);
+            view.setAlpha(0f);
+            view.setTranslationY(tier == 4 ? 0f : dp(view.getContext(), 6));
+            view.animate().alpha(rest).translationY(0f).setStartDelay(STEP_MS * (tier - 1)).setDuration(180).start();
+            moved.add(view);
+            return;
+        }
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) tiers(group.getChildAt(i), moved);
+        }
+    }
+
+    /** Which step a part arrives in: 2 titles, 3 actions, 4 status and decoration, 1 for the rest. */
+    private static int tierOf(View view) {
+        int id = view.getId();
+        Object tag = view.getTag();
+        if (id == R.id.kit_crumbs || "kit-title".equals(tag)) return 2;
+        if (id == R.id.kit_actions || id == R.id.kit_back || "kit-action".equals(tag)) return 3;
+        if (id == R.id.kit_end || id == R.id.kit_chevron || id == R.id.kit_icon || id == R.id.kit_dot
+            || id == R.id.kit_action) return 4;
+        return 1;
     }
 
     /** Draw a page the way Android's back preview does: it shrinks a little as the gesture goes on, and springs back at 0. */

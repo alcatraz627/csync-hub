@@ -337,7 +337,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageSettings.setVisibility(page == 4 ? View.VISIBLE : View.GONE);
         pageCamera.setVisibility(page == 5 ? View.VISIBLE : View.GONE);
         pageMore.setVisibility(page == 6 ? View.VISIBLE : View.GONE);
-        if (moved) Kit.fadeThrough(currentPage());
+        if (resumed) arrive();
         markBar();
         if (page == 6) showMoreDetail(0);
         if (page == 0) refreshHome();
@@ -350,6 +350,39 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         }
         if (page == 4) { closeSettingsDetail(); refreshConnection(); refreshAssistant(); }
         if (page == 5 && resumed) cameraController.show();
+    }
+
+    private boolean movePending;
+    private String moveFrom;
+
+    /**
+     * Note that the page on screen may have changed. Opening one place often passes through
+     * another on the way (a page, then its detail), so the move is animated once, after the
+     * change settles, from where the user was to where they landed.
+     */
+    private void arrive() {
+        if (movePending) return;
+        movePending = true;
+        moveFrom = Kit.lastPlace;
+        ui.post(() -> {
+            movePending = false;
+            String to = placeNow();
+            if (to.equals(moveFrom)) { Kit.lastPlace = to; return; }
+            Kit.move(currentPage(), moveFrom, to);
+        });
+    }
+
+    /** The place in the map that the page on screen is. */
+    private String placeNow() {
+        switch (current) {
+            case 1: return "share";
+            case 2: return chatConvoMode ? "conversation" : "chat";
+            case 3: return toolsDetail == 1 ? "process" : toolsDetail == 2 ? "widgets" : "pi";
+            case 4: return settingsDetail != 0 ? "connection" : "settings";
+            case 5: return "camera";
+            case 6: return moreDetail == 1 ? "guide" : moreDetail == 2 ? "help" : "more";
+            default: return "home";
+        }
     }
 
     /**
@@ -378,6 +411,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         super.onResume();
         Rail.attach(this);
         resumed = true;
+        // Coming back from a page in another screen (Media, Notes, Search) is a move too.
+        arrive();
         acceptChatDraft(getIntent());
         // A send made on the share page while this page waited underneath belongs in the list at once.
         if (current == 1) renderSentHistory();
@@ -591,6 +626,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageMore.findViewById(R.id.more_guide).setVisibility(detail == 1 ? View.VISIBLE : View.GONE);
         pageMore.findViewById(R.id.more_help).setVisibility(detail == 2 ? View.VISIBLE : View.GONE);
         Kit.pageTop(pageMore.findViewById(R.id.more_crumb), detail == 0 ? "more" : detail == 1 ? "guide" : "help", this::openPlace, visitBack());
+        if (resumed) arrive();
         if (detail == 1) renderGuide();
         if (detail == 2) renderHelp();
     }
@@ -719,6 +755,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         // Pulling the page down checks again, so the top bar carries no refresh icon.
         Kit.pageTop(top, overview ? "pi" : detail == 1 ? "process" : "widgets", this::openPlace, overview ? rootBack() : visitBack());
         markBar();
+        if (resumed) arrive();
         ((android.widget.ScrollView) pageTools.findViewById(R.id.tools_scroll)).scrollTo(0, 0);
         if (detail == 1 && resumed) ensureShizuku();
         if (detail == 2) renderWidgetsPage();
@@ -731,6 +768,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageSettings.findViewById(R.id.settings_overview).setVisibility(View.GONE);
         pageSettings.findViewById(id).setVisibility(View.VISIBLE);
         Kit.pageTop(pageSettings.findViewById(R.id.settings_back), "connection", this::openPlace, visitBack());
+        if (resumed) arrive();
         refreshConnection();
         pageSettings.findViewById(R.id.settings_scroll).post(() ->
             ((android.widget.ScrollView) pageSettings.findViewById(R.id.settings_scroll))
@@ -742,6 +780,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageSettings.findViewById(R.id.settings_connection_detail).setVisibility(View.GONE);
         pageSettings.findViewById(R.id.settings_overview).setVisibility(View.VISIBLE);
         Kit.pageTop(pageSettings.findViewById(R.id.settings_back), "settings", this::openPlace, rootBack());
+        if (resumed) arrive();
     }
 
     /** Go to a place in the map. The top bar's path and Back both come through here. */
@@ -3116,6 +3155,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         chatConvo.setVisibility(View.GONE);
         chatBack.setVisibility(View.GONE);
         renderChatTop();
+        if (resumed) arrive();
         chatFilterbar.setVisibility(View.VISIBLE);
         chatTitleEdit.setVisibility(View.GONE);
         chatTitle.setVisibility(View.VISIBLE);
@@ -3235,6 +3275,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         chatConvo.setVisibility(View.VISIBLE);
         chatBack.setVisibility(View.GONE);
         renderChatTop();
+        if (resumed) arrive();
         chatFilterbar.setVisibility(View.GONE);
         chatTitleEdit.setVisibility(View.GONE);
         chatTitle.setVisibility(View.VISIBLE);
@@ -3262,6 +3303,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         chatConvo.setVisibility(View.VISIBLE);
         chatBack.setVisibility(View.GONE);
         renderChatTop();
+        if (resumed) arrive();
         chatFilterbar.setVisibility(View.GONE);
         chatTitleEdit.setVisibility(View.GONE);
         chatTitle.setVisibility(View.VISIBLE);

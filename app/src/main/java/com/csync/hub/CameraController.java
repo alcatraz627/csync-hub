@@ -180,12 +180,14 @@ final class CameraController {
         showingCaptures = true;
         closePreview();
         renderPage();
+        Kit.move(capturesPage, "camera", "captures");
         loadCaptures();
     }
 
     private void closeCaptures() {
         showingCaptures = false;
         renderPage();
+        Kit.move(cameraPage, "captures", "camera");
         if (visible) startPreview();
     }
 
