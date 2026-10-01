@@ -1645,27 +1645,20 @@ public final class MediaActivity extends AppCompatActivity {
         }, this::sayIfRefused);
     }
 
+    /** The player page holds every playback setting in view, so the settings button opens it rather than a list of drawers. */
     private void chooseSetting() {
-        Kit.sheet(this, "Playback settings", null,
-            new Kit.Action(Kit.Icon.VOLUME, "Volume", lastVolume + "%", this::chooseVolume),
-            new Kit.Action(Kit.Icon.SPEED, "Speed", lastSpeed + "×", this::chooseSpeed),
-            new Kit.Action(R.drawable.csi_sliders, "Skip length", skipSeconds + " seconds", this::chooseSkip));
+        showFullPlayer();
     }
 
+    /** Each tap moves to the next skip length, 5, 10, 15 and 30 seconds round again; the button shows the length. */
     private void chooseSkip() {
         int[] choices = {5, 10, 15, 30};
-        Kit.Action[] actions = new Kit.Action[choices.length];
-        for (int i = 0; i < choices.length; i++) {
-            int seconds = choices[i];
-            actions[i] = new Kit.Action(seconds == skipSeconds ? R.drawable.csi_check : R.drawable.csi_fastforward,
-                seconds + " seconds", null, () -> {
-                    skipSeconds = seconds;
-                    getSharedPreferences("player_controls", MODE_PRIVATE).edit()
-                        .putInt("skip_seconds", skipSeconds).apply();
-                    renderSkip();
-                });
-        }
-        Kit.sheet(this, "Skip length", "Rewind and Forward jump by this much", actions);
+        int next = choices[0];
+        for (int i = 0; i < choices.length; i++) if (choices[i] == skipSeconds) next = choices[(i + 1) % choices.length];
+        skipSeconds = next;
+        getSharedPreferences("player_controls", MODE_PRIVATE).edit().putInt("skip_seconds", skipSeconds).apply();
+        renderSkip();
+        Kit.tick(findViewById(R.id.player_skip));
     }
 
     private int lastVolume;
