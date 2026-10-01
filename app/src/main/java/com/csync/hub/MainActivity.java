@@ -1616,15 +1616,24 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             rows.addView(slider);
         }
         preview.setBackgroundColor(initial);
-        new androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("Custom primary color")
-            .setView(rows)
-            .setNegativeButton("Cancel", null)
-            .setPositiveButton("Apply color", (dialog, which) -> {
-                Prefs.saveCustomAccent(this,
-                    android.graphics.Color.rgb(channels[0], channels[1], channels[2]));
-                recreate();
-            }).show();
+        LinearLayout actions = new LinearLayout(this);
+        actions.setGravity(android.view.Gravity.END);
+        actions.setPadding(0, dp(8), 0, 0);
+        actions.addView(Kit.tonalButton(this, R.drawable.csi_check, "Use this colour", () -> {
+            Prefs.saveCustomAccent(this, android.graphics.Color.rgb(channels[0], channels[1], channels[2]));
+            recreate();
+        }));
+        rows.addView(actions);
+        // The mixer opens in place under the swatches, and a second tap on the swatch folds it away.
+        // The swatches scroll sideways, so the mixer goes under the scroller, in the page itself.
+        View swatches = (View) pageSettings.findViewById(R.id.set_accent_custom).getParent();
+        while (swatches.getParent() instanceof android.widget.HorizontalScrollView) swatches = (View) swatches.getParent();
+        android.view.ViewGroup holder = (android.view.ViewGroup) swatches.getParent();
+        View open = holder.findViewWithTag("accent-mixer");
+        if (open != null) { holder.removeView(open); return; }
+        rows.setTag("accent-mixer");
+        rows.setPadding(dp(4), dp(8), dp(4), dp(4));
+        holder.addView(rows, holder.indexOfChild(swatches) + 1);
     }
 
     // ---------------- system page (Shizuku top) ----------------
@@ -2313,18 +2322,6 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         View loop = Kit.addRow(playback);
         Kit.bindRow(loop, Kit.Icon.LOOP, "Loop", null, null, false);
         Kit.rowToggle(loop, how.getBoolean("loop", false), on -> how.edit().putBoolean("loop", on).apply());
-        View skip = Kit.addRow(playback);
-        Kit.bindRow(skip, R.drawable.csi_fastforward, "Skip length", null, how.getInt("skip_seconds", 10) + " seconds", true);
-        skip.setOnClickListener(v -> {
-            int now = how.getInt("skip_seconds", 10);
-            java.util.List<Kit.Action> lengths = new java.util.ArrayList<>();
-            for (int seconds : new int[]{5, 10, 15, 30}) lengths.add(new Kit.Action(
-                seconds == now ? R.drawable.csi_check : R.drawable.csi_fastforward, seconds + " seconds", null, () -> {
-                    how.edit().putInt("skip_seconds", seconds).apply();
-                    renderPlaybackSettings();
-                }));
-            Kit.sheet(this, "Skip length", "For both Back and Forward", lengths.toArray(new Kit.Action[0]));
-        });
         // The screen the Pi is plugged into and how loud it starts, written in once the Pi has answered.
         final View display = Kit.addRow(playback);
         Kit.bindRow(display, Kit.Icon.DISPLAY, "Display", "What the Pi is plugged into", null, true);
@@ -2339,6 +2336,17 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                 Kit.bindRow(volume, Kit.Icon.VOLUME, "Starting volume", "On the Pi screen", starts == 0 ? "Muted" : starts + "%", true);
             });
         }, "display-name").start();
+
+        // Four lengths are a choice made in place, not a drawer.
+        Kit.label(host, "Skip length, back and forward");
+        LinearLayout lengths = new LinearLayout(this);
+        host.addView(lengths, new LinearLayout.LayoutParams(-1, -2));
+        int[] seconds = {5, 10, 15, 30};
+        int now = how.getInt("skip_seconds", 10), chosen = 1;
+        for (int i = 0; i < seconds.length; i++) if (seconds[i] == now) chosen = i;
+        Kit.segmented(lengths, new int[]{R.drawable.csi_fastforward, R.drawable.csi_fastforward, R.drawable.csi_fastforward,
+                R.drawable.csi_fastforward}, new String[]{"5 s", "10 s", "15 s", "30 s"}, chosen,
+            picked -> { how.edit().putInt("skip_seconds", seconds[picked]).apply(); renderPlaybackSettings(); });
     }
 
     /** Whether the Pi answers, shown on the Settings row and as the Connection page's heading. */
