@@ -2752,7 +2752,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private void openConfigDialog() { openModelSheet("chat"); }
 
     private void updateConfigSubtitle() {
-        chatSubtitle.setTextAppearance(R.style.Kit_Text_PageSub);
+        chatSubtitle.setTextAppearance(R.style.Kit_Text_Meta);
         // The model lives in the message box, next to Send, where it is chosen. The line under the title counts messages.
         String summary = configSummary();
         ((TextView) pageChat.findViewById(R.id.chat_model_pill)).setText(
@@ -2834,8 +2834,11 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         updateConversationActions();
         // The top bar already says Chat, so the list leads with how the assistant is instead of a second title.
         chatTitle.setVisibility(View.GONE);
-        chatSubtitle.setTextAppearance(R.style.Kit_Text_Section);
-        chatSubtitle.setTextSize(18);
+        // A status reading, in the readings voice: mono, quiet, sentence case.
+        chatSubtitle.setTextAppearance(R.style.Kit_Text_Meta);
+        chatSubtitle.setAllCaps(false);
+        chatSubtitle.setLetterSpacing(0f);
+        chatSubtitle.setTextSize(13);
         chatSubtitle.setTextColor(col(R.color.text));
         pageChat.findViewById(R.id.chat_presence_dot).setVisibility(View.VISIBLE);
         chatSubtitle.setCompoundDrawablesWithIntrinsicBounds(0, 0, 0, 0);

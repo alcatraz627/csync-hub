@@ -245,8 +245,8 @@
                     android:layout_width="wrap_content" android:layout_height="36dp"
                     android:gravity="center_vertical"
                     android:paddingStart="12dp" android:paddingEnd="14dp"
-                    android:drawablePadding="6dp"
-                    android:textSize="12sp" android:textColor="@color/dim"
+                    android:drawablePadding="6dp" android:fontFamily="@font/mono"
+                    android:textSize="11.5sp" android:textColor="@color/dim"
                     android:maxLines="1"
                     android:background="@drawable/pill_off"
                     app:drawableStartCompat="@drawable/csi_speed" app:drawableTint="@color/dim"/>

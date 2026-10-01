@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The readings voice: counts, times, states and section labels in JetBrains Mono. -->
+<font-family xmlns:android="http://schemas.android.com/apk/res/android">
+    <font android:fontStyle="normal" android:fontWeight="400" android:font="@font/jetbrainsmono"
+        android:fontVariationSettings="'wght' 450"/>
+    <font android:fontStyle="normal" android:fontWeight="700" android:font="@font/jetbrainsmono"
+        android:fontVariationSettings="'wght' 650"/>
+</font-family>

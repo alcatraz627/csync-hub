@@ -26,6 +26,11 @@
     <style name="Kit.Text" parent="">
         <item name="android:textColor">@color/text</item>
         <item name="android:includeFontPadding">false</item>
+        <item name="android:fontFamily">@font/display</item>
+    </style>
+    <!-- Readings (counts, times, states, section labels) speak in the mono voice. -->
+    <style name="Kit.Text.Mono">
+        <item name="android:fontFamily">@font/mono</item>
     </style>
     <!--
       The top bar names the page, so a second title and tagline under it are hidden
@@ -36,7 +41,7 @@
         <item name="android:visibility">gone</item>
         <item name="android:textSize">22sp</item>
         <item name="android:textStyle">bold</item>
-        <item name="android:letterSpacing">-0.03</item>
+        <item name="android:letterSpacing">-0.02</item>
     </style>
     <style name="Kit.Text.PageSub">
         <item name="android:visibility">gone</item>
@@ -45,10 +50,12 @@
         <item name="android:lineSpacingMultiplier">1.2</item>
     </style>
     <style name="Kit.Text.Section">
-        <item name="android:textSize">13sp</item>
+        <item name="android:fontFamily">@font/mono</item>
+        <item name="android:textSize">11sp</item>
         <item name="android:textStyle">bold</item>
         <item name="android:textColor">@color/dim</item>
-        <item name="android:textAllCaps">false</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:letterSpacing">0.12</item>
     </style>
     <style name="Kit.Text.RowTitle">
         <item name="android:textSize">15sp</item>
@@ -60,7 +67,8 @@
         <item name="android:lineSpacingMultiplier">1.2</item>
     </style>
     <style name="Kit.Text.Meta">
-        <item name="android:textSize">13sp</item>
+        <item name="android:fontFamily">@font/mono</item>
+        <item name="android:textSize">12sp</item>
         <item name="android:textColor">@color/dim</item>
     </style>
     <style name="Kit.Pill" parent="">
@@ -75,11 +83,14 @@
         <item name="android:textSize">12.5sp</item>
         <item name="android:includeFontPadding">false</item>
     </style>
+    <!-- The path reads as a path: the crumbs speak in the mono voice, the current one heavy. -->
     <style name="Kit.Text.Crumb">
-        <item name="android:textSize">13.5sp</item>
+        <item name="android:fontFamily">@font/mono</item>
+        <item name="android:textSize">13sp</item>
         <item name="android:textColor">@color/dim</item>
     </style>
     <style name="Kit.Text.CrumbCurrent">
+        <item name="android:fontFamily">@font/mono</item>
         <item name="android:textSize">13.5sp</item>
         <item name="android:textStyle">bold</item>
     </style>

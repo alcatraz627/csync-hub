@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The app's own voice for names and words: Manrope, one variable file, two weights so
+     "bold" picks a real heavy instance instead of a smeared one. -->
+<font-family xmlns:android="http://schemas.android.com/apk/res/android">
+    <font android:fontStyle="normal" android:fontWeight="400" android:font="@font/manrope"
+        android:fontVariationSettings="'wght' 500"/>
+    <font android:fontStyle="normal" android:fontWeight="700" android:font="@font/manrope"
+        android:fontVariationSettings="'wght' 750"/>
+</font-family>

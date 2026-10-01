@@ -7,6 +7,9 @@
         <item name="colorSurface">@color/surface</item>
         <item name="colorOnSurface">@color/text</item>
         <item name="colorOnBackground">@color/text</item>
+        <!-- One voice for every word in the app, including views the kit does not draw. -->
+        <item name="android:fontFamily">@font/display</item>
+        <item name="fontFamily">@font/display</item>
         <item name="android:statusBarColor">@color/bg</item>
         <item name="android:navigationBarColor">@color/surface</item>
         <!-- Media, Notes and Search are separate screens under the hood. With no window animation they open the way the other bar places do, at once. -->
