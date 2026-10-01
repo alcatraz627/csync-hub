@@ -2082,8 +2082,8 @@ public final class MediaActivity extends AppCompatActivity {
                         piMisses = 0;
                         piLastActive = active ? displayMediaName(state.optString("name", "Pi media")) : null;
                         nowPlaying.setText(active ? displayMediaName(state.optString("name", "Pi media")) : "Pi screen");
-                        output.setText(plays ? stateWords("Pi screen", playerState, problem) + " · volume " + state.optInt("volume", 0) + "%"
-                            : stateWords("Pi screen", playerState, problem));
+                        // One short reading on the foot row; the volume is read on the page itself.
+                        output.setText(stateWords("Pi screen", playerState, problem));
                         shownPages = "document".equals(state.optString("kind")) && state.optInt("count") > 0
                             ? new int[]{state.optInt("page", 1), state.optInt("count")} : null;
                         updateFullPlayer("Pi screen", playerState, state.optString("name", ""),

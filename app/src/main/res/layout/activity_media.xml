@@ -205,6 +205,7 @@
                 android:layout_marginStart="8dp">
                 <TextView android:id="@+id/media_output" android:layout_width="match_parent"
                     android:layout_height="wrap_content" android:fontFamily="@font/mono"
+                    android:textAllCaps="true" android:letterSpacing="0.08"
                     android:textSize="10sp" android:textColor="@color/dim"/>
                 <TextView android:id="@+id/media_now" android:layout_width="match_parent"
                     android:layout_height="wrap_content" android:text="Nothing playing"
