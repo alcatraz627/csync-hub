@@ -114,8 +114,9 @@
             <LinearLayout android:id="@+id/player_live" android:layout_width="match_parent"
                 android:layout_height="wrap_content" android:orientation="vertical">
             <TextView android:id="@+id/player_art" android:layout_width="match_parent" android:layout_height="150dp"
-                android:layout_marginTop="10dp" android:gravity="bottom|start" android:padding="12dp"
-                android:textSize="13sp" android:textStyle="bold"
+                android:layout_marginTop="10dp" android:gravity="bottom|start" android:padding="14dp"
+                android:fontFamily="@font/mono" android:textAllCaps="true" android:letterSpacing="0.12"
+                android:textSize="11sp" android:textStyle="bold" android:alpha="0.85"
                 android:textColor="@color/text" android:background="@drawable/player_poster_bg"/>
             <TextView android:id="@+id/player_feedback" android:layout_width="match_parent"
                 android:layout_height="wrap_content" android:layout_marginTop="5dp"
@@ -131,9 +132,9 @@
                 android:orientation="horizontal">
                 <TextView android:id="@+id/player_position" android:layout_width="0dp"
                     android:layout_weight="1" android:layout_height="wrap_content"
-                    android:text="0:00" android:textSize="12sp" android:textColor="@color/dim"/>
+                    android:text="0:00" android:fontFamily="@font/mono" android:textSize="12sp" android:textColor="@color/dim"/>
                 <TextView android:id="@+id/player_duration" android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
+                    android:layout_height="wrap_content" android:fontFamily="@font/mono"
                     android:textSize="12sp" android:textColor="@color/dim"/>
             </LinearLayout>
             </LinearLayout>
