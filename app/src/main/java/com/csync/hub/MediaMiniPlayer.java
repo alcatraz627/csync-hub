@@ -209,6 +209,13 @@ final class MediaMiniPlayer {
             LinearLayout rows = body.findViewById(R.id.kit_rows);
             panelSeek = new android.widget.SeekBar(activity);
             panelSeek.setMax(1000);
+            // The same accent as the page's seek bar, not the widget's stock purple.
+            android.content.res.ColorStateList accent = android.content.res.ColorStateList.valueOf(
+                com.google.android.material.color.MaterialColors.getColor(activity,
+                    com.google.android.material.R.attr.colorPrimary, activity.getColor(R.color.coral)));
+            panelSeek.setProgressTintList(accent);
+            panelSeek.setThumbTintList(accent);
+            panelSeek.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(activity.getColor(R.color.border)));
             panelSeek.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
                 public void onProgressChanged(android.widget.SeekBar s, int p, boolean user) {}
                 public void onStartTrackingTouch(android.widget.SeekBar s) {}
@@ -268,7 +275,7 @@ final class MediaMiniPlayer {
 
         private void renderPanel() {
             if (panel == null) return;
-            panelTitle.setText(name);
+            panelTitle.setText(MediaActivity.displayMediaName(name));
             panelState.setText(target.getText());
             if (duration > 0) panelSeek.setProgress((int) Math.min(1000L, 1000L * position / duration));
             boolean paused = state.equals("PAUSED");
@@ -285,7 +292,7 @@ final class MediaMiniPlayer {
             if (failureAction != null &&
                 ((failureAction.equals("pause") && state.equals("PAUSED")) ||
                  (failureAction.equals("resume") && state.equals("PLAYING")))) failureAction = null;
-            title.setText(name);
+            title.setText(MediaActivity.displayMediaName(name));
             progress.setProgress(duration > 0 ? (int) Math.min(1000L, 1000L * position / duration) : 0);
             render();
         }
