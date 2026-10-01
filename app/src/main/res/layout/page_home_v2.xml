@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Home: what to pick up, the four things done most, where to send, then one quiet line on how the Pi is. -->
+<!-- Home is the map: a hero, what to pick up, then every capability as cards in two tiers. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent" android:layout_height="match_parent"
@@ -14,7 +14,24 @@
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
             android:orientation="vertical"
             android:paddingStart="@dimen/kit_gutter" android:paddingEnd="@dimen/kit_gutter"
-            android:paddingBottom="28dp">
+            android:paddingTop="6dp" android:paddingBottom="28dp">
+
+            <!-- The hero: a greeting over the devices turning slowly around the Pi. -->
+            <FrameLayout android:id="@+id/home_hero"
+                android:layout_width="match_parent" android:layout_height="164dp">
+                <com.csync.hub.HeroView android:id="@+id/home_hero_art"
+                    android:layout_width="match_parent" android:layout_height="match_parent"/>
+                <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:layout_gravity="start|center_vertical" android:orientation="vertical"
+                    android:paddingStart="20dp" android:paddingEnd="8dp">
+                    <TextView android:id="@+id/home_hero_greeting" style="@style/Kit.Text.RowTitle"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textSize="24sp"/>
+                    <TextView android:id="@+id/home_hero_line" style="@style/Kit.Text.Meta"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"/>
+                </LinearLayout>
+            </FrameLayout>
 
             <include android:id="@+id/home_pickup_head" layout="@layout/kit_section_head"/>
             <!-- The last conversation, and what was last played when there is one. Rows are added in code. -->
@@ -22,32 +39,23 @@
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical"/>
 
-            <!-- The four things done most, as large targets. Each tile is icon over one word. -->
-            <LinearLayout android:id="@+id/home_actions"
+            <!-- The capabilities, large cards then smaller ones, drawn from the catalogue. -->
+            <LinearLayout android:id="@+id/home_primary"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="16dp" android:layout_marginStart="-4dp" android:layout_marginEnd="-4dp"
-                android:orientation="horizontal">
-                <include android:id="@+id/home_do_play" layout="@layout/kit_action_tile"/>
-                <include android:id="@+id/home_do_ask" layout="@layout/kit_action_tile"/>
-                <include android:id="@+id/home_do_send" layout="@layout/kit_action_tile"/>
-                <include android:id="@+id/home_do_camera" layout="@layout/kit_action_tile"/>
-            </LinearLayout>
-
-            <!-- Your devices as one row with a count; the list itself lives in Share. -->
-            <LinearLayout android:id="@+id/home_devices"
+                android:layout_marginStart="-4dp" android:layout_marginEnd="-4dp"
+                android:orientation="vertical"/>
+            <LinearLayout android:id="@+id/home_secondary"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="16dp" android:orientation="vertical"/>
+                android:layout_marginStart="-4dp" android:layout_marginEnd="-4dp"
+                android:orientation="vertical"/>
 
-            <!-- How the Pi is, said once and quietly. It opens Tools, where the detail lives. -->
+            <!-- The app's own line: its version, opening About. -->
             <LinearLayout android:id="@+id/home_status"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:minHeight="48dp" android:layout_marginTop="12dp"
+                android:minHeight="48dp" android:layout_marginTop="14dp"
                 android:paddingStart="4dp" android:paddingEnd="4dp"
                 android:gravity="center_vertical" android:orientation="horizontal"
                 android:background="?attr/selectableItemBackground">
-                <View android:id="@+id/home_status_dot"
-                    android:layout_width="@dimen/kit_dot" android:layout_height="@dimen/kit_dot"
-                    android:layout_marginEnd="8dp" android:background="@drawable/kit_dot"/>
                 <TextView android:id="@+id/home_status_words" style="@style/Kit.Text.RowSub"
                     android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"/>
                 <TextView android:id="@+id/home_status_version" style="@style/Kit.Text.Meta"

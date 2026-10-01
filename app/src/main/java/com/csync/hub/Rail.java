@@ -22,16 +22,16 @@ import java.util.List;
 /**
  * Two floating buttons at the top corners of every page, translucent over the top bar.
  *
- * Bar 1, on the left: a tap runs its first action; a drag downwards opens it into a chain
- * of every action the owner picked in Settings, and letting go on one runs it. The right
+ * Bar 1, on the left, rests as a plus. A tap opens it into a chain of every action the owner
+ * picked in Settings, and so does a drag downwards, where letting go on one runs it. The right
  * button holds one action, the light and dark switch unless another was chosen. Both live
  * in a 48dp band the top bar leaves free at each side.
  */
 final class Rail {
     private Rail() {}
 
-    static final int BUTTON_DP = 40;
-    private static final int CHIP_DP = 44;
+    static final int BUTTON_DP = 48;
+    private static final int CHIP_DP = 48;
     private static final int OPEN_DRAG_DP = 28;
 
     /** Draw the buttons over the page; called on create and on resume, so Settings' picks show at once. */
@@ -66,7 +66,7 @@ final class Rail {
         button.setLayoutParams(new ViewGroup.LayoutParams(size, size));
         button.setImageResource(icon);
         button.setImageTintList(android.content.res.ColorStateList.valueOf(ContextCompat.getColor(c, R.color.text)));
-        button.setPadding(Kit.dp(c, 10), Kit.dp(c, 10), Kit.dp(c, 10), Kit.dp(c, 10));
+        button.setPadding(Kit.dp(c, 13), Kit.dp(c, 13), Kit.dp(c, 13), Kit.dp(c, 13));
         button.setBackground(glass(c));
         button.setContentDescription(label);
         button.setElevation(Kit.dp(c, 2));
@@ -96,27 +96,33 @@ final class Rail {
         LinearLayout column = new LinearLayout(a);
         column.setOrientation(LinearLayout.VERTICAL);
         column.setClipChildren(false);
-        ImageView button = button(a, items.isEmpty() ? R.drawable.csi_plus : RailActions.icon(items.get(0).optString("id")),
-            items.isEmpty() ? "Quick rail, empty; set it up in Settings" : "Quick rail: " + items.get(0).optString("label"));
+        ImageView button = button(a, R.drawable.csi_plus, "Quick rail");
         column.addView(button);
         LinearLayout chain = new LinearLayout(a);
         chain.setOrientation(LinearLayout.VERTICAL);
         chain.setVisibility(View.GONE);
         for (JSONObject item : items) chain.addView(chip(a, item));
+        // An empty rail still opens: its one link says where the picks are made.
+        if (items.isEmpty()) chain.addView(chip(a, RailActions.setup()));
         LinearLayout.LayoutParams chainParams = new LinearLayout.LayoutParams(-2, -2);
         chainParams.topMargin = Kit.dp(a, 6);
         column.addView(chain, chainParams);
         final boolean[] open = {false};
+        int scrim = ColorUtils.setAlphaComponent(ContextCompat.getColor(a, R.color.bg), 150);
         Runnable close = () -> {
             open[0] = false;
+            button.animate().rotation(0f).setDuration(160).start();
             chain.animate().alpha(0f).translationY(-Kit.dp(a, 12)).setDuration(120)
                 .withEndAction(() -> chain.setVisibility(View.GONE)).start();
+            overlay.setBackgroundColor(0);
             overlay.setOnTouchListener(null);
             overlay.setClickable(false);
         };
         Runnable show = () -> {
-            if (items.isEmpty()) { RailActions.run(a, RailActions.fixed("settings")); return; }
             open[0] = true;
+            // The plus turns to a cross while the chain is open, so the same button closes it.
+            button.animate().rotation(45f).setDuration(160).start();
+            overlay.setBackgroundColor(scrim);
             chain.setVisibility(View.VISIBLE);
             chain.setAlpha(0f);
             chain.setTranslationY(-Kit.dp(a, 12));
@@ -154,8 +160,7 @@ final class Rail {
                             if (picked != null) { close.run(); picked.performClick(); }
                             else highlight(chain, -1);
                         } else if (open[0]) close.run();
-                        else if (!items.isEmpty()) { Kit.tick(v); RailActions.run(a, items.get(0)); }
-                        else show.run();
+                        else { Kit.tick(v); show.run(); }
                         return true;
                     case MotionEvent.ACTION_CANCEL:
                         v.animate().scaleX(1f).scaleY(1f).setDuration(80).start();
@@ -192,7 +197,12 @@ final class Rail {
         label.setPadding(Kit.dp(a, 8), 0, 0, 0);
         chip.addView(label);
         chip.setContentDescription(item.optString("label"));
-        chip.setOnClickListener(v -> { Kit.tick(v); RailActions.run(a, item); });
+        chip.setOnClickListener(v -> {
+            Kit.tick(v);
+            View overlay = a.findViewById(R.id.rail_overlay);
+            if (overlay != null) overlay.setBackgroundColor(0);
+            RailActions.run(a, item);
+        });
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-2, -2);
         params.topMargin = Kit.dp(a, 6);
         chip.setLayoutParams(params);

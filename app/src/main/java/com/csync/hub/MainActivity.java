@@ -138,6 +138,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         nav.setOnItemSelectedListener(item -> {
             int id = item.getItemId();
             fromHome = false;
+            chatReturn = null;
             if (visitor && id != R.id.nav_media) {
                 leaveVisit(id == R.id.nav_share ? "share" : id == R.id.nav_chat ? "chat" : id == R.id.nav_more ? "more" : "home");
                 return false;
@@ -285,7 +286,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         switch (destination) {
             case "share": return 1;
             case "chat": case "chat-new": return 2;
-            case "tools": return 3;
+            case "tools": case "pi": return 3;
             case "settings": return 4;
             case "camera": return 5;
             case "more": return 6;
@@ -337,6 +338,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageCamera.setVisibility(page == 5 ? View.VISIBLE : View.GONE);
         pageMore.setVisibility(page == 6 ? View.VISIBLE : View.GONE);
         if (moved) Kit.fadeThrough(currentPage());
+        markBar();
         if (page == 6) showMoreDetail(0);
         if (page == 0) refreshHome();
         if (page == 1) refreshShare();
@@ -348,6 +350,19 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         }
         if (page == 4) { closeSettingsDetail(); refreshConnection(); refreshAssistant(); }
         if (page == 5 && resumed) cameraController.show();
+    }
+
+    /**
+     * Light the bar place that owns the page on screen: Home for the Pi and its camera, More for
+     * Settings and This phone's pages. Checking the item quietly does not run the bar's own move.
+     */
+    private void markBar() {
+        com.google.android.material.bottomnavigation.BottomNavigationView nav = findViewById(R.id.nav);
+        if (nav == null) return;
+        int item = current == 1 ? R.id.nav_share : current == 2 ? R.id.nav_chat
+            : current == 4 || current == 6 || (current == 3 && toolsDetail != 0) ? R.id.nav_more : R.id.nav_home;
+        android.view.MenuItem owner = nav.getMenu().findItem(item);
+        if (owner != null && !owner.isChecked()) owner.setChecked(true);
     }
 
     // Wake the tailnet path to the assistant so the first message is not the cold
@@ -419,16 +434,10 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         Kit.pageTop(top, "home", this::openPlace, visitBack());
         Kit.topAction(top, Kit.Icon.SEARCH, "Search", v -> openHomeSearch());
         Kit.bindSection(pageHome.findViewById(R.id.home_pickup_head), 0, "Pick up", null);
-        // Home leads with doing: the four things done most, each one tap from here.
-        Kit.bindAction(pageHome.findViewById(R.id.home_do_play), Kit.Icon.MEDIA, "Play", "Play something from Media",
-            v -> startActivity(new Intent(this, MediaActivity.class)));
-        Kit.bindAction(pageHome.findViewById(R.id.home_do_ask), Kit.Icon.CHAT, "Ask", "Ask the Pi assistant in a new conversation",
-            v -> fromHome(R.id.nav_chat, this::newConversation));
-        Kit.bindAction(pageHome.findViewById(R.id.home_do_send), Kit.Icon.SHARE, "Send", "Send something to a device",
-            v -> nav.setSelectedItemId(R.id.nav_share));
-        Kit.bindAction(pageHome.findViewById(R.id.home_do_camera), Kit.Icon.CAMERA, "Camera", "Open the Pi camera",
-            v -> fromHome(R.id.nav_more, () -> show(5)));
-        pageHome.findViewById(R.id.home_status).setOnClickListener(v -> fromHome(R.id.nav_more, () -> show(3)));
+        // Home is the map of what the app can do, so every capability is a card here.
+        homeCards(pageHome.findViewById(R.id.home_primary), Catalogue.tier(true), true);
+        homeCards(pageHome.findViewById(R.id.home_secondary), Catalogue.tier(false), false);
+        pageHome.findViewById(R.id.home_status).setOnClickListener(v -> fromHome(R.id.nav_more, () -> showMoreDetail(2)));
         bindHomeStatus(null, false, null);
         renderMore(null);
         showMoreDetail(0);
@@ -446,7 +455,10 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private View toolsLeadDot;
     private TextView toolsLeadWords, toolsUpdateStatus;
 
-    /** Tools: one line on how things are, then each part of the Pi, this phone's tools, and the app's own update. */
+    /**
+     * The Raspberry Pi page: one line on how it is, what it can show and see, then each part's
+     * health. A part that is a capability opens it; power and drives say their facts in place.
+     */
     private void buildTools() {
         LinearLayout page = pageTools.findViewById(R.id.tools_overview);
         page.removeAllViews();
@@ -462,30 +474,29 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         lead.addView(toolsLeadWords);
         page.addView(lead);
 
-        Kit.label(page, "Raspberry Pi");
+        Kit.label(page, "On the Pi");
         LinearLayout group = Kit.group(page);
-        int[] icons = {Kit.Icon.MEDIA, Kit.Icon.CHAT, Kit.Icon.CAMERA, R.drawable.csi_alert, Kit.Icon.FILES};
-        for (int i = 0; i < TOOL_PARTS.length; i++) {
-            int part = i;
-            toolRows[i] = Kit.addRow(group);
-            Kit.bindRow(toolRows[i], icons[i], TOOL_PARTS[i], null, null, false);
-            toolRows[i].setOnClickListener(v -> {
-                if (toolFacts[part] != null) Kit.sheet(this, TOOL_PARTS[part], toolFacts[part]);
-            });
-        }
+        Kit.bindRow(Kit.addRow(group), Kit.Icon.DISPLAY, "Pi screen", "Play, show or share on the screen", null, true)
+            .setOnClickListener(v -> startActivity(new Intent(this, MediaActivity.class).putExtra("player_target", "pi")));
+        // The camera opened from here is the Pi page's child, so Back climbs to this page, not Home.
+        Kit.bindRow(Kit.addRow(group), Kit.Icon.CAMERA, "Pi camera", "Live picture, photos and recordings", null, true)
+            .setOnClickListener(v -> { fromHome = false; show(5); });
 
-        Kit.label(page, "This phone");
+        Kit.label(page, "Health");
         group = Kit.group(page);
-        Kit.bindRow(Kit.addRow(group), Kit.Icon.DEVICE, "Process monitor", "Memory, processor, temperature", null, true)
-            .setOnClickListener(v -> showToolsDetail(1));
-        Kit.bindRow(Kit.addRow(group), R.drawable.csi_launcher, "Widgets", "Widgets, tiles, shortcuts and the share menu", null, true)
-            .setOnClickListener(v -> showToolsDetail(2));
-
-        Kit.label(page, "This app");
-        View update = Kit.addRow(Kit.group(page));
-        Kit.bindRow(update, R.drawable.csi_download, "Update csync from the Pi", "Installed: " + appVersion(), null, false);
-        toolsUpdateStatus = update.findViewById(R.id.kit_sub);
-        update.setOnClickListener(v -> AppUpdater.start(this, toolsUpdateStatus));
+        int[] icons = {Kit.Icon.MEDIA, Kit.Icon.CHAT, Kit.Icon.CAMERA, R.drawable.csi_alert, Kit.Icon.FILES};
+        Runnable[] opens = {
+            () -> startActivity(new Intent(this, MediaActivity.class)),
+            () -> ((com.google.android.material.bottomnavigation.BottomNavigationView) findViewById(R.id.nav))
+                .setSelectedItemId(R.id.nav_chat),
+            () -> { fromHome = false; show(5); }, null, null};
+        for (int i = 0; i < TOOL_PARTS.length; i++) {
+            toolRows[i] = Kit.addRow(group);
+            Kit.bindRow(toolRows[i], icons[i], TOOL_PARTS[i], null, null, opens[i] != null);
+            Runnable open = opens[i];
+            if (open != null) toolRows[i].setOnClickListener(v -> open.run());
+            else toolRows[i].setClickable(false);
+        }
     }
 
     private void setToolsLead(Kit.Status status, String words) {
@@ -494,8 +505,14 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     }
 
     private void setToolPart(int part, Kit.Status status, String words, String fact) {
-        Kit.rowStatus(toolRows[part], status, words);
         toolFacts[part] = fact;
+        // Power and drives have no page of their own, so what they would explain is written under them.
+        if (!toolRows[part].isClickable()) {
+            TextView sub = toolRows[part].findViewById(R.id.kit_sub);
+            sub.setText(fact);
+            sub.setVisibility(fact == null || fact.isEmpty() ? View.GONE : View.VISIBLE);
+        }
+        Kit.rowStatus(toolRows[part], status, words);
     }
 
     /**
@@ -586,19 +603,19 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private void renderMore(Boolean piUp) {
         LinearLayout page = pageMore.findViewById(R.id.more_rows);
         page.removeAllViews();
-        Kit.label(page, "On the Pi");
+        Kit.label(page, "This phone");
         LinearLayout group = Kit.group(page);
-        Kit.bindRow(Kit.addRow(group), Kit.Icon.CAMERA, "Pi camera", "Live picture, photos and recordings", null, true)
-            .setOnClickListener(v -> show(5));
-        Kit.bindRow(Kit.addRow(group), Kit.Icon.NOTES, "Notes", "Notes and pins, kept on the Pi", null, true)
-            .setOnClickListener(v -> startActivity(new Intent(this, NotesActivity.class)));
+        Kit.bindRow(Kit.addRow(group), Kit.Icon.DEVICE, "Process monitor", "What is using memory and the processor", null, true)
+            .setOnClickListener(v -> openPlace("process"));
+        Kit.bindRow(Kit.addRow(group), R.drawable.csi_launcher, "Widgets", "Widgets, tiles, shortcuts and the share menu", null, true)
+            .setOnClickListener(v -> openPlace("widgets"));
 
-        Kit.label(page, "Looking after things");
+        Kit.label(page, "This app");
         group = Kit.group(page);
-        View tools = Kit.addRow(group);
-        Kit.bindRow(tools, Kit.Icon.TOOLS, "Tools", "Pi health, this phone, updates", null, true);
-        if (piUp != null) Kit.rowStatus(tools, piUp ? Kit.Status.GOOD : Kit.Status.IDLE, piUp ? "Ready" : "Offline");
-        tools.setOnClickListener(v -> show(3));
+        View update = Kit.addRow(group);
+        Kit.bindRow(update, R.drawable.csi_download, "Update csync from the Pi", "Installed: " + appVersion(), null, false);
+        toolsUpdateStatus = update.findViewById(R.id.kit_sub);
+        update.setOnClickListener(v -> AppUpdater.start(this, toolsUpdateStatus));
         Kit.bindRow(Kit.addRow(group), Kit.Icon.SETTINGS, "Settings", "How the app connects, plays and looks", null, true)
             .setOnClickListener(v -> show(4));
 
@@ -610,10 +627,24 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             .setOnClickListener(v -> showMoreDetail(2));
     }
 
+    // A conversation or Chat's Tools opened from a link on another page (the guide) is a visit:
+    // Back runs this to return to that page. A crumb or a bar tap ends the visit.
+    private Runnable chatReturn;
+
+    /** The way back to the guide, for a page the guide opened. */
+    private Runnable backToGuide() {
+        return () -> {
+            ((com.google.android.material.bottomnavigation.BottomNavigationView) findViewById(R.id.nav))
+                .setSelectedItemId(R.id.nav_more);
+            showMoreDetail(1);
+        };
+    }
+
     /** Start a new conversation with an ask already written, so an example can be tried with one tap. */
     private void tryAsk(String ask) {
         ((com.google.android.material.bottomnavigation.BottomNavigationView) findViewById(R.id.nav))
             .setSelectedItemId(R.id.nav_chat);
+        chatReturn = backToGuide();
         newConversation();
         chatInput.setText(ask);
         chatInput.setSelection(chatInput.length());
@@ -650,6 +681,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                 .setSelectedItemId(R.id.nav_chat);
             showChatList();
             selectChatFilter("Tools");
+            chatReturn = backToGuide();
         }), below);
     }
 
@@ -686,7 +718,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageTools.findViewById(R.id.tools_widget_section).setVisibility(detail == 2 ? View.VISIBLE : View.GONE);
         View top = pageTools.findViewById(R.id.tools_back);
         // Pulling the page down checks again, so the top bar carries no refresh icon.
-        Kit.pageTop(top, overview ? "tools" : detail == 1 ? "process" : "widgets", this::openPlace, overview ? rootBack() : visitBack());
+        Kit.pageTop(top, overview ? "pi" : detail == 1 ? "process" : "widgets", this::openPlace, overview ? rootBack() : visitBack());
+        markBar();
         ((android.widget.ScrollView) pageTools.findViewById(R.id.tools_scroll)).scrollTo(0, 0);
         if (detail == 1 && resumed) ensureShizuku();
         if (detail == 2) renderWidgetsPage();
@@ -715,6 +748,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     /** Go to a place in the map. The top bar's path and Back both come through here. */
     private void openPlace(String id) {
         fromHome = false;
+        chatReturn = null;
         if (visitor) {
             if ("media".equals(id)) { finish(); startActivity(new Intent(this, MediaActivity.class)); }
             else leaveVisit(id);
@@ -735,7 +769,10 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             case "more":
                 if (current == 6) showMoreDetail(0); else show(6);
                 break;
-            case "tools": show(3); break;
+            case "pi": case "tools": show(3); break;
+            case "process": show(3); showToolsDetail(1); break;
+            case "widgets": show(3); showToolsDetail(2); break;
+            case "notes": startActivity(new Intent(this, NotesActivity.class)); break;
             case "settings": show(4); break;
             case "camera": show(5); break;
             default: break;
@@ -843,16 +880,19 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         if (current == 2 && chatConvoMode && chatSuggest.isOpen()) chatSuggest.close();
         else if (current == 2 && chatConvoMode && chatFind.isOpen()) chatFind.close();
         else if (visitor) finish();
+        else if (current == 2 && chatReturn != null) { Runnable back = chatReturn; chatReturn = null; back.run(); }
         else if (current == 2 && chatConvoMode) openPlace(fromHome ? "home" : "chat");
-        else if (current == 1 && shareInboxMode) setShareMode(false);
-        else if (current == 6 && moreDetail != 0) showMoreDetail(0);
+        else if (current == 1 && shareInboxMode) { if (fromHome) openPlace("home"); else setShareMode(false); }
+        else if (current == 6 && moreDetail != 0) { if (fromHome) openPlace("home"); else showMoreDetail(0); }
         else if (current == 4 && settingsDetail != 0) closeSettingsDetail();
-        else if (current == 3 && toolsDetail != 0) showToolsDetail(0);
+        // The process monitor and Widgets belong to More's This phone section.
+        else if (current == 3 && toolsDetail != 0) { if (fromHome) openPlace("home"); else show(6); }
         else if (current == 5) {
             if (cameraController.closeChildPage()) return;
-            if (fromHome) openPlace("home"); else show(6);
+            if (fromHome) openPlace("home"); else show(3);
         }
-        else if (current == 3 || current == 4) { if (fromHome) openPlace("home"); else show(6); }
+        else if (current == 3) openPlace("home");
+        else if (current == 4) { if (fromHome) openPlace("home"); else show(6); }
         else if (current != 0) openPlace("home");
     }
 
@@ -887,41 +927,140 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     }
 
     /**
-     * Fill Home's lead line, capability cards and device rows. A null reading means it
-     * is still being checked. The words are the status vocabulary of the app model.
+     * Fill what on Home depends on a reading: the hero's greeting and devices, the Pi card's
+     * line, and the app's own version at the foot. A null reading means it is still being checked.
      */
     private void bindHomeStatus(Boolean pi, boolean media, Boolean mac) {
         boolean checking = pi == null;
         boolean piUp = !checking && (pi || media);
-        com.google.android.material.bottomnavigation.BottomNavigationView nav = findViewById(R.id.nav);
-        // One quiet line on how the Pi is. The detail, and the app's own version and updates, live in Tools.
-        Kit.setStatus(pageHome.findViewById(R.id.home_status_dot),
-            checking ? Kit.Status.WARN : piUp ? Kit.Status.GOOD : Kit.Status.BAD);
-        ((TextView) pageHome.findViewById(R.id.home_status_words)).setText(
-            checking ? "Checking the Pi" : piUp ? "The Pi is online" : "The Pi cannot be reached");
-        TextView version = pageHome.findViewById(R.id.home_status_version);
-        version.setTextAppearance(R.style.Kit_Text_Meta);
-        version.setTypeface(androidx.core.content.res.ResourcesCompat.getFont(this, R.font.mono));
-        version.setText("csync " + appVersion());
-        pageHome.findViewById(R.id.home_status).setContentDescription(
-            (checking ? "Checking the Pi" : piUp ? "The Pi is online" : "The Pi cannot be reached") + ". Open Tools");
+        if (piCardLine != null)
+            piCardLine.setText(checking ? "Checking the Pi" : piUp ? "Online · health, drives, power" : "Cannot be reached");
 
-        // Your devices as one row with a count. Choosing which one happens in Share.
+        int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
+        ((TextView) pageHome.findViewById(R.id.home_hero_greeting)).setText(
+            hour < 5 ? "Up late" : hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening");
         JSONArray roster = PeerStore.load(this);
         String self = Prefs.deviceName(this);
-        int known = 0, online = 0;
+        java.util.List<HeroView.Node> nodes = new java.util.ArrayList<>();
+        int online = 0;
         for (int i = 0; roster != null && i < roster.length(); i++) {
             JSONObject peer = roster.optJSONObject(i);
             if (peer == null || self.equals(peer.optString("name"))) continue;
-            known++;
+            nodes.add(new HeroView.Node(peer.optString("name"), peer.optBoolean("online")));
             if (peer.optBoolean("online")) online++;
         }
-        LinearLayout box = pageHome.findViewById(R.id.home_devices);
-        box.removeAllViews();
-        View devices = Kit.addRow(Kit.group(box));
-        Kit.bindRow(devices, Kit.Icon.DEVICE, "Your devices",
-            known == 0 ? "None found yet" : online + " of " + known + " online", null, true);
-        devices.setOnClickListener(v -> nav.setSelectedItemId(R.id.nav_share));
+        ((HeroView) pageHome.findViewById(R.id.home_hero_art)).setNodes(nodes);
+        TextView line = pageHome.findViewById(R.id.home_hero_line);
+        line.setTypeface(androidx.core.content.res.ResourcesCompat.getFont(this, R.font.mono));
+        line.setText(nodes.isEmpty() ? "no devices yet" : online + " of " + nodes.size() + " devices around");
+
+        ((TextView) pageHome.findViewById(R.id.home_status_words)).setText("About csync");
+        TextView version = pageHome.findViewById(R.id.home_status_version);
+        version.setTextAppearance(R.style.Kit_Text_Meta);
+        version.setTypeface(androidx.core.content.res.ResourcesCompat.getFont(this, R.font.mono));
+        version.setText(appVersion());
+        pageHome.findViewById(R.id.home_status).setContentDescription("About csync, version " + appVersion());
+    }
+
+    private TextView piCardLine;
+
+    /** Lay the catalogue's cards out two to a row; the secondary tier is smaller and quieter. */
+    private void homeCards(LinearLayout host, java.util.List<Catalogue.Entry> entries, boolean primary) {
+        host.removeAllViews();
+        TextView label = Kit.label(host, primary ? "Go to" : "Also here");
+        label.setPadding(dp(4), 0, 0, 0);
+        LinearLayout row = null;
+        for (int i = 0; i < entries.size(); i++) {
+            if (i % 2 == 0) {
+                row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                host.addView(row, new LinearLayout.LayoutParams(-1, -2));
+            }
+            Catalogue.Entry entry = entries.get(i);
+            View card = capabilityCard(entry, primary);
+            row.addView(card);
+            if ("pi".equals(entry.id)) piCardLine = card.findViewWithTag("sub");
+        }
+        if (row != null && row.getChildCount() == 1) row.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1));
+    }
+
+    /**
+     * One capability as a card. A primary card carries the accent wash, a tinted icon and a line
+     * saying what it is for; a secondary card is a flat tile with its icon and name.
+     */
+    private View capabilityCard(Catalogue.Entry entry, boolean primary) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(primary ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
+        card.setGravity(primary ? android.view.Gravity.TOP : android.view.Gravity.CENTER_VERTICAL);
+        card.setPadding(dp(14), dp(primary ? 14 : 10), dp(12), dp(primary ? 14 : 10));
+        card.setMinimumHeight(dp(primary ? 118 : 56));
+        int accent = accent(), surface = col(R.color.surface);
+        android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable(
+            android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+            primary ? new int[]{androidx.core.graphics.ColorUtils.blendARGB(surface, accent, 0.12f), surface}
+                : new int[]{surface, surface});
+        shape.setCornerRadius(dp(16));
+        shape.setStroke(dp(1), primary ? androidx.core.graphics.ColorUtils.blendARGB(surface, accent, 0.28f) : col(R.color.border));
+        card.setBackground(new android.graphics.drawable.RippleDrawable(
+            android.content.res.ColorStateList.valueOf(androidx.core.graphics.ColorUtils.setAlphaComponent(accent, 40)), shape, null));
+        android.widget.ImageView icon = new android.widget.ImageView(this);
+        icon.setImageResource(entry.icon);
+        int size = primary ? 40 : 30;
+        icon.setPadding(dp(primary ? 9 : 6), dp(primary ? 9 : 6), dp(primary ? 9 : 6), dp(primary ? 9 : 6));
+        android.graphics.drawable.GradientDrawable disc = new android.graphics.drawable.GradientDrawable();
+        disc.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        disc.setColor(primary ? androidx.core.graphics.ColorUtils.blendARGB(surface, accent, 0.2f) : col(R.color.surface2));
+        icon.setBackground(disc);
+        icon.setImageTintList(android.content.res.ColorStateList.valueOf(primary ? Kit.accentText(this) : col(R.color.dim)));
+        card.addView(icon, new LinearLayout.LayoutParams(dp(size), dp(size)));
+        LinearLayout words = new LinearLayout(this);
+        words.setOrientation(LinearLayout.VERTICAL);
+        TextView title = new TextView(this);
+        title.setTextAppearance(R.style.Kit_Text_RowTitle);
+        if (!primary) title.setTextSize(14.5f);
+        title.setText(entry.title);
+        words.addView(title);
+        if (primary) {
+            TextView sub = new TextView(this);
+            sub.setTextAppearance(R.style.Kit_Text_RowSub);
+            sub.setTextSize(13);
+            sub.setText(entry.sub);
+            sub.setTag("sub");
+            words.addView(sub);
+        }
+        LinearLayout.LayoutParams wordsAt = new LinearLayout.LayoutParams(primary ? -1 : 0, -2, primary ? 0 : 1);
+        if (primary) wordsAt.topMargin = dp(12); else wordsAt.setMarginStart(dp(10));
+        card.addView(words, wordsAt);
+        card.setContentDescription(entry.title + ", " + entry.sub);
+        card.setOnClickListener(v -> { Kit.tick(v); openCapability(entry.id); });
+        // Matching the row's height keeps two cards side by side the same size whatever their words.
+        LinearLayout.LayoutParams at = new LinearLayout.LayoutParams(0, -1, 1);
+        at.setMargins(dp(4), dp(4), dp(4), dp(4));
+        card.setLayoutParams(at);
+        return card;
+    }
+
+    /**
+     * Open one capability from Home. Pages inside this screen remember they came from Home, so
+     * Back returns here; the separate screens return here by closing.
+     */
+    private void openCapability(String id) {
+        switch (id) {
+            case "pi-screen":
+                startActivity(new Intent(this, MediaActivity.class).putExtra("player_target", "pi")); break;
+            case "notes": startActivity(new Intent(this, NotesActivity.class)); break;
+            case "videos": startActivity(new Intent(this, MediaActivity.class).putExtra("open_view", "videos")); break;
+            case "search": openHomeSearch(); break;
+            case "camera": fromHome(R.id.nav_home, () -> show(5)); break;
+            case "pi": fromHome(R.id.nav_home, () -> show(3)); break;
+            case "chat-new": fromHome(R.id.nav_chat, this::newConversation); break;
+            case "received": fromHome(R.id.nav_share, () -> setShareMode(true)); break;
+            case "process": fromHome(R.id.nav_more, () -> openPlace("process")); fromHome = true; break;
+            case "widgets": fromHome(R.id.nav_more, () -> openPlace("widgets")); fromHome = true; break;
+            case "guide": fromHome(R.id.nav_more, () -> showMoreDetail(1)); break;
+            case "settings": fromHome(R.id.nav_more, () -> show(4)); break;
+            default: break;
+        }
     }
 
     /** Pick up: the last conversation, and what was last played when the Pi remembers one. */
@@ -945,7 +1084,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         Kit.bindRow(watch, Kit.Icon.VIDEO, MediaActivity.displayMediaName(played.optString("name")),
             (played.optBoolean("completed") ? "Finished" : "Last played") + (onPhone ? " · on this phone" : " · on the Pi screen"),
             null, true);
-        watch.setOnClickListener(v -> startActivity(new Intent(this, MediaActivity.class)));
+        // Picking up means the player, on the output it last played on, not Media's front page.
+        watch.setOnClickListener(v -> startActivity(new Intent(this, MediaActivity.class)
+            .putExtra("player_target", onPhone ? "phone" : "pi")));
     }
 
     private String appVersion() {
@@ -972,6 +1113,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     /** Back for a page one step below a bar root: out of a visit, back to Home, or up the path. */
     private Runnable rootBack() {
         if (visitor) return this::finish;
+        if (current == 2 && chatReturn != null) return () -> { Runnable back = chatReturn; chatReturn = null; back.run(); };
         return fromHome ? () -> openPlace("home") : null;
     }
 

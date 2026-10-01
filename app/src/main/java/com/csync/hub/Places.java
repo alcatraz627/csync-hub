@@ -23,6 +23,8 @@ final class Places {
         }
         /** One of the five places on the bottom bar. */
         boolean onBar() { return parent == null; }
+        /** A capability page reached straight from Home, such as the Pi or Notes. */
+        boolean primary() { return parent == null || "home".equals(parent); }
     }
 
     private static final Map<String, Place> ALL = new LinkedHashMap<>();
@@ -34,6 +36,12 @@ final class Places {
     static {
         add("home", "Home", R.drawable.csi_home, null);
         add("search", "Search", R.drawable.csi_search, "home");
+        // The Pi and Notes are capabilities in their own right, one tap from Home, not kept in More.
+        add("pi", "Raspberry Pi", R.drawable.csi_system, "home");
+        add("camera", "Pi camera", R.drawable.csi_camera, "pi");
+        add("captures", "Captures", R.drawable.csi_photo, "camera");
+        add("notes", "Notes", R.drawable.csi_note, "home");
+        add("note", "Note", R.drawable.csi_note, "notes");
         add("media", "Media", R.drawable.csi_media, null);
         add("pi-screen", "Pi screen", R.drawable.csi_screen, "media");
         add("phone-player", "This phone", R.drawable.csi_device, "media");
@@ -42,13 +50,8 @@ final class Places {
         add("chat", "Chat", R.drawable.csi_chat, null);
         add("conversation", "Conversation", R.drawable.csi_chat, "chat");
         add("more", "More", R.drawable.csi_more, null);
-        add("camera", "Pi camera", R.drawable.csi_camera, "more");
-        add("captures", "Captures", R.drawable.csi_photo, "camera");
-        add("notes", "Notes", R.drawable.csi_note, "more");
-        add("note", "Note", R.drawable.csi_note, "notes");
-        add("tools", "Tools", R.drawable.csi_tools, "more");
-        add("process", "Process monitor", R.drawable.csi_device, "tools");
-        add("widgets", "Widgets", R.drawable.csi_launcher, "tools");
+        add("process", "Process monitor", R.drawable.csi_device, "more");
+        add("widgets", "Widgets", R.drawable.csi_launcher, "more");
         add("settings", "Settings", R.drawable.csi_settings, "more");
         add("connection", "Connection", R.drawable.csi_wifi, "settings");
         add("guide", "Assistant guide", R.drawable.csi_help, "more");

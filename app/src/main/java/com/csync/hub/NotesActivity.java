@@ -141,13 +141,12 @@ public final class NotesActivity extends AppCompatActivity {
         nav.setItemIconTintList(androidx.core.content.ContextCompat.getColorStateList(this, R.color.nav_icon_tint));
         nav.setItemActiveIndicatorColor(ColorStateList.valueOf(getColor(R.color.nav_indicator)));
         nav.setBackgroundColor(getColor(R.color.surface));
-        nav.setSelectedItemId(R.id.nav_more);
+        // Notes is reached from Home, so Home is the bar place that stays lit here.
+        nav.setSelectedItemId(R.id.nav_home);
         nav.setOnItemSelectedListener(item -> {
             int id = item.getItemId();
             Runnable move;
-            // More is the page underneath, unless Notes was visited from elsewhere; then More is asked for by name.
-            if (id == R.id.nav_more && !visiting) move = this::finish;
-            else if (id == R.id.nav_media) move = () -> startActivity(new Intent(this, MediaActivity.class));
+            if (id == R.id.nav_media) move = () -> startActivity(new Intent(this, MediaActivity.class));
             else {
                 String destination = id == R.id.nav_home ? "home" : id == R.id.nav_share ? "share" :
                     id == R.id.nav_chat ? "chat" : "more";
@@ -198,11 +197,11 @@ public final class NotesActivity extends AppCompatActivity {
 
     // ---- parts ----
 
-    /** Notes lives under More, so its path starts there. */
+    /** Notes lives under Home, so its path starts there. */
     private Kit.Crumb moreCrumb() {
-        return new Kit.Crumb(Kit.Icon.MORE, "More", () -> startActivity(new Intent(this, MainActivity.class)
+        return new Kit.Crumb(Kit.Icon.HOME, "Home", () -> startActivity(new Intent(this, MainActivity.class)
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            .putExtra("destination", "more")));
+            .putExtra("destination", "home")));
     }
 
     private int dp(int value) {

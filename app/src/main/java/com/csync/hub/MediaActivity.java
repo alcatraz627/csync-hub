@@ -215,7 +215,8 @@ public final class MediaActivity extends AppCompatActivity {
             path = getIntent().getStringExtra("open_path") == null ? "" : getIntent().getStringExtra("open_path");
             selectTab(FILES);
             browse();
-        } else if (searchItemId == null) drives();
+        } else if ("videos".equals(getIntent().getStringExtra("open_view"))) openTab(VIDEOS);
+        else if (searchItemId == null) drives();
         else openSearchItem(searchItemId,
             getIntent().getStringExtra("search_drive_id"),
             getIntent().getStringExtra("search_relative_path"),

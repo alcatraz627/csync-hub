@@ -28,7 +28,7 @@ final class RailActions {
         {"Places", "home", "Home"}, {"Places", "search", "Search"}, {"Places", "media", "Media"},
         {"Places", "pi-screen", "Pi screen"}, {"Places", "share", "Share"}, {"Places", "received", "Received"},
         {"Places", "chat", "Chat"}, {"Places", "chat-new", "New conversation"}, {"Places", "camera", "Pi camera"},
-        {"Places", "notes", "Notes"}, {"Places", "tools", "Tools"}, {"Places", "process", "Process monitor"},
+        {"Places", "notes", "Notes"}, {"Places", "pi", "Raspberry Pi"}, {"Places", "process", "Process monitor"},
         {"Places", "widgets", "Widgets"}, {"Places", "settings", "Settings"}, {"Places", "connection", "Connection"},
         {"Pi screen", "pi-stop", "Stop the Pi screen"}, {"Pi screen", "pi-camera-show", "Pi camera on the Pi screen"},
         {"Pi screen", "screen-share", "Share this phone's screen"},
@@ -40,12 +40,15 @@ final class RailActions {
             case "home": return Kit.Icon.HOME;
             case "search": return Kit.Icon.SEARCH;
             case "media": return Kit.Icon.MEDIA;
-            case "pi-screen": case "pi-stop": case "pi-camera-show": return Kit.Icon.DISPLAY;
+            case "pi-screen": case "pi-camera-show": return Kit.Icon.DISPLAY;
+            case "pi-stop": return R.drawable.csi_stop;
+            case "rail-setup": return R.drawable.csi_settings;
             case "share": case "received": return Kit.Icon.SHARE;
             case "chat": case "chat-new": return Kit.Icon.CHAT;
             case "camera": return Kit.Icon.CAMERA;
             case "notes": return Kit.Icon.NOTES;
-            case "tools": case "process": return Kit.Icon.TOOLS;
+            case "pi": case "tools": return R.drawable.csi_system;
+            case "process": return Kit.Icon.DEVICE;
             case "widgets": return R.drawable.csi_launcher;
             case "settings": case "connection": return Kit.Icon.SETTINGS;
             case "screen-share": return R.drawable.csi_screen;
@@ -62,6 +65,12 @@ final class RailActions {
                 try { return new JSONObject().put("id", id).put("label", entry[2]); } catch (Exception ignored) { }
             }
         return null;
+    }
+
+    /** The one link an empty rail shows: where its picks are made. */
+    static JSONObject setup() {
+        try { return new JSONObject().put("id", "rail-setup").put("label", "Choose what goes here"); }
+        catch (Exception impossible) { return null; }
     }
 
     static JSONObject folder(String driveId, String driveLabel, String path) {
@@ -126,7 +135,7 @@ final class RailActions {
                     : androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES);
                 return;
             }
-            case "home": case "share": case "chat": case "chat-new": case "tools": case "settings": case "camera":
+            case "home": case "share": case "chat": case "chat-new": case "tools": case "pi": case "settings": case "camera":
             case "more":
                 main(a, id.equals("chat-new") ? "chat-new" : id, null);
                 return;
@@ -134,6 +143,7 @@ final class RailActions {
             case "process": main(a, "tools", "process"); return;
             case "widgets": main(a, "tools", "widgets"); return;
             case "connection": main(a, "settings", "connection"); return;
+            case "rail-setup": main(a, "settings", null); return;
             case "update": main(a, "tools", "update"); return;
             case "search": jump(a, new Intent(a, SearchActivity.class)); return;
             case "notes": jump(a, new Intent(a, NotesActivity.class)); return;
