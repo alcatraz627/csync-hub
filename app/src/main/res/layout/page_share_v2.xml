@@ -32,20 +32,26 @@
                 <LinearLayout android:id="@+id/share_adds" android:layout_width="match_parent"
                     android:layout_height="wrap_content" android:layout_marginTop="12dp"
                     android:orientation="vertical"/>
-                <FrameLayout android:id="@+id/share_send_host" android:layout_width="match_parent"
-                    android:layout_height="wrap_content" android:layout_marginTop="12dp"/>
-                <TextView android:id="@+id/share_status" style="@style/Kit.Text.Meta"
+                <!-- What is happening to a send, then Send itself, which shows only when it can act. -->
+                <LinearLayout android:id="@+id/share_send_row"
                     android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp" android:visibility="gone"/>
-
-                <TextView style="@style/Kit.Text.Section"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:layout_marginTop="18dp" android:layout_marginBottom="8dp"
-                    android:text="Sent from this phone"/>
-                <LinearLayout android:id="@+id/share_sent" android:layout_width="match_parent"
-                    android:layout_height="wrap_content" android:orientation="vertical"/>
+                    android:layout_marginTop="12dp" android:visibility="gone"
+                    android:orientation="horizontal" android:gravity="center_vertical">
+                    <TextView android:id="@+id/share_status" style="@style/Kit.Text.Meta"
+                        android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+                        android:layout_marginEnd="12dp" android:visibility="invisible"/>
+                    <FrameLayout android:id="@+id/share_send_host" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"/>
+                </LinearLayout>
             </LinearLayout>
 
+            <!-- Sent and Received side by side as two views of one list of transfers. -->
+            <LinearLayout android:id="@+id/share_tabs"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="14dp" android:layout_marginBottom="8dp"
+                android:orientation="vertical"/>
+            <LinearLayout android:id="@+id/share_sent" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:orientation="vertical"/>
             <LinearLayout android:id="@+id/share_inbox_section"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical" android:visibility="gone">

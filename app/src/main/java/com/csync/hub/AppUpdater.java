@@ -2,6 +2,7 @@ package com.csync.hub;
 
 import android.app.Activity;
 import android.app.PendingIntent;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageInstaller;
@@ -12,6 +13,8 @@ import android.os.Looper;
 import android.provider.Settings;
 import android.widget.TextView;
 
+import org.json.JSONObject;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -20,11 +23,46 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+/**
+ * Updating csync from the build staged on the Pi.
+ *
+ * {@link #check} asks the Pi which build it holds without downloading it, so Home can say an
+ * update is ready. {@link #start} downloads and installs it as background work, with a
+ * progress notification and Stop until the install is handed to Android.
+ */
 final class AppUpdater {
     private static final long MAX_APK = 100L * 1024 * 1024;
     private static final AtomicBoolean updating = new AtomicBoolean();
 
+    /** What the Pi holds, when it is newer than this app: its version name. Null otherwise. */
+    interface Found { void newer(String versionName); }
+
+    /** Ask the Pi which build it holds; {@code found} hears back on the main thread. */
+    static void check(Context c, Found found) {
+        String host = Prefs.assistIp(c), token = Prefs.token(c);
+        Handler ui = new Handler(Looper.getMainLooper());
+        if (host.isEmpty() || token.isEmpty()) { found.newer(null); return; }
+        new Thread(() -> {
+            String newer = null;
+            try {
+                JSONObject staged = new MediaClient(host, token).get("/v1/app/version");
+                long code = staged.optLong("versionCode", 0);
+                if (staged.optBoolean("staged") && code > installedCode(c)) newer = staged.optString("versionName", "a newer build");
+            } catch (Exception unreachable) { }
+            String said = newer;
+            ui.post(() -> found.newer(said));
+        }, "csync-update-check").start();
+    }
+
+    static boolean running() { return updating.get(); }
+
+    private static long installedCode(Context c) throws Exception {
+        PackageInfo current = c.getPackageManager().getPackageInfo(c.getPackageName(), 0);
+        return Build.VERSION.SDK_INT >= 28 ? current.getLongVersionCode() : current.versionCode;
+    }
+
     static void refreshStatus(Activity activity, TextView status) {
+        if (status == null) return;
         android.content.SharedPreferences prefs = activity.getSharedPreferences("csync_update", Activity.MODE_PRIVATE);
         String failure = prefs.getString("failure", "");
         if (!failure.isEmpty()) {
@@ -36,7 +74,7 @@ final class AppUpdater {
         if (expected == 0 && lastInstalled.isEmpty()) return;
         try {
             PackageInfo current = activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0);
-            long installed = Build.VERSION.SDK_INT >= 28 ? current.getLongVersionCode() : current.versionCode;
+            long installed = installedCode(activity);
             if (expected > 0 && installed >= expected) {
                 status.setText("csync " + current.versionName + " is installed, from the Pi");
                 prefs.edit().remove("expected_version").putString("last_installed", current.versionName).apply();
@@ -50,23 +88,31 @@ final class AppUpdater {
         }
     }
 
+    /** Download and install the Pi's build as background work. {@code status} may be null. */
     static void start(Activity activity, TextView status) {
+        Handler ui = new Handler(Looper.getMainLooper());
         String host = Prefs.assistIp(activity);
         String token = Prefs.token(activity);
         if (host.isEmpty() || token.isEmpty()) {
-            status.setText("Connect to the Pi first, then check for an update");
+            if (status != null) status.setText("Connect to the Pi first, then check for an update");
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= 26 && !activity.getPackageManager().canRequestPackageInstalls()) {
+            if (status != null) status.setText("Allow csync to install updates, then tap Update again");
+            activity.startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                Uri.parse("package:" + activity.getPackageName())));
             return;
         }
         if (!updating.compareAndSet(false, true)) {
-            status.setText("An update is already on its way");
+            if (status != null) status.setText("An update is already on its way");
             return;
         }
-        status.setText("Fetching the update from the Pi");
-        Handler ui = new Handler(Looper.getMainLooper());
-        new Thread(() -> {
+        if (status != null) status.setText("Fetching the update from the Pi");
+        WorkService.start(activity, "Updating csync", R.drawable.csi_download, true, work -> {
             File apk = new File(activity.getCacheDir(), "csync-update.apk");
             HttpURLConnection connection = null;
             try {
+                work.progress(-1, "Fetching it from the Pi");
                 connection = (HttpURLConnection) new URL("http://" + host + ":8792/v1/app/apk").openConnection();
                 connection.setConnectTimeout(6000);
                 connection.setReadTimeout(30000);
@@ -81,36 +127,30 @@ final class AppUpdater {
                     byte[] buffer = new byte[65536];
                     long read = 0;
                     while (read < length) {
+                        if (work.stopped()) throw new Exception("Stopped");
                         int count = input.read(buffer, 0, (int) Math.min(buffer.length, length - read));
                         if (count < 0) throw new Exception("The update ended early");
                         output.write(buffer, 0, count);
                         read += count;
+                        work.progress((int) (read * 90 / length), (read * 100 / length) + "% of " + (length / (1024 * 1024)) + " MB");
                     }
                     output.flush();
                 }
                 PackageInfo archive = activity.getPackageManager().getPackageArchiveInfo(apk.getAbsolutePath(), 0);
                 if (archive == null || !activity.getPackageName().equals(archive.packageName))
                     throw new Exception("What the Pi holds is not a csync update");
-                PackageInfo current = activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0);
                 long newVersion = Build.VERSION.SDK_INT >= 28 ? archive.getLongVersionCode() : archive.versionCode;
-                long oldVersion = Build.VERSION.SDK_INT >= 28 ? current.getLongVersionCode() : current.versionCode;
-                if (newVersion <= oldVersion) {
-                    ui.post(() -> status.setText("csync is already up to date"));
-                    return;
+                if (newVersion <= installedCode(activity)) {
+                    if (status != null) ui.post(() -> status.setText("csync is already up to date"));
+                    return "csync is already up to date";
                 }
-                if (Build.VERSION.SDK_INT >= 26 && !activity.getPackageManager().canRequestPackageInstalls()) {
-                    ui.post(() -> {
-                        status.setText("Allow csync to install updates, then tap Update again");
-                        activity.startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                            Uri.parse("package:" + activity.getPackageName())));
-                    });
-                    return;
-                }
+                if (work.stopped()) throw new Exception("Stopped");
                 activity.getSharedPreferences("csync_update", Activity.MODE_PRIVATE).edit()
                     .putLong("expected_version", newVersion)
                     .putString("expected_name", archive.versionName)
                     .remove("failure").apply();
-                ui.post(() -> status.setText("Installing csync " + archive.versionName));
+                work.progress(95, "Handing it to Android to install");
+                if (status != null) ui.post(() -> status.setText("Installing csync " + archive.versionName));
                 PackageInstaller installer = activity.getPackageManager().getPackageInstaller();
                 PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(
                     PackageInstaller.SessionParams.MODE_FULL_INSTALL);
@@ -136,15 +176,20 @@ final class AppUpdater {
                 } finally {
                     if (!committed) installer.abandonSession(sessionId);
                 }
+                return "Installing csync " + archive.versionName;
             } catch (Exception error) {
-                activity.getSharedPreferences("csync_update", Activity.MODE_PRIVATE).edit()
-                    .remove("expected_version").putString("failure", error.getMessage()).apply();
-                ui.post(() -> status.setText("The update did not install. " + error.getMessage()));
+                if (!work.stopped()) {
+                    activity.getSharedPreferences("csync_update", Activity.MODE_PRIVATE).edit()
+                        .remove("expected_version").putString("failure", error.getMessage()).apply();
+                    if (status != null) ui.post(() -> status.setText("The update did not install. " + error.getMessage()));
+                } else if (status != null) ui.post(() -> status.setText("The update was stopped"));
+                throw error;
             } finally {
                 if (connection != null) connection.disconnect();
-                if (apk.exists()) apk.delete();
+                if (apk.exists()) //noinspection ResultOfMethodCallIgnored
+                    apk.delete();
                 updating.set(false);
             }
-        }, "csync-app-update").start();
+        });
     }
 }

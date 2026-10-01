@@ -582,15 +582,19 @@ public class ShareActivity extends AppCompatActivity {
             String asked = getIntent().getStringExtra(TEXT_NAME);
             final String textName = asked == null || asked.trim().isEmpty() ? "shared.txt"
                 : asked.replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", " ").trim();
-            String pendingName = textName, pendingKind = "text";
+            String pendingName = textName, pendingKind = "text", pendingUri = null, pendingText = null;
             try {
                 for (int item = nextItem; item < total; item++) {
                     if (item < textItems) {
                         pendingName = textName;
                         pendingKind = "text";
+                        pendingUri = null;
+                        pendingText = text;
                         MeshClient.send(peer, token, from, "text", textName, text.getBytes("UTF-8"));
                     } else {
                         Uri u = files.get(item - textItems);
+                        pendingUri = u.toString();
+                        pendingText = null;
                         byte[] data = read(u);
                         String name = displayName(u);
                         String sentAs = isImage(name, getContentResolver().getType(u)) ? "image" : "file";
@@ -598,7 +602,7 @@ public class ShareActivity extends AppCompatActivity {
                         pendingKind = sentAs;
                         MeshClient.send(peer, token, from, sentAs, name, data);
                     }
-                    recordSent(pendingName, pendingKind, peer, true);
+                    Transfers.recordSent(this, pendingName, pendingKind, peer, true, pendingUri, pendingText);
                     sent++;
                     if (sent < total) {
                         final int next = sent + 1;
@@ -607,7 +611,7 @@ public class ShareActivity extends AppCompatActivity {
                 }
             } catch (Throwable e) {
                 err = e.getMessage() == null ? "The device did not answer." : e.getMessage();
-                recordSent(pendingName, pendingKind, peer, false);
+                Transfers.recordSent(this, pendingName, pendingKind, peer, false, pendingUri, pendingText);
             }
             final int delivered = sent;
             final String error = err;
@@ -624,24 +628,6 @@ public class ShareActivity extends AppCompatActivity {
                     new Kit.Action(Kit.Icon.DEVICE, "Choose another device", null, go(this::chooseDevice))));
             });
         }, "share-send").start();
-    }
-
-    private void recordSent(String name, String sentAs, String target, boolean delivered) {
-        android.content.SharedPreferences prefs = getSharedPreferences("csync_share", MODE_PRIVATE);
-        JSONArray prior;
-        try { prior = new JSONArray(prefs.getString("sent", "[]")); }
-        catch (Exception ignored) { prior = new JSONArray(); }
-        JSONObject entry = new JSONObject();
-        try {
-            entry.put("name", name);
-            entry.put("kind", sentAs);
-            entry.put("target", target);
-            entry.put("delivered", delivered);
-            entry.put("at", System.currentTimeMillis());
-        } catch (Exception ignored) { }
-        JSONArray next = new JSONArray().put(entry);
-        for (int i = 0; i < Math.min(prior.length(), 49); i++) next.put(prior.optJSONObject(i));
-        prefs.edit().putString("sent", next.toString()).apply();
     }
 
     private byte[] read(Uri u) throws Exception {

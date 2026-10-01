@@ -437,7 +437,6 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         // Home is the map of what the app can do, so every capability is a card here.
         homeCards(pageHome.findViewById(R.id.home_primary), Catalogue.tier(true), true);
         homeCards(pageHome.findViewById(R.id.home_secondary), Catalogue.tier(false), false);
-        pageHome.findViewById(R.id.home_status).setOnClickListener(v -> fromHome(R.id.nav_more, () -> showMoreDetail(2)));
         bindHomeStatus(null, false, null);
         renderMore(null);
         showMoreDetail(0);
@@ -882,7 +881,6 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         else if (visitor) finish();
         else if (current == 2 && chatReturn != null) { Runnable back = chatReturn; chatReturn = null; back.run(); }
         else if (current == 2 && chatConvoMode) openPlace(fromHome ? "home" : "chat");
-        else if (current == 1 && shareInboxMode) { if (fromHome) openPlace("home"); else setShareMode(false); }
         else if (current == 6 && moreDetail != 0) { if (fromHome) openPlace("home"); else showMoreDetail(0); }
         else if (current == 4 && settingsDetail != 0) closeSettingsDetail();
         // The process monitor and Widgets belong to More's This phone section.
@@ -901,6 +899,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private void refreshHome() {
         final String home = Prefs.homeIp(this), assist = Prefs.assistIp(this), token = Prefs.token(this);
         renderPickUp(null);
+        AppUpdater.check(this, newer -> { stagedUpdate = newer; bindUpdateFooter(newer); });
         new Thread(() -> {
             final boolean mac = !home.isEmpty() && MeshClient.reachable(home, MeshClient.PORT);
             final boolean pi = !assist.isEmpty() && MeshClient.reachable(assist, MeshClient.ASSIST_PORT);
@@ -954,12 +953,67 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         line.setTypeface(androidx.core.content.res.ResourcesCompat.getFont(this, R.font.mono));
         line.setText(nodes.isEmpty() ? "no devices yet" : online + " of " + nodes.size() + " devices around");
 
-        ((TextView) pageHome.findViewById(R.id.home_status_words)).setText("About csync");
+        bindUpdateFooter(stagedUpdate);
+    }
+
+    // The newer build the Pi holds, by name, or null when this app is the newest.
+    private String stagedUpdate;
+
+    /**
+     * Home's foot line is the app itself: greyed "Up to date" with the version, or, when the Pi
+     * holds a newer build, an accent line that shimmers and installs it on a tap.
+     */
+    private void bindUpdateFooter(String newer) {
+        View row = pageHome.findViewById(R.id.home_status);
+        TextView words = pageHome.findViewById(R.id.home_status_words);
         TextView version = pageHome.findViewById(R.id.home_status_version);
         version.setTextAppearance(R.style.Kit_Text_Meta);
         version.setTypeface(androidx.core.content.res.ResourcesCompat.getFont(this, R.font.mono));
-        version.setText(appVersion());
-        pageHome.findViewById(R.id.home_status).setContentDescription("About csync, version " + appVersion());
+        words.animate().cancel();
+        words.setAlpha(1f);
+        if (newer == null) {
+            words.setText(AppUpdater.running() ? "Updating csync" : "Up to date");
+            words.setTextColor(col(R.color.dim));
+            words.setCompoundDrawablesRelative(null, null, null, null);
+            version.setText("csync " + appVersion());
+            row.setBackgroundResource(outValue());
+            row.setContentDescription("csync " + appVersion() + ", up to date. Open About");
+            row.setOnClickListener(v -> fromHome(R.id.nav_more, () -> showMoreDetail(2)));
+            return;
+        }
+        words.setText("csync " + newer + " is ready");
+        words.setTextColor(Kit.accentText(this));
+        android.graphics.drawable.Drawable spark = androidx.core.content.ContextCompat.getDrawable(this, R.drawable.csi_download);
+        if (spark != null) {
+            spark.setBounds(0, 0, dp(16), dp(16));
+            spark.setTint(Kit.accentText(this));
+        }
+        words.setCompoundDrawablesRelative(spark, null, null, null);
+        words.setCompoundDrawablePadding(dp(8));
+        version.setText("Install");
+        android.graphics.drawable.GradientDrawable wash = new android.graphics.drawable.GradientDrawable();
+        wash.setColor(androidx.core.graphics.ColorUtils.blendARGB(col(R.color.bg), accent(), 0.12f));
+        wash.setCornerRadius(dp(14));
+        row.setBackground(wash);
+        // A slow shimmer says something new is waiting without asking for attention.
+        android.animation.ObjectAnimator shimmer = android.animation.ObjectAnimator.ofFloat(words, View.ALPHA, 1f, 0.55f);
+        shimmer.setDuration(1100);
+        shimmer.setRepeatMode(android.animation.ValueAnimator.REVERSE);
+        shimmer.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+        shimmer.start();
+        row.setContentDescription("csync " + newer + " is ready. Install it");
+        row.setOnClickListener(v -> {
+            Kit.tick(v);
+            AppUpdater.start(this, null);
+            stagedUpdate = null;
+            bindUpdateFooter(null);
+        });
+    }
+
+    private int outValue() {
+        android.util.TypedValue value = new android.util.TypedValue();
+        getTheme().resolveAttribute(android.R.attr.selectableItemBackground, value, true);
+        return value.resourceId;
     }
 
     private TextView piCardLine;
@@ -1614,9 +1668,10 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         shareText = pageShare.findViewById(R.id.share_text);
         shareInbox = pageShare.findViewById(R.id.share_inbox);
         shareStatus = pageShare.findViewById(R.id.share_status);
+        // Send is no wider than its word and is shown only once there is something to send and someone to get it.
         shareSend = Kit.primaryButton(this, R.drawable.csi_send, "Send", this::sendComposed);
         ((android.widget.FrameLayout) pageShare.findViewById(R.id.share_send_host)).addView(shareSend,
-            new android.widget.FrameLayout.LayoutParams(-1, -2));
+            new android.widget.FrameLayout.LayoutParams(-2, -2));
         shareText.addTextChangedListener(new android.text.TextWatcher() {
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             public void onTextChanged(CharSequence s, int start, int before, int count) {}
@@ -1631,7 +1686,17 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         if (shareSend == null) return;
         boolean ready = !PeerStore.selected(this).isEmpty() &&
             (shareFileUri != null || !shareText.getText().toString().trim().isEmpty());
-        shareSend.setAlpha(ready ? 1f : 0.45f);
+        boolean shown = shareSend.getVisibility() == View.VISIBLE;
+        syncSendRow(ready);
+        if (ready == shown) return;
+        shareSend.animate().cancel();
+        if (ready) {
+            shareSend.setVisibility(View.VISIBLE);
+            shareSend.setAlpha(0f);
+            shareSend.setScaleX(0.9f);
+            shareSend.setScaleY(0.9f);
+            shareSend.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(160).start();
+        } else shareSend.setVisibility(View.GONE);
     }
 
     /** One Send for the whole page: the attached file goes, and the message with it when there is one. */
@@ -1646,26 +1711,43 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     /** Say what is happening to a send under the button, or with nothing to say take the line away. */
     private void shareSay(String words) {
         shareStatus.setText(words);
-        shareStatus.setVisibility(words == null || words.isEmpty() ? View.GONE : View.VISIBLE);
+        // The line keeps its room while Send is showing, so Send beside it does not jump.
+        shareStatus.setVisibility(words == null || words.isEmpty() ? View.INVISIBLE : View.VISIBLE);
+        syncSendRow(shareSend != null && shareSend.getVisibility() == View.VISIBLE);
     }
 
-    /** Compose and Inbox are two modes of the Share tab; each has its own crumb, and back leaves Inbox for Compose. */
+    /**
+     * The human half of a send failure. The mesh client says what to check, then adds the
+     * socket's own report in brackets; that half names ports and addresses, so it is left out.
+     */
+    private static String plainReason(Throwable error) {
+        String said = error.getMessage();
+        if (said == null) return "";
+        said = said.replaceAll("\\s*\\(.*\\)\\s*$", "").trim();
+        return said.isEmpty() ? "" : " " + said;
+    }
+
+    /** The row under the composer takes room only while it holds Send or something to say. */
+    private void syncSendRow(boolean sendShown) {
+        boolean saying = shareStatus != null && shareStatus.getVisibility() == View.VISIBLE;
+        pageShare.findViewById(R.id.share_send_row).setVisibility(sendShown || saying ? View.VISIBLE : View.GONE);
+    }
+
+    /**
+     * Sent and Received are two views of one list under the composer, side by side as tabs.
+     * Switching between them is a view, not a move, so Back does not undo it.
+     */
     private void setShareMode(boolean inbox) {
         shareInboxMode = inbox;
-        pageShare.findViewById(R.id.share_compose).setVisibility(inbox ? View.GONE : View.VISIBLE);
+        Kit.tabs(pageShare.findViewById(R.id.share_tabs), new int[]{R.drawable.csi_send, R.drawable.csi_download},
+            new String[]{"Sent", "Received"}, inbox ? 1 : 0, picked -> setShareMode(picked == 1));
+        pageShare.findViewById(R.id.share_sent).setVisibility(inbox ? View.GONE : View.VISIBLE);
         pageShare.findViewById(R.id.share_inbox_section).setVisibility(inbox ? View.VISIBLE : View.GONE);
         View top = pageShare.findViewById(R.id.share_top);
-        if (inbox) {
-            Kit.pageTop(top, "received", this::openPlace, visitBack());
-            // The breadcrumb already names this page, so it carries no heading of its own.
-            refreshShareHeading();
-            renderInbox();
-            return;
-        }
         Kit.pageTop(top, "share", this::openPlace, visitBack());
         Kit.topAction(top, Kit.Icon.DEVICE, "Choose who receives", v -> openRecipientSheet());
-        Kit.topAction(top, R.drawable.csi_download, "Received", v -> setShareMode(true));
         refreshShareHeading();
+        if (inbox) renderInbox(); else renderSentHistory();
     }
 
     /** Draw what can go with the message: the attached file, or the way to attach one, and the clipboard. */
@@ -1739,9 +1821,11 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     }
 
     private void sendSelectedFile() {
-        final android.net.Uri uri = shareFileUri;
-        final String name = shareFileName;
-        final String target = PeerStore.selected(this);
+        sendFile(shareFileUri, shareFileName, PeerStore.selected(this));
+    }
+
+    /** Send one file to one device, and keep a record that can open, resend or retry it. */
+    private void sendFile(final android.net.Uri uri, final String name, final String target) {
         final String token = Prefs.token(this);
         if (uri == null) { toast("Choose a file first"); return; }
         if (target.isEmpty()) { toast("Pick a device first"); return; }
@@ -1770,15 +1854,15 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                 result = "";
                 delivered = true;
             } catch (Exception error) {
-                result = name + " was not delivered to " + target + ". It is still attached."
-                    + (error.getMessage() == null ? "" : " " + error.getMessage());
+                result = name + " did not reach " + target + "."
+                    + (uri.equals(shareFileUri) ? " It is still attached." : " Try again from its row in Sent.") + plainReason(error);
             }
             final String message = result;
             final boolean sent = delivered;
             final String sentKind = kind;
             ui.post(() -> {
                 shareSay(message);
-                recordSent(name, sentKind, target, sent);
+                recordSent(name, sentKind, target, sent, uri.toString(), null);
                 if (sent && uri.equals(shareFileUri)) {
                     shareFileUri = null;
                     shareFileName = "";
@@ -1788,48 +1872,104 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         }, "share-file").start();
     }
 
-    private void recordSent(String name, String kind, String target, boolean delivered) {
-        android.content.SharedPreferences prefs = getSharedPreferences("csync_share", MODE_PRIVATE);
-        JSONArray prior;
-        try { prior = new JSONArray(prefs.getString("sent", "[]")); }
-        catch (Exception ignored) { prior = new JSONArray(); }
-        JSONArray next = new JSONArray();
-        JSONObject entry = new JSONObject();
-        try {
-            entry.put("name", name);
-            entry.put("kind", kind);
-            entry.put("target", target);
-            entry.put("delivered", delivered);
-            entry.put("at", System.currentTimeMillis());
-        } catch (Exception ignored) { }
-        next.put(entry);
-        for (int i = 0; i < Math.min(prior.length(), 49); i++) next.put(prior.optJSONObject(i));
-        prefs.edit().putString("sent", next.toString()).apply();
+    /**
+     * Keep a record of one send. A file keeps its link on this phone and words keep their whole
+     * text, so the record can be opened, sent again, or retried later.
+     */
+    private void recordSent(String name, String kind, String target, boolean delivered, String uri, String text) {
+        Transfers.recordSent(this, name, kind, target, delivered, uri, text);
         renderSentHistory();
     }
 
+    /**
+     * Everything sent from this phone, newest first. A row opens what it can do with the item; a
+     * failed one has Retry at its end; a file that can no longer be opened here says so quietly,
+     * apart from whether it was delivered.
+     */
     private void renderSentHistory() {
         LinearLayout container = pageShare.findViewById(R.id.share_sent);
         container.removeAllViews();
-        JSONArray entries;
-        try { entries = new JSONArray(getSharedPreferences("csync_share", MODE_PRIVATE).getString("sent", "[]")); }
-        catch (Exception ignored) { entries = new JSONArray(); }
+        JSONArray entries = Transfers.sent(this);
         if (entries.length() == 0) {
             Kit.empty(container, R.drawable.csi_send, "Nothing sent yet", "What you send from this phone is listed here.", null);
             return;
         }
         LinearLayout group = Kit.group(container);
-        for (int i = 0; i < Math.min(entries.length(), 10); i++) {
+        for (int i = 0; i < entries.length(); i++) {
             JSONObject item = entries.optJSONObject(i);
             if (item == null) continue;
             String kind = item.optString("kind", "file");
+            boolean text = "text".equals(kind);
             boolean delivered = item.optBoolean("delivered");
+            boolean gone = !text && !Transfers.stillHere(this, item);
             View row = Kit.addRow(group);
-            Kit.bindRow(row, "text".equals(kind) ? R.drawable.csi_text : "image".equals(kind) ? Kit.Icon.PHOTO : Kit.Icon.FILE,
-                item.optString("name"), item.optString("target") + " · " + relTime(item.optLong("at")), null, false);
+            CharSequence sub = item.optString("target") + " · " + relTime(item.optLong("at"));
+            if (gone) {
+                android.text.SpannableStringBuilder words = new android.text.SpannableStringBuilder(sub).append("\n");
+                int from = words.length();
+                words.append("Can no longer be opened from this phone");
+                words.setSpan(new android.text.style.ForegroundColorSpan(Kit.statusColor(this, Kit.Status.WARN)),
+                    from, words.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                sub = words;
+            }
+            Kit.bindRow(row, text ? R.drawable.csi_text : "image".equals(kind) ? Kit.Icon.PHOTO : Kit.Icon.FILE,
+                item.optString("name"), sub, null, false);
             Kit.rowStatus(row, delivered ? Kit.Status.GOOD : Kit.Status.BAD, delivered ? "Delivered" : "Failed");
-            row.setClickable(false);
+            boolean resendable = text || !gone;
+            if (!delivered && resendable)
+                Kit.rowAction(row, R.drawable.csi_refresh, "Try sending " + item.optString("name") + " again",
+                    v -> { Kit.tick(v); resend(item, item.optString("target")); });
+            row.setOnClickListener(v -> sentActions(item, gone));
         }
+    }
+
+    /** What can be done with something already sent: look at it, send it again, or take it off the list. */
+    private void sentActions(JSONObject item, boolean gone) {
+        boolean text = "text".equals(item.optString("kind"));
+        String target = item.optString("target");
+        java.util.List<Kit.Action> actions = new java.util.ArrayList<>();
+        if (text) actions.add(new Kit.Action(R.drawable.csi_copy, "Copy the text", null, () -> {
+            android.content.ClipboardManager clip = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            clip.setPrimaryClip(android.content.ClipData.newPlainText("csync", item.optString("text", item.optString("name"))));
+            toast("Copied");
+        }));
+        else if (!gone) actions.add(new Kit.Action(R.drawable.csi_expand, "Open", "On this phone", () -> {
+            try {
+                startActivity(new Intent(Intent.ACTION_VIEW).setData(android.net.Uri.parse(item.optString("uri")))
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION));
+            } catch (Exception none) { toast("No app on this phone opens it"); }
+        }));
+        if (text || !gone) {
+            actions.add(new Kit.Action(R.drawable.csi_send, "Send again to " + target, null, () -> resend(item, target)));
+            actions.add(new Kit.Action(Kit.Icon.DEVICE, "Send to another device", null, () -> chooseResendDevice(item), true));
+        }
+        actions.add(new Kit.Action(R.drawable.csi_trash, "Take it off this list", null, () -> {
+            Transfers.forget(this, item.optLong("at"));
+            renderSentHistory();
+        }));
+        Kit.sheet(this, item.optString("name"), (item.optBoolean("delivered") ? "Delivered to " : "Did not reach ")
+            + target + " · " + relTime(item.optLong("at")), actions.toArray(new Kit.Action[0]));
+    }
+
+    private void chooseResendDevice(JSONObject item) {
+        JSONArray roster = PeerStore.load(this);
+        java.util.List<Kit.Action> actions = new java.util.ArrayList<>();
+        for (int i = 0; roster != null && i < roster.length(); i++) {
+            JSONObject peer = roster.optJSONObject(i);
+            if (peer == null || Prefs.deviceName(this).equals(peer.optString("name"))) continue;
+            String name = peer.optString("name");
+            actions.add(new Kit.Action(Kit.Icon.DEVICE, name, null, () -> resend(item, name))
+                .value(peer.optBoolean("online") ? "Online" : "Offline"));
+        }
+        Kit.sheet(this, "Send to", null, actions.toArray(new Kit.Action[0]));
+    }
+
+    /** Send a past item again, to the same device or another one. */
+    private void resend(JSONObject item, String target) {
+        // A retry to the same device replaces the failed row instead of piling up another.
+        if (!item.optBoolean("delivered") && target.equals(item.optString("target"))) Transfers.forget(this, item.optLong("at"));
+        if ("text".equals(item.optString("kind"))) sendTextTo(item.optString("text", item.optString("name")), target, false);
+        else sendFile(android.net.Uri.parse(item.optString("uri")), item.optString("name"), target);
     }
 
     private void scanPeers() {
@@ -1881,8 +2021,12 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     }
 
     private void sendToSelected(final String text, boolean fromComposer) {
+        sendTextTo(text, PeerStore.selected(this), fromComposer);
+    }
+
+    private void sendTextTo(final String text, final String target, boolean fromComposer) {
         if (text == null || text.isEmpty()) { toast("Nothing to send"); return; }
-        final String target = PeerStore.selected(this), token = Prefs.token(this);
+        final String token = Prefs.token(this);
         if (target.isEmpty()) { toast("Pick a device first"); return; }
         if (token.isEmpty()) { toast("Set the token in Settings"); return; }
         final String from = Prefs.deviceName(this);
@@ -1895,14 +2039,14 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                 result = "";
                 sent = true;
             } catch (Throwable e) {
-                result = "The message was not delivered to " + target + ". It is still in the box."
-                    + (e.getMessage() == null ? "" : " " + e.getMessage());
+                result = (fromComposer ? "The message did not reach " + target + ". It is still in the box."
+                    : "It did not reach " + target + ". Try again from its row in Sent.") + plainReason(e);
             }
             final String r = result;
             final boolean delivered = sent;
             ui.post(() -> {
                 shareSay(r);
-                recordSent(text.length() > 36 ? text.substring(0, 36) : text, "text", target, delivered);
+                recordSent(text.length() > 36 ? text.substring(0, 36) : text, "text", target, delivered, null, text);
                 if (delivered && fromComposer && text.contentEquals(shareText.getText())) shareText.setText("");
             });
         }).start();
