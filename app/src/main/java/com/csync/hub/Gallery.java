@@ -22,17 +22,24 @@ final class Gallery {
 
     /** Make a hidden entry for a file about to be written. Needs Android 10 or newer. */
     static Uri begin(Context c, String name, String mime) throws Exception {
+        return begin(c, name, mime, null);
+    }
+
+    /** As above; a file that is not a photo or video goes in {@code folder} inside Downloads/csync when one is named. */
+    static Uri begin(Context c, String name, String mime, String folder) throws Exception {
         if (android.os.Build.VERSION.SDK_INT < 29) throw new Exception("Saving needs Android 10 or newer");
         boolean picture = mime != null && mime.startsWith("image/");
         boolean video = mime != null && mime.startsWith("video/");
         Uri collection = picture ? MediaStore.Images.Media.EXTERNAL_CONTENT_URI
             : video ? MediaStore.Video.Media.EXTERNAL_CONTENT_URI : MediaStore.Downloads.EXTERNAL_CONTENT_URI;
-        String folder = picture ? Environment.DIRECTORY_PICTURES : video ? Environment.DIRECTORY_MOVIES
+        String root = picture ? Environment.DIRECTORY_PICTURES : video ? Environment.DIRECTORY_MOVIES
             : Environment.DIRECTORY_DOWNLOADS;
+        String inside = folder == null || folder.isEmpty() || picture || video ? ""
+            : "/" + folder.replaceAll("[\\\\:*?\"<>|]", "_").replaceAll("^/+|/+$", "");
         ContentValues values = new ContentValues();
         values.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
         values.put(MediaStore.MediaColumns.MIME_TYPE, mime);
-        values.put(MediaStore.MediaColumns.RELATIVE_PATH, folder + "/csync");
+        values.put(MediaStore.MediaColumns.RELATIVE_PATH, root + "/csync" + inside);
         values.put(MediaStore.MediaColumns.IS_PENDING, 1);
         Uri entry = c.getContentResolver().insert(collection, values);
         if (entry == null) throw new Exception("The phone's storage is not available");

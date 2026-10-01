@@ -223,6 +223,13 @@ public class ShareActivity extends AppCompatActivity {
         shared.own.put(ItemActions.Act.CHAT, this::toConversation);
         shared.own.put(ItemActions.Act.NOTE, this::toNote);
         shared.own.put(ItemActions.Act.PIN, this::toPin);
+        if (files.size() > 1) shared.own.put(ItemActions.Act.SAVE, () -> {
+            // Several files shared at once are saved together, as one piece of work.
+            List<PhoneSave.Entry> entries = new ArrayList<>();
+            for (Uri file : files) entries.add(PhoneSave.of(this, displayName(file), fileType(file), file));
+            PhoneSave.save(this, files.size() + " files", null, entries);
+            finish();
+        });
         Kit.sections(body, ItemActions.sections(this, shared), null);
     }
 

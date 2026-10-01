@@ -133,7 +133,10 @@ final class ItemActions {
             if (!item.inNote) add(rest, a, item, Act.NOTE, Kit.Icon.NOTES, "Add to a note", false);
             if (!item.isPin) add(rest, a, item, Act.PIN, R.drawable.ic_pin, "Save as a pin", false);
         }
-        if (here && !words && (Build.VERSION.SDK_INT >= 29 || item.own.containsKey(Act.SAVE)))
+        // Anything but a bare link can be kept on this phone, including what another app shared in
+        // and words such as a note (owner ruling D3).
+        boolean savable = kind != Kind.LINK && kind != Kind.VIDEO_LINK && (!words || item.text != null);
+        if (savable && (Build.VERSION.SDK_INT >= 29 || item.own.containsKey(Act.SAVE)))
             add(rest, a, item, Act.SAVE, R.drawable.csi_download, "Save on this phone", false);
         if (here) add(rest, a, item, Act.SHARE_OUT, Kit.Icon.SHARE, "Share with another app", true);
         rest.addAll(item.more);
@@ -170,6 +173,11 @@ final class ItemActions {
             return;
         }
         if (item.file == null) {
+            if (act == Act.SAVE) {
+                String name = item.textName != null ? item.textName : item.title + ".txt";
+                PhoneSave.save(a, name, null, java.util.Collections.singletonList(PhoneSave.text(name, item.text)));
+                return;
+            }
             if (act == Act.PLAY_PHONE || act == Act.OPEN) {
                 String address = item.link == null ? item.text.trim() : item.link;
                 start(a, new Intent(Intent.ACTION_VIEW, Uri.parse(address)), "No app on this phone can open this link");
@@ -196,7 +204,8 @@ final class ItemActions {
                     start(a, view(a, uri, type, item.title).setPackage("org.videolan.vlc"), "VLC is not on this phone");
                     return;
                 case SAVE:
-                    save(a, item.title, uri, type);
+                    PhoneSave.save(a, item.title, null,
+                        java.util.Collections.singletonList(PhoneSave.of(a, item.title, type, uri)));
                     return;
                 default:
                     Intent send = new Intent(Intent.ACTION_SEND).setType(type).putExtra(Intent.EXTRA_STREAM, uri)
@@ -246,41 +255,6 @@ final class ItemActions {
                 else Kit.pictureSheet(a, title, shown);
             });
         }, "item-look").start();
-    }
-
-    /** Copy the file into the phone's Downloads folder. */
-    private static void save(Activity a, String name, Uri from, String type) {
-        if (Build.VERSION.SDK_INT < 29) { toast(a, "Saving needs Android 10 or newer"); return; }
-        Handler main = new Handler(Looper.getMainLooper());
-        toast(a, "Saving " + name);
-        new Thread(() -> {
-            Uri saved = null;
-            String problem = null;
-            try {
-                ContentValues values = new ContentValues();
-                values.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
-                values.put(MediaStore.MediaColumns.MIME_TYPE, type);
-                values.put(MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS + "/csync");
-                values.put(MediaStore.MediaColumns.IS_PENDING, 1);
-                saved = a.getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
-                if (saved == null) throw new Exception("The phone's storage is not available");
-                try (InputStream in = a.getContentResolver().openInputStream(from);
-                     OutputStream out = a.getContentResolver().openOutputStream(saved)) {
-                    if (in == null || out == null) throw new Exception("The file could not be read");
-                    byte[] buffer = new byte[65536];
-                    int count;
-                    while ((count = in.read(buffer)) != -1) out.write(buffer, 0, count);
-                }
-                ContentValues ready = new ContentValues();
-                ready.put(MediaStore.MediaColumns.IS_PENDING, 0);
-                a.getContentResolver().update(saved, ready, null, null);
-            } catch (Exception error) {
-                problem = error.getMessage() == null ? "The file could not be saved" : error.getMessage();
-                if (saved != null) try { a.getContentResolver().delete(saved, null, null); } catch (Exception ignored) { }
-            }
-            String failure = problem;
-            main.post(() -> toast(a, failure == null ? "Saved to Downloads" : "It was not saved. " + failure));
-        }, "item-save").start();
     }
 
     private static void toast(Activity a, String words) {
