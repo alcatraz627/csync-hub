@@ -481,19 +481,28 @@ public final class MediaActivity extends AppCompatActivity {
         stopPhoneForNewPlayback();
         target = "pi";
         selected = null;
-        say("Sending " + fileName + " to Pi USB: 0%");
+        say("Sending " + fileName + " to the Pi: 0%");
         request(intent, () -> {
             try (InputStream input = getContentResolver().openInputStream(uri)) {
                 if (input == null) throw new Exception("Could not open selected media");
-                return client.uploadMedia("sandisk", fileName, fileSize, input, sent -> {
+                // No drive named: the Pi keeps the copy in the cache folder of whichever drive has room.
+                return client.uploadMedia("", fileName, fileSize, input, sent -> {
                     int percent = (int) (sent * 100 / fileSize);
                     ui.post(() -> { if (screenActive && intent == outputIntent)
-                        say("Sending " + fileName + " to Pi USB: " + percent + "%"); });
+                        say("Sending " + fileName + " to the Pi: " + percent + "%"); });
                 });
             }
         }, result -> {
             JSONObject item = result.getJSONObject("item");
-            say("Saved on Pi USB. Opening it on the Pi screen");
+            if (result.optBoolean("started")) {
+                // The Pi began playing while the copy was still arriving; the phone only follows it.
+                selected = item;
+                loopWhenPlaying = getSharedPreferences("player_controls", MODE_PRIVATE).getBoolean("loop", false);
+                nowPlaying.setText(displayMediaName(item.optString("name")));
+                showFullPlayer();
+                return;
+            }
+            say("Opening it on the Pi screen");
             playPi(item);
         });
     }

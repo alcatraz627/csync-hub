@@ -100,8 +100,9 @@ final class MediaClient {
                            java.util.function.LongConsumer progress) throws Exception {
         if (size < 1 || size > 16L * 1024 * 1024 * 1024)
             throw new Exception("Choose a media file under 16 GB");
+        // play=1 lets the Pi start the file once enough has arrived, instead of after the whole copy.
         HttpURLConnection connection = (HttpURLConnection) new URL(url("/v1/cast/file?driveId=" +
-            enc(driveId) + "&name=" + enc(name))).openConnection();
+            enc(driveId) + "&name=" + enc(name) + "&play=1")).openConnection();
         connection.setRequestMethod("POST");
         connection.setConnectTimeout(5000);
         connection.setReadTimeout(30000);
