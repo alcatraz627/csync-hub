@@ -531,6 +531,47 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             if (open != null) toolRows[i].setOnClickListener(v -> open.run());
             else toolRows[i].setClickable(false);
         }
+
+        // What the Pi is busy with: headline readings, then its busiest processes with meters.
+        piBusy = new LinearLayout(this);
+        piBusy.setOrientation(LinearLayout.VERTICAL);
+        page.addView(piBusy, new LinearLayout.LayoutParams(-1, -2));
+    }
+
+    private LinearLayout piBusy;
+
+    /** Draw one reading of the Pi from /v1/system. A reading the Pi did not give is left out. */
+    private void showPiBusy(JSONObject reading) {
+        if (piBusy == null) return;
+        piBusy.removeAllViews();
+        if (reading == null) return;
+        Kit.label(piBusy, "Busy right now");
+        java.util.List<Kit.Stat> stats = new java.util.ArrayList<>();
+        if (reading.has("cpuPercent")) {
+            double cpu = reading.optDouble("cpuPercent");
+            stats.add(new Kit.Stat("Processor", Math.round(cpu) + "%", cpu));
+        }
+        JSONObject memory = reading.optJSONObject("memory");
+        if (memory != null && memory.optLong("totalBytes") > 0) {
+            double share = memory.optLong("usedBytes") * 100.0 / memory.optLong("totalBytes");
+            stats.add(new Kit.Stat("Memory", Math.round(share) + "%", share));
+        }
+        if (reading.has("temperatureC")) {
+            double temp = reading.optDouble("temperatureC");
+            // 85 C is where the Pi slows itself, so the meter reads against that.
+            stats.add(new Kit.Stat("Heat", Math.round(temp) + "°C", temp * 100 / 85));
+        }
+        if (!stats.isEmpty()) Kit.statCards(piBusy, stats);
+        JSONArray processes = reading.optJSONArray("processes");
+        if (processes == null || processes.length() == 0) return;
+        Kit.label(piBusy, "Busiest on the Pi");
+        LinearLayout group = Kit.group(piBusy);
+        for (int i = 0; i < processes.length(); i++) {
+            JSONObject p = processes.optJSONObject(i);
+            if (p == null) continue;
+            Kit.meterRow(group, R.drawable.csi_system, p.optString("name"), p.optDouble("cpu"), p.optDouble("memory"))
+                .setClickable(false);
+        }
     }
 
     private void setToolsLead(Kit.Status status, String words) {
@@ -838,6 +879,10 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             try { power = client.get("/v1/diagnostics").optJSONObject("power"); } catch (Exception ignored) { }
             try { client.get("/v1/camera/status"); camera = true; } catch (Exception ignored) { }
             try { drives = client.get("/v1/drives").optJSONArray("drives"); } catch (Exception ignored) { }
+            JSONObject busy = null;
+            try { busy = client.get("/v1/system"); } catch (Exception ignored) { }
+            final JSONObject reading = busy;
+            ui.post(() -> showPiBusy(reading));
             boolean assistant = MeshClient.reachable(host, MeshClient.ASSIST_PORT);
             final boolean mediaUp = media, cameraUp = camera, assistantUp = assistant;
             final JSONObject currentPower = power;
@@ -1622,28 +1667,54 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             Kit.empty(body, Kit.Icon.DEVICE, "The readings could not be taken", raw.trim().isEmpty() ? null : raw.trim(), null);
             return;
         }
-        LinearLayout readings = Kit.group(body);
-        long total = matchMB(memLine, "total"), used = matchMB(memLine, "used");
-        if (total > 0) Kit.bindRow(Kit.addRow(readings), Kit.Icon.DEVICE, "Memory in use", gb(used) + " of " + gb(total),
-            Math.round(used * 100.0 / total) + "%", false).setClickable(false);
+        // Headline readings first, as cards; the busiest apps under them, each with its own meters.
+        java.util.List<Kit.Stat> stats = new java.util.ArrayList<>();
         String cpu = cpuSummary(cpuLine);
-        if (!cpu.endsWith("?")) Kit.bindRow(Kit.addRow(readings), Kit.Icon.SPEED, "Processor", "Busy right now",
-            cpu.replace("CPU ", ""), false).setClickable(false);
+        if (!cpu.endsWith("?")) {
+            String value = cpu.replace("CPU ", "").trim();
+            double share = 0;
+            try { share = Double.parseDouble(value.replace("%", "")); } catch (NumberFormatException ignored) { }
+            stats.add(new Kit.Stat("Processor", value, share));
+        }
+        long total = matchMB(memLine, "total"), used = matchMB(memLine, "used");
+        if (total > 0) stats.add(new Kit.Stat("Memory", Math.round(used * 100.0 / total) + "%", used * 100.0 / total));
         String tasks = matchOne(tasksLine, "Tasks:\\s+(\\d+)");
-        if (!tasks.isEmpty()) Kit.bindRow(Kit.addRow(readings), Kit.Icon.TOOLS, "Running", "Processes on this phone",
-            tasks, false).setClickable(false);
+        if (!tasks.isEmpty()) stats.add(new Kit.Stat("Running", tasks, -1));
+        if (!stats.isEmpty()) Kit.statCards(body, stats);
         Kit.label(body, "Busiest apps");
         LinearLayout busiest = Kit.group(body);
         int shown = 0;
         for (int i = headerIdx + 1; i < lines.length && shown < 10; i++) {
             String[] f = lines[i].trim().split("\\s+");
             if (f.length < 12) continue;
-            String name = f[11];
-            if (name.length() > 40) name = name.substring(name.length() - 40);
-            Kit.bindRow(Kit.addRow(busiest), Kit.Icon.DEVICE, name, f[8] + "% processor · " + f[9] + "% memory",
-                null, false).setClickable(false);
+            final String process = f[11];
+            String name = process.contains(".") ? process.substring(process.lastIndexOf('.') + 1) : process;
+            double cpuShare = 0, memShare = 0;
+            try { cpuShare = Double.parseDouble(f[8]); memShare = Double.parseDouble(f[9]); } catch (NumberFormatException ignored) { }
+            View row = Kit.meterRow(busiest, Kit.Icon.DEVICE, name, cpuShare, memShare);
+            // An app named by its package can be stopped, which frees what it holds until it is opened again.
+            if (process.contains(".") && !process.startsWith("com.csync.")) row.setOnClickListener(v ->
+                Kit.confirm(this, "Stop " + name + "?", process + " closes now and frees what it is using. "
+                    + "It starts again the next time it is opened.", R.drawable.csi_stop, "Stop this app",
+                    () -> stopApp(process, name)));
+            else row.setClickable(false);
             shown++;
         }
+    }
+
+    /** Close an app through Shizuku, then read again so the list shows the effect. */
+    private void stopApp(String pkg, String name) {
+        new Thread(() -> {
+            boolean done = false;
+            try {
+                Method m = Shizuku.class.getDeclaredMethod("newProcess", String[].class, String[].class, String.class);
+                m.setAccessible(true);
+                Process p = (Process) m.invoke(null, new String[]{"am", "force-stop", pkg}, null, null);
+                done = p.waitFor() == 0;
+            } catch (Exception ignored) { }
+            boolean stopped = done;
+            ui.post(() -> { toast(stopped ? name + " is stopped" : name + " could not be stopped"); sysTickOnce(); });
+        }, "stop-app").start();
     }
 
     private String rawTop() {

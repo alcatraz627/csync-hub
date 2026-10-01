@@ -654,6 +654,114 @@ final class Kit {
         return scroll;
     }
 
+    // ---- readings: stat cards and meters ----
+
+    /** The colour a share of something reads in: calm to 60 percent, amber to 85, red past it. */
+    static int meterColor(Context c, double percent) {
+        return statusColor(c, percent < 60 ? Status.GOOD : percent < 85 ? Status.WARN : Status.BAD);
+    }
+
+    /** A bar of fixed width filled to {@code percent} in its meter colour. */
+    static View meter(Context c, double percent, int widthDp, int heightDp) {
+        android.widget.FrameLayout track = new android.widget.FrameLayout(c);
+        android.graphics.drawable.GradientDrawable ground = new android.graphics.drawable.GradientDrawable();
+        ground.setColor(ContextCompat.getColor(c, R.color.surface2));
+        ground.setCornerRadius(dp(c, heightDp));
+        track.setBackground(ground);
+        View fill = new View(c);
+        android.graphics.drawable.GradientDrawable bar = new android.graphics.drawable.GradientDrawable();
+        bar.setColor(meterColor(c, percent));
+        bar.setCornerRadius(dp(c, heightDp));
+        fill.setBackground(bar);
+        int width = dp(c, widthDp);
+        track.addView(fill, new android.widget.FrameLayout.LayoutParams(
+            Math.max(dp(c, heightDp), (int) Math.round(width * Math.min(100, Math.max(0, percent)) / 100.0)), -1));
+        track.setLayoutParams(new LinearLayout.LayoutParams(width, dp(c, heightDp)));
+        return track;
+    }
+
+    /** One headline reading: a small label, the value large, and a meter when it is a share. */
+    static final class Stat {
+        final String label, value; final double percent;
+        Stat(String label, String value, double percent) { this.label = label; this.value = value; this.percent = percent; }
+    }
+
+    /** Headline readings as cards, three to a row, so a dense page leads with what matters. */
+    static void statCards(ViewGroup parent, java.util.List<Stat> stats) {
+        Context c = parent.getContext();
+        LinearLayout row = new LinearLayout(c);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams rowAt = new LinearLayout.LayoutParams(-1, -2);
+        rowAt.setMargins(-dp(c, 4), 0, -dp(c, 4), 0);
+        parent.addView(row, rowAt);
+        for (Stat stat : stats) {
+            LinearLayout card = new LinearLayout(c);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setPadding(dp(c, 12), dp(c, 12), dp(c, 12), dp(c, 12));
+            card.setBackgroundResource(R.drawable.card_bg);
+            TextView label = new TextView(c);
+            label.setTextAppearance(R.style.Kit_Text_Section);
+            label.setText(stat.label);
+            card.addView(label);
+            TextView value = new TextView(c);
+            value.setTextAppearance(R.style.Kit_Text_RowTitle);
+            value.setTextSize(22);
+            value.setTypeface(androidx.core.content.res.ResourcesCompat.getFont(c, R.font.mono));
+            value.setText(stat.value);
+            value.setPadding(0, dp(c, 4), 0, dp(c, 8));
+            card.addView(value);
+            if (stat.percent >= 0) {
+                View bar = meter(c, stat.percent, 1, 6);
+                bar.setLayoutParams(new LinearLayout.LayoutParams(-1, dp(c, 6)));
+                // A card's meter spans the card, so it is sized after the card is laid out.
+                card.addView(bar);
+                bar.post(() -> {
+                    View fill = ((ViewGroup) bar).getChildAt(0);
+                    fill.getLayoutParams().width = Math.max(dp(c, 6), (int) (bar.getWidth() * Math.min(100, stat.percent) / 100));
+                    fill.requestLayout();
+                });
+            }
+            card.setContentDescription(stat.label + ", " + stat.value);
+            LinearLayout.LayoutParams at = new LinearLayout.LayoutParams(0, -1, 1);
+            at.setMargins(dp(c, 4), dp(c, 4), dp(c, 4), dp(c, 4));
+            row.addView(card, at);
+        }
+    }
+
+    /**
+     * One process: its name, then two short fixed-width meters stacked at the end, processor over
+     * memory, each filled and coloured by its percent with the number beside it.
+     */
+    static View meterRow(LinearLayout group, int icon, String name, double cpu, double memory) {
+        View row = addRow(group);
+        bindRow(row, icon, name, null, null, false);
+        Context c = row.getContext();
+        LinearLayout meters = new LinearLayout(c);
+        meters.setOrientation(LinearLayout.VERTICAL);
+        meters.setGravity(android.view.Gravity.END);
+        meters.setTag("kit-action");
+        String[] words = {"CPU", "MEM"};
+        double[] values = {cpu, memory};
+        for (int i = 0; i < 2; i++) {
+            LinearLayout line = new LinearLayout(c);
+            line.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            TextView label = new TextView(c);
+            label.setTextAppearance(R.style.Kit_Text_Meta);
+            label.setTypeface(androidx.core.content.res.ResourcesCompat.getFont(c, R.font.mono));
+            label.setTextSize(11);
+            label.setText(words[i] + " " + (values[i] >= 10 ? Math.round(values[i]) : Math.round(values[i] * 10) / 10.0) + "%");
+            label.setMinWidth(dp(c, 74));
+            line.addView(label);
+            line.addView(meter(c, values[i], 64, 6));
+            LinearLayout.LayoutParams lineAt = new LinearLayout.LayoutParams(-2, -2);
+            if (i == 1) lineAt.topMargin = dp(c, 4);
+            meters.addView(line, lineAt);
+        }
+        ((LinearLayout) row).addView(meters, ((LinearLayout) row).indexOfChild(row.findViewById(R.id.kit_chevron)));
+        row.setContentDescription(name + ", processor " + Math.round(cpu) + " percent, memory " + Math.round(memory) + " percent");
+        return row;
+    }
+
     // ---- capability cards ----
 
     static View bindArea(View card, int icon, CharSequence title, Status status, CharSequence sub) {
