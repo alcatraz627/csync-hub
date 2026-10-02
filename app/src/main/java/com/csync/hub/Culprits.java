@@ -52,7 +52,8 @@ final class Culprits {
         Kit.Status status() { return score >= 80 ? Kit.Status.BAD : score >= 30 ? Kit.Status.WARN : Kit.Status.IDLE; }
         String level() { return score >= 80 ? "Heavy" : score >= 30 ? "Some" : "Light"; }
         String summary() {
-            if (powers.isEmpty() || pkg() == null) return why;
+            if (pkg() == null) return why;
+            if (powers.isEmpty()) return pssMb > 0 ? "Holds " + pssMb + " MB of memory" : why;
             StringBuilder s = new StringBuilder();
             for (Power p : powers) s.append(s.length() == 0 ? "" : ", ").append(p.what);
             String text = s.substring(0, 1).toUpperCase() + s.substring(1);
