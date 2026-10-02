@@ -711,10 +711,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         LinearLayout make = Kit.group(page);
         ((LinearLayout.LayoutParams) make.getLayoutParams()).topMargin = dp(12);
         Kit.bindRow(Kit.addRow(make), R.drawable.csi_sliders, "A timer of any length", "Up to three hours, with a name", null, true)
-            .setOnClickListener(v -> Kit.sliderSheet(this, "Timer length", 1, 180, 1, 15,
-                value -> Math.round(value) + " min", value -> Kit.fieldSheet(this, "Name the timer", Math.round(value) + " minutes",
-                    "Tea, laundry, a break", "Leave it empty for a plain timer.", R.drawable.csi_history, "Start",
-                    name -> startTimer(Math.round(value), name.trim()))));
+            .setOnClickListener(v -> timerLengthSheet());
         Kit.bindRow(Kit.addRow(make), Kit.Icon.NOTES, "A reminder at a time", "What to remember, then when", null, true)
             .setOnClickListener(v -> Kit.fieldSheet(this, "Remind me to", null, "Call home, take the bins out", null,
                 R.drawable.csi_forward, "Pick a time", this::pickReminderTime));
@@ -764,9 +761,40 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     private final Runnable reminderTick = () -> { if (current == 6 && moreDetail == 4) renderReminders(); };
 
+    /** Choose a length with the slider, then Next asks for a name; the drawer closes as it moves on. */
+    private void timerLengthSheet() {
+        Kit.Sheet sheet = new Kit.Sheet(this, "Timer length", minutesWords(15));
+        com.google.android.material.slider.Slider slider = new com.google.android.material.slider.Slider(this);
+        slider.setValueFrom(1);
+        slider.setValueTo(180);
+        slider.setStepSize(1);
+        slider.setValue(15);
+        slider.setTickVisible(false);
+        slider.setLabelFormatter(value -> minutesWords(Math.round(value)));
+        sheet.rows.addView(slider, new LinearLayout.LayoutParams(-1, -2));
+        LinearLayout.LayoutParams below = new LinearLayout.LayoutParams(-1, -2);
+        below.topMargin = dp(12);
+        sheet.rows.addView(Kit.primaryButton(this, R.drawable.csi_forward, "Next", () -> {
+            int minutes = Math.round(slider.getValue());
+            sheet.dialog.dismiss();
+            Kit.fieldSheet(this, "Name the timer", minutesWords(minutes), "Tea, laundry, a break",
+                "Leave it empty for a plain timer.", R.drawable.csi_history, "Start", name -> startTimer(minutes, name.trim()));
+        }), below);
+        sheet.show();
+        TextView sub = sheet.dialog.findViewById(R.id.kit_sub);
+        slider.addOnChangeListener((s, value, fromUser) -> { if (sub != null) sub.setText(minutesWords(Math.round(value))); });
+    }
+
+    private static String minutesWords(int minutes) {
+        if (minutes < 60) return minutes + (minutes == 1 ? " minute" : " minutes");
+        int hours = minutes / 60, rest = minutes % 60;
+        String h = hours + (hours == 1 ? " hour" : " hours");
+        return rest == 0 ? h : h + " " + rest + " min";
+    }
+
     private void startTimer(int minutes, String name) {
         Reminders.add(this, "timer", name, System.currentTimeMillis() + minutes * 60000L);
-        toast((name.isEmpty() ? "Timer" : name) + " rings in " + minutes + " min");
+        toast((name.isEmpty() ? "Timer" : name) + " rings in " + minutesWords(minutes));
         renderReminders();
     }
 
@@ -835,8 +863,11 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         Kit.label(page, "Choice");
         LinearLayout segments = new LinearLayout(this);
         page.addView(segments, new LinearLayout.LayoutParams(-1, -2));
-        Kit.segmented(segments, new int[]{R.drawable.csi_system, R.drawable.csi_sun, R.drawable.csi_moon},
-            new String[]{"System", "Light", "Dark"}, 0, i -> { });
+        int[] sampleIcons = {R.drawable.csi_system, R.drawable.csi_sun, R.drawable.csi_moon};
+        String[] sampleWords = {"System", "Light", "Dark"};
+        Kit.Pick[] onSample = new Kit.Pick[1];
+        onSample[0] = i -> Kit.segmented(segments, sampleIcons, sampleWords, i, onSample[0]);
+        Kit.segmented(segments, sampleIcons, sampleWords, 0, onSample[0]);
 
         Kit.label(page, "Buttons");
         LinearLayout buttons = new LinearLayout(this);

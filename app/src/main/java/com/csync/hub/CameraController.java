@@ -402,7 +402,6 @@ final class CameraController {
                         Kit.bindRow(row, Kit.Icon.FOLDER, "Saved captures",
                             photos + (photos == 1 ? " photo, " : " photos, ") + recordings + (recordings == 1 ? " recording" : " recordings"),
                             android.text.format.Formatter.formatShortFileSize(activity, total), false);
-                        Kit.rowAction(row, R.drawable.csi_refresh, "Read the folder again", v -> loadCaptures());
                         row.setOnClickListener(v -> loadCaptures());
                     }
                     loadedCapturesWords();

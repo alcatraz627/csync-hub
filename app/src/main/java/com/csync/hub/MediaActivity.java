@@ -531,13 +531,20 @@ public final class MediaActivity extends AppCompatActivity {
         Kit.label(sheet.rows, "Volume");
         LinearLayout volumes = new LinearLayout(this);
         sheet.rows.addView(volumes, new LinearLayout.LayoutParams(-1, -2));
-        Kit.segmented(volumes, new int[]{Kit.Icon.VOLUME, Kit.Icon.VOLUME, Kit.Icon.VOLUME, Kit.Icon.VOLUME},
-            new String[]{"Muted", "Low", "Half", "Full"}, volume[0], i -> volume[0] = i);
+        // The control draws only the choice it is given, so each pick draws it again.
+        int[] volumeIcons = {Kit.Icon.VOLUME, Kit.Icon.VOLUME, Kit.Icon.VOLUME, Kit.Icon.VOLUME};
+        String[] volumeWords = {"Muted", "Low", "Half", "Full"};
+        Kit.Pick[] onVolume = new Kit.Pick[1];
+        onVolume[0] = i -> { volume[0] = i; Kit.segmented(volumes, volumeIcons, volumeWords, i, onVolume[0]); };
+        Kit.segmented(volumes, volumeIcons, volumeWords, volume[0], onVolume[0]);
         Kit.label(sheet.rows, "Speed");
         LinearLayout speeds = new LinearLayout(this);
         sheet.rows.addView(speeds, new LinearLayout.LayoutParams(-1, -2));
-        Kit.segmented(speeds, new int[]{Kit.Icon.SPEED, Kit.Icon.SPEED, Kit.Icon.SPEED, Kit.Icon.SPEED},
-            new String[]{"1×", "1.25×", "1.5×", "2×"}, speed[0], i -> speed[0] = i);
+        int[] speedIcons = {Kit.Icon.SPEED, Kit.Icon.SPEED, Kit.Icon.SPEED, Kit.Icon.SPEED};
+        String[] speedWords = {"1×", "1.25×", "1.5×", "2×"};
+        Kit.Pick[] onSpeed = new Kit.Pick[1];
+        onSpeed[0] = i -> { speed[0] = i; Kit.segmented(speeds, speedIcons, speedWords, i, onSpeed[0]); };
+        Kit.segmented(speeds, speedIcons, speedWords, speed[0], onSpeed[0]);
         LinearLayout group = Kit.group(sheet.rows);
         ((LinearLayout.LayoutParams) group.getLayoutParams()).topMargin = dp(12);
         View loopRow = Kit.addRow(group);
