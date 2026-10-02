@@ -22,6 +22,12 @@
             android:orientation="vertical" android:paddingStart="@dimen/kit_gutter" android:paddingEnd="@dimen/kit_gutter"
             android:paddingBottom="16dp"/>
     </ScrollView>
+    <ScrollView android:id="@+id/more_reminders" android:layout_width="match_parent"
+        android:layout_height="0dp" android:layout_weight="1" android:visibility="gone">
+        <LinearLayout android:id="@+id/reminders_rows" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:paddingStart="@dimen/kit_gutter" android:paddingEnd="@dimen/kit_gutter"
+            android:paddingBottom="16dp"/>
+    </ScrollView>
     <ScrollView android:id="@+id/more_showcase" android:layout_width="match_parent"
         android:layout_height="0dp" android:layout_weight="1" android:visibility="gone">
         <LinearLayout android:id="@+id/showcase_rows" android:layout_width="match_parent" android:layout_height="wrap_content"

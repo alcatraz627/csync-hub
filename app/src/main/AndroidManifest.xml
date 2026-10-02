@@ -9,6 +9,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <!-- Timers and reminders ring on the minute, and survive a restart. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <!-- Only for "Send the last photo": asked the first time that tile is used. -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
@@ -189,6 +192,13 @@
             android:configChanges="orientation|screenSize"/>
 
         <receiver android:name=".AppUpdateReceiver" android:exported="false"/>
+        <!-- Rings timers and reminders, and arms them again after a restart or an update. -->
+        <receiver android:name=".Reminders$Receiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+            </intent-filter>
+        </receiver>
 
         <provider android:name=".VlcStreamProvider"
             android:authorities="${applicationId}.media"

@@ -1092,7 +1092,7 @@ final class Kit {
     // Places the sheet can open from any screen; the rest live inside a page and are reached there.
     private static final java.util.Set<String> REACHABLE = new java.util.HashSet<>(java.util.Arrays.asList(
         "home", "search", "pi", "camera", "notes", "media", "pi-screen", "share", "received", "chat", "more",
-        "process", "widgets", "settings", "connection", "guide", "help", "showcase"));
+        "process", "widgets", "settings", "connection", "guide", "help", "showcase", "reminders"));
 
     /** A sheet of the places next to this one and inside it, each with its icon and what it is for. */
     static void adjacent(android.app.Activity a, String placeId) {

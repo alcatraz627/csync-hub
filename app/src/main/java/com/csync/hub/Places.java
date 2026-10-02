@@ -57,6 +57,7 @@ final class Places {
         add("guide", "Assistant guide", R.drawable.csi_help, "more");
         add("help", "About", R.drawable.csi_info, "more");
         add("showcase", "Design system", R.drawable.csi_palette, "more");
+        add("reminders", "Reminders", R.drawable.csi_history, "more");
     }
 
     static Place of(String id) { return ALL.get(id); }
@@ -89,6 +90,7 @@ final class Places {
             case "guide": return "What to ask the assistant";
             case "help": return "Version and your Pi";
             case "showcase": return "Every part the app is built from";
+            case "reminders": return "Ring after a while or at a time";
             default: return null;
         }
     }
