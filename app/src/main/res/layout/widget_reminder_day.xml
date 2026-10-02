@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One day in the week strip: its name, date and a dot when it has reminders. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/wd_root" android:layout_width="0dp" android:layout_weight="1" android:layout_height="46dp"
+    android:orientation="vertical" android:gravity="center">
+    <TextView android:id="@+id/wd_name" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:textSize="10.5sp" android:textColor="@color/dim"/>
+    <TextView android:id="@+id/wd_date" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:textSize="13sp" android:textStyle="bold" android:textColor="@color/text"/>
+    <ImageView android:id="@+id/wd_dot" android:layout_width="4dp" android:layout_height="4dp" android:layout_marginTop="2dp"
+        android:src="@drawable/wg_dot" android:contentDescription="@null"/>
+</LinearLayout>

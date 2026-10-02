@@ -76,6 +76,8 @@ public final class TimerService extends Service {
             stopSelf();
             return;
         }
+        // The widget's ring is a picture too, so it moves on the same beat.
+        HubWidgets.refreshTimers(this);
         handler.postDelayed(this::redraw, REDRAW);
     }
 

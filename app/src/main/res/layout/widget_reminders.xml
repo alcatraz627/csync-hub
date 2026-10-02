@@ -1,26 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- What is coming up, each with Done and a snooze; Add opens the add box. The heading opens Reminders. -->
+<!-- Look R3 (owner pick 2026-10-03): seven days with dots, today chosen, today's reminders below
+     with Done. Add opens the add box; the heading and the days open Reminders. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/wg_root" android:layout_width="match_parent" android:layout_height="match_parent"
-    android:orientation="vertical" android:paddingStart="14dp" android:paddingEnd="8dp" android:paddingTop="10dp"
+    android:orientation="vertical" android:paddingStart="12dp" android:paddingEnd="8dp" android:paddingTop="8dp"
     android:paddingBottom="10dp" android:background="@drawable/wg_bg">
-    <LinearLayout android:layout_width="match_parent" android:layout_height="40dp"
+    <LinearLayout android:layout_width="match_parent" android:layout_height="36dp"
         android:orientation="horizontal" android:gravity="center_vertical">
         <LinearLayout android:id="@+id/wg_open" android:layout_width="0dp" android:layout_weight="1"
             android:layout_height="match_parent" android:orientation="horizontal" android:gravity="center_vertical">
-            <ImageView android:layout_width="16dp" android:layout_height="16dp" android:src="@drawable/wg_bell"
+            <ImageView android:layout_width="15dp" android:layout_height="15dp" android:src="@drawable/wg_bell"
                 android:tint="@color/coral" android:contentDescription="@null"/>
-            <TextView android:id="@+id/wg_title" android:layout_width="0dp" android:layout_weight="1"
-                android:layout_height="wrap_content" android:layout_marginStart="8dp" android:text="Reminders"
-                android:textSize="14sp" android:textStyle="bold" android:textColor="@color/text" android:maxLines="1"/>
+            <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+                android:layout_marginStart="7dp" android:text="Reminders" android:textSize="13sp" android:textStyle="bold"
+                android:textColor="@color/text" android:maxLines="1"/>
         </LinearLayout>
-        <ImageButton android:id="@+id/wg_add" android:layout_width="40dp" android:layout_height="40dp"
-            android:padding="10dp" android:scaleType="fitCenter" android:tint="@color/text"
+        <ImageButton android:id="@+id/wg_add" android:layout_width="34dp" android:layout_height="34dp"
+            android:padding="9dp" android:scaleType="fitCenter" android:tint="@color/text"
             android:src="@drawable/wg_plus" android:background="@drawable/wg_btn" android:contentDescription="Add a reminder"/>
     </LinearLayout>
+    <LinearLayout android:id="@+id/wg_strip" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal"/>
+    <TextView android:id="@+id/wg_day" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="4dp" android:textSize="10.5sp" android:letterSpacing="0.08" android:textAllCaps="true"
+        android:textColor="@color/dim" android:text="Today"/>
     <LinearLayout android:id="@+id/wg_rows" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="vertical"/>
     <TextView android:id="@+id/wg_state" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:layout_marginTop="6dp" android:text="Nothing coming up" android:textSize="13sp"
+        android:layout_marginTop="4dp" android:text="Nothing else today" android:textSize="13sp"
         android:textColor="@color/dim" android:visibility="gone"/>
 </LinearLayout>

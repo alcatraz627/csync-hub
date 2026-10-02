@@ -657,6 +657,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             {Kit.Icon.TOOLS, "Pi status", "Whether the Pi is online, its power and its drives", HubWidgets.PiStatus.class},
             {Kit.Icon.CAMERA, "Camera glance", "The latest photo from the Pi camera", HubWidgets.CameraGlance.class},
             {Kit.Icon.CHAT, "Ask the Pi", "Opens a new conversation", HubWidgets.Ask.class},
+            {R.drawable.csi_timer, "Timers", "The next timer with its buttons, the others and saved tiles", HubWidgets.TimerWidget.class},
+            {R.drawable.csi_bell, "Reminders", "This week's days, and today's reminders with Done", HubWidgets.ReminderWidget.class},
             {Kit.Icon.PHOTO, "xkcd", "A comic, changed every hour", XkcdWidgetProvider.class}};
         for (Object[] w : launcher) {
             android.content.ComponentName provider = new android.content.ComponentName(this, (Class<?>) w[3]);
@@ -678,7 +680,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             {Kit.Icon.DISPLAY, "Pi screen", "Stops what is playing, or opens Media", HubTiles.Screen.class, R.drawable.ti_screen},
             {Kit.Icon.CAMERA, "Pi camera", "Opens the live picture", HubTiles.Camera.class, R.drawable.ti_camera},
             {R.drawable.csi_clipboard, "Clipboard", "Sends the clipboard to your last device", HubTiles.Clipboard.class, R.drawable.ti_clipboard},
-            {Kit.Icon.PHOTO, "Last photo", "Sends your newest photo to your last device", HubTiles.Photo.class, R.drawable.ti_photo}};
+            {Kit.Icon.PHOTO, "Last photo", "Sends your newest photo to your last device", HubTiles.Photo.class, R.drawable.ti_photo},
+            {R.drawable.csi_timer, "Timers", "Lit while one runs; opens Timers", HubTiles.Timers.class, R.drawable.wg_timer},
+            {R.drawable.csi_bell, "Reminders", "Shows the next one; opens the add box", HubTiles.Reminders.class, R.drawable.wg_bell}};
         for (Object[] t : tiles) {
             View row = Kit.addRow(group);
             Kit.bindRow(row, (Integer) t[0], (String) t[1], (String) t[2], null, false);

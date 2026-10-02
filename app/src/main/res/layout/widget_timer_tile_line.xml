@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A saved tile in the right column of look T3, under the other running timers. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/wq_root" android:layout_width="match_parent" android:layout_height="34dp"
+    android:layout_marginTop="5dp" android:orientation="horizontal" android:gravity="center_vertical"
+    android:paddingStart="10dp" android:background="@drawable/wg_tile">
+    <ImageView android:id="@+id/wq_dot" android:layout_width="8dp" android:layout_height="8dp"
+        android:src="@drawable/wg_dot" android:contentDescription="@null"/>
+    <TextView android:id="@+id/wq_words" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:layout_marginStart="7dp" android:textSize="12.5sp" android:textStyle="bold" android:textColor="@color/text"
+        android:maxLines="1"/>
+</LinearLayout>

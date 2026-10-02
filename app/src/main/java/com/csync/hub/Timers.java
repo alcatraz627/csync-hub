@@ -341,6 +341,27 @@ final class Timers {
         return b;
     }
 
+    /** A ring with no words inside, for the widget, which lays its own countdown over it. */
+    static Bitmap ringBare(Context c, int colour, float fraction, int sizeDp) {
+        int size = Kit.dp(c, sizeDp);
+        Bitmap b = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(b);
+        float stroke = size * 0.085f;
+        RectF box = new RectF(stroke / 2 + 1, stroke / 2 + 1, size - stroke / 2 - 1, size - stroke / 2 - 1);
+        Paint track = new Paint(Paint.ANTI_ALIAS_FLAG);
+        track.setStyle(Paint.Style.STROKE);
+        track.setStrokeWidth(stroke);
+        track.setColor(0x33808080);
+        canvas.drawOval(box, track);
+        if (fraction > 0.004f) {
+            Paint arc = new Paint(track);
+            arc.setColor(colour);
+            arc.setStrokeCap(Paint.Cap.ROUND);
+            canvas.drawArc(box, -90, 360f * fraction, false, arc);
+        }
+        return b;
+    }
+
     static int colour(Context c, String name) {
         switch (name == null ? "" : name) {
             case "teal": return ContextCompat.getColor(c, R.color.teal);
