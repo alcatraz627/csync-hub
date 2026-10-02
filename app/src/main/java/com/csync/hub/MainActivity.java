@@ -1781,6 +1781,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         LinearLayout body = pageTools.findViewById(R.id.sys_body);
         if (!Shizuku.pingBinder()) {
             sysStatus.setText("");
+            ((LinearLayout) pageTools.findViewById(R.id.sys_report)).removeAllViews();
             body.removeAllViews();
             Kit.empty(body, Kit.Icon.DEVICE, "Live readings need Shizuku to be running on this phone", null,
                 Kit.button(this, R.drawable.csi_upload, "Open Shizuku", R.color.text, () -> {
@@ -1796,7 +1797,125 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     private void startSysLoop() {
         sysStatus.setText("What is using the processor and memory, read every 3 seconds");
+        showCulpritReport();
         if (!sysLooping) { sysLooping = true; sysLoop(); }
+    }
+
+    private Culprits.Report culprits;
+    private boolean culpritsBusy;
+
+    /** The report's place on the page: one row that runs it, then what it found once it has run. */
+    private void showCulpritReport() {
+        LinearLayout host = pageTools.findViewById(R.id.sys_report);
+        host.removeAllViews();
+        LinearLayout ask = Kit.group(host);
+        View run = Kit.addRow(ask);
+        String sub = culpritsBusy ? "Checking background powers, memory, heat and frames"
+            : culprits == null ? "Background powers, memory, heat and dropped frames, each with a fix"
+            : "Checked at " + android.text.format.DateFormat.getTimeFormat(this).format(new java.util.Date(culprits.at))
+                + ", tap to check again";
+        Kit.bindRow(run, R.drawable.csi_search, "Find what slows this phone", sub, null, false);
+        if (culpritsBusy) Kit.rowStatus(run, Kit.Status.IDLE, "Checking");
+        run.setOnClickListener(v -> { if (!culpritsBusy) findCulprits(); });
+        if (culprits == null || culpritsBusy) return;
+        Kit.label(host, "What slows this phone");
+        LinearLayout list = Kit.group(host);
+        if (culprits.error != null) {
+            Kit.bindRow(Kit.addRow(list), Kit.Icon.DEVICE, "The check could not run", culprits.error, null, false);
+            return;
+        }
+        if (culprits.findings.isEmpty())
+            Kit.bindRow(Kit.addRow(list), R.drawable.csi_check, "Nothing stands out",
+                "No app holds a power that slows the phone, and it is cool", null, false);
+        for (Culprits.Finding f : culprits.findings) {
+            View row = Kit.addRow(list);
+            Kit.bindRow(row, f.icon, f.name, f.summary(), null, true);
+            Kit.rowStatus(row, f.status(), f.level());
+            row.setOnClickListener(v -> openCulprit(f));
+        }
+        if (culprits.systemParts > 0) {
+            TextView note = new TextView(this);
+            note.setTextAppearance(R.style.Kit_Text_RowSub);
+            note.setText(culprits.systemParts + " parts of the phone itself hold these powers too. They are left out,"
+                + " since turning them off would break the phone.");
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+            lp.topMargin = Kit.dp(this, 8);
+            host.addView(note, lp);
+        }
+    }
+
+    private void findCulprits() {
+        culpritsBusy = true;
+        showCulpritReport();
+        new Thread(() -> {
+            Culprits.Report r = Culprits.gather(this);
+            ui.post(() -> {
+                culprits = r;
+                culpritsBusy = false;
+                if (current == 3 && toolsDetail == 1) showCulpritReport();
+                sendCulpritsToPi(r);
+            });
+        }, "culprits").start();
+    }
+
+    /** One finding's drawer: why it costs, then each fix it has, then the setting to change it by hand. */
+    private void openCulprit(Culprits.Finding f) {
+        java.util.List<Kit.Action> fixes = new java.util.ArrayList<>();
+        for (Culprits.Power p : f.powers) {
+            if (p.undo == null) continue;
+            boolean reset = p.undo.contains("gfxinfo");
+            fixes.add(new Kit.Action(reset ? R.drawable.csi_refresh : R.drawable.csi_stop, p.undoLabel,
+                reset ? "Then use the phone and check again to see if it improved" : null,
+                () -> fixCulprit(p.undo, f.name)));
+        }
+        String pkg = f.pkg();
+        if (pkg != null) {
+            fixes.add(new Kit.Action(R.drawable.csi_stop, "Stop the app", "It closes now and starts again when opened",
+                () -> fixCulprit("am force-stop " + pkg, f.name)));
+            fixes.add(new Kit.Action(R.drawable.csi_settings, "App info", "Its permissions, battery and storage",
+                () -> openSetting(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg), true));
+        }
+        if (f.settings != null) fixes.add(new Kit.Action(R.drawable.csi_settings, "Open the setting",
+            "Change it by hand in Android's settings", () -> openSetting(f.settings,
+                android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION.equals(f.settings) ? pkg : null), true));
+        Kit.sheet(this, f.name, Culprits.reason(f), fixes.toArray(new Kit.Action[0]));
+    }
+
+    private void fixCulprit(String command, String name) {
+        new Thread(() -> {
+            boolean done = Culprits.apply(command);
+            ui.post(() -> { toast(done ? "Done for " + name : "That did not work for " + name); findCulprits(); });
+        }, "culprit-fix").start();
+    }
+
+    /**
+     * Hand the report to the Pi assistant, with the memory readings beside it, so the agent can
+     * answer "why is my phone slow" from the same facts. Quiet when the Pi is away.
+     */
+    private void sendCulpritsToPi(Culprits.Report r) {
+        final String ip = Prefs.assistIp(this), token = Prefs.token(this);
+        if (ip == null || ip.isEmpty()) return;
+        new Thread(() -> {
+            try {
+                JSONObject body = Culprits.toJson(r);
+                String raw = rawTop();
+                JSONObject memory = new JSONObject();
+                for (String key : new String[]{"MemTotal", "MemAvailable", "Cached", "SwapTotal", "SwapFree"}) {
+                    long kb = meminfoKb(raw, key);
+                    if (kb >= 0) memory.put(key + "_mb", kb / 1024);
+                }
+                body.put("memory", memory);
+                body.put("phone", android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL);
+                MeshClient.conversations(ip, token, "POST", "/phone/diagnostics", body);
+            } catch (Throwable ignored) { }
+        }, "culprits-to-pi").start();
+    }
+
+    private void openSetting(String action, String pkg) {
+        Intent open = new Intent(action);
+        if (pkg != null) open.setData(android.net.Uri.parse("package:" + pkg));
+        try { startActivity(open); }
+        catch (Exception e) { startActivity(new Intent(android.provider.Settings.ACTION_SETTINGS)); }
     }
 
     private void sysLoop() {
