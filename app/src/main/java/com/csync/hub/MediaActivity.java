@@ -515,7 +515,45 @@ public final class MediaActivity extends AppCompatActivity {
             Kit.Icon.DISPLAY, "Play on Pi screen", this::startYoutube);
     }
 
+    private static final int[] CAST_VOLUMES = {0, 25, 50, 100};
+    private static final double[] CAST_SPEEDS = {1, 1.25, 1.5, 2};
+
+    /**
+     * Ask how a link should play before it starts: volume, speed and loop, each set as the last
+     * cast left it. Play starts it on the Pi screen and then applies the choices.
+     */
     private void startYoutube(String url) {
+        android.content.SharedPreferences last = getSharedPreferences("cast_options", MODE_PRIVATE);
+        int[] volume = {last.getInt("volume", 0)};
+        int[] speed = {last.getInt("speed", 0)};
+        boolean[] loop = {last.getBoolean("loop", false)};
+        Kit.Sheet sheet = new Kit.Sheet(this, "Play on the Pi screen", "Set as you left it last time");
+        Kit.label(sheet.rows, "Volume");
+        LinearLayout volumes = new LinearLayout(this);
+        sheet.rows.addView(volumes, new LinearLayout.LayoutParams(-1, -2));
+        Kit.segmented(volumes, new int[]{Kit.Icon.VOLUME, Kit.Icon.VOLUME, Kit.Icon.VOLUME, Kit.Icon.VOLUME},
+            new String[]{"Muted", "Low", "Half", "Full"}, volume[0], i -> volume[0] = i);
+        Kit.label(sheet.rows, "Speed");
+        LinearLayout speeds = new LinearLayout(this);
+        sheet.rows.addView(speeds, new LinearLayout.LayoutParams(-1, -2));
+        Kit.segmented(speeds, new int[]{Kit.Icon.SPEED, Kit.Icon.SPEED, Kit.Icon.SPEED, Kit.Icon.SPEED},
+            new String[]{"1×", "1.25×", "1.5×", "2×"}, speed[0], i -> speed[0] = i);
+        LinearLayout group = Kit.group(sheet.rows);
+        ((LinearLayout.LayoutParams) group.getLayoutParams()).topMargin = dp(12);
+        View loopRow = Kit.addRow(group);
+        Kit.bindRow(loopRow, Kit.Icon.LOOP, "Loop", "Start again when it ends", null, false);
+        Kit.rowToggle(loopRow, loop[0], on -> loop[0] = on);
+        LinearLayout.LayoutParams below = new LinearLayout.LayoutParams(-1, -2);
+        below.topMargin = dp(14);
+        sheet.rows.addView(Kit.primaryButton(this, Kit.Icon.DISPLAY, "Play on Pi screen", () -> {
+            sheet.dialog.dismiss();
+            last.edit().putInt("volume", volume[0]).putInt("speed", speed[0]).putBoolean("loop", loop[0]).apply();
+            castYoutubeNow(url, CAST_VOLUMES[volume[0]], CAST_SPEEDS[speed[0]], loop[0]);
+        }), below);
+        sheet.show();
+    }
+
+    private void castYoutubeNow(String url, int volume, double speed, boolean loop) {
                 final long intent = ++outputIntent;
                 exitVideoMode();
                 target = "pi";
@@ -525,10 +563,22 @@ public final class MediaActivity extends AppCompatActivity {
                     if (intent != outputIntent) throw new java.util.concurrent.CancellationException();
                     JSONObject result = client.post("/v1/cast/youtube", new JSONObject().put("url", url));
                     if (intent != outputIntent) stopStalePiStart(result);
+                    // The Pi always starts a link muted at normal speed; the choices follow once it plays.
+                    if (volume > 0) client.post("/v1/player/pi/immediate", new JSONObject().put("action", "volume").put("value", volume));
+                    if (speed != 1) {
+                        JSONObject state = client.get("/v1/player/pi");
+                        client.post("/v1/player/pi/commands", new JSONObject().put("action", "speed").put("value", speed)
+                            .put("expectedRevision", state.getInt("revision")));
+                    }
+                    if (loop) {
+                        JSONObject state = client.get("/v1/player/pi");
+                        client.post("/v1/player/pi/commands", new JSONObject().put("action", "loop").put("value", true)
+                            .put("expectedRevision", state.getInt("revision")));
+                    }
                     return result;
                 }, result -> {
                     showFullPlayer();
-                    say("It starts muted. Use Volume for sound.");
+                    say(volume == 0 ? "It starts muted. Use Volume for sound." : "Playing on the Pi screen");
                 });
     }
 

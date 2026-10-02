@@ -2251,13 +2251,47 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         }
         // The clipboard is read only on the tap: Android shows a notice every time an app looks at it.
         View clip = Kit.addRow(group);
-        Kit.bindRow(clip, R.drawable.csi_clipboard, "Use the clipboard", "Adds the text you copied to the message", null, false);
+        Kit.bindRow(clip, R.drawable.csi_clipboard, "Use the clipboard", "Adds the text or picture you copied", null, false);
         clip.setOnClickListener(v -> {
+            if (attachClipboardImage()) return;
             String held = clipboardText();
             if (held == null || held.trim().isEmpty()) { toast("There is no text on the clipboard"); return; }
             shareText.getText().insert(Math.max(0, shareText.getSelectionStart()), held);
         });
         renderSendReady();
+    }
+
+    /**
+     * A copied picture becomes the attachment. Android lends another app's picture only while this
+     * screen is in front, so it is copied into the app's own space at once and sent from there.
+     */
+    private boolean attachClipboardImage() {
+        ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        android.content.ClipData data = cm == null ? null : cm.getPrimaryClip();
+        if (data == null || data.getItemCount() == 0 || data.getItemAt(0).getUri() == null) return false;
+        android.net.Uri source = data.getItemAt(0).getUri();
+        String mime = getContentResolver().getType(source);
+        if (mime == null && data.getDescription().getMimeTypeCount() > 0) mime = data.getDescription().getMimeType(0);
+        if (mime == null || !mime.startsWith("image/")) return false;
+        String ext = mime.contains("png") ? "png" : mime.contains("webp") ? "webp" : mime.contains("gif") ? "gif" : "jpg";
+        try {
+            java.io.File folder = new java.io.File(getCacheDir(), "share");
+            if (!folder.isDirectory() && !folder.mkdirs()) throw new java.io.IOException("no space");
+            java.io.File copy = new java.io.File(folder, "clipboard-" + System.currentTimeMillis() + "." + ext);
+            try (java.io.InputStream in = getContentResolver().openInputStream(source);
+                 java.io.OutputStream out = new java.io.FileOutputStream(copy)) {
+                byte[] buffer = new byte[65536];
+                int n;
+                while ((n = in.read(buffer)) > 0) out.write(buffer, 0, n);
+            }
+            shareFileUri = androidx.core.content.FileProvider.getUriForFile(this, getPackageName() + ".share", copy);
+            shareFileName = "Copied picture." + ext;
+            bindShareFile();
+            return true;
+        } catch (Exception unreadable) {
+            toast("The copied picture could not be read");
+            return true;
+        }
     }
 
     // Show the stored roster and inbox immediately, then refresh online state in
