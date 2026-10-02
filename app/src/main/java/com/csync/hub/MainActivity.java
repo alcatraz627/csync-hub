@@ -1839,11 +1839,32 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             try { share = Double.parseDouble(value.replace("%", "")); } catch (NumberFormatException ignored) { }
             stats.add(new Kit.Stat(R.drawable.csi_cpu, "CPU", value, share));
         }
+        // RAM in use is what apps hold: total less what Android could hand out now (MemAvailable).
+        long memTotal = meminfoKb(raw, "MemTotal"), available = meminfoKb(raw, "MemAvailable");
         long total = matchMB(memLine, "total"), used = matchMB(memLine, "used");
-        if (total > 0) stats.add(new Kit.Stat(R.drawable.csi_ram, "RAM", Math.round(used * 100.0 / total) + "%", used * 100.0 / total));
+        double ramShare = memTotal > 0 && available >= 0 ? (memTotal - available) * 100.0 / memTotal
+            : total > 0 ? used * 100.0 / total : -1;
+        if (ramShare >= 0) stats.add(new Kit.Stat(R.drawable.csi_ram, "RAM", Math.round(ramShare) + "%", ramShare));
         String tasks = matchOne(tasksLine, "Tasks:\\s+(\\d+)");
         if (!tasks.isEmpty()) stats.add(new Kit.Stat(R.drawable.csi_menu, "Running", tasks, -1));
         if (!stats.isEmpty()) Kit.statCards(body, stats);
+        // What explains a slow phone: how much is truly free, how much has been squeezed into
+        // compressed swap, and how long apps waited on memory in the last 10 seconds.
+        java.util.List<String[]> memory = new java.util.ArrayList<>();
+        if (memTotal > 0 && available >= 0) {
+            memory.add(new String[]{"Available", gb(available / 1024) + " of " + gb(memTotal / 1024)});
+            long cached = meminfoKb(raw, "Cached");
+            if (cached >= 0) memory.add(new String[]{"Cache", gb(cached / 1024) + ", freed when needed"});
+        }
+        long swapTotal = meminfoKb(raw, "SwapTotal"), swapFree = meminfoKb(raw, "SwapFree");
+        if (swapTotal > 0 && swapFree >= 0) memory.add(new String[]{"Swap", gb((swapTotal - swapFree) / 1024) + " of " + gb(swapTotal / 1024)});
+        String stall = matchOne(raw.contains("__PSI__") ? raw.substring(raw.indexOf("__PSI__")) : "", "some avg10=([0-9.]+)");
+        String stuck = matchOne(raw.contains("__PSI__") ? raw.substring(raw.indexOf("__PSI__")) : "", "full avg10=([0-9.]+)");
+        if (!stall.isEmpty()) memory.add(new String[]{"Waiting", stall + "% of the time, " + (stuck.isEmpty() ? "0" : stuck) + "% fully stuck"});
+        if (!memory.isEmpty()) {
+            Kit.label(body, "Memory");
+            Kit.facts(body, memory);
+        }
         Kit.label(body, "Busiest apps");
         LinearLayout busiest = Kit.group(body);
         int shown = 0;
@@ -1887,7 +1908,10 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                     String[].class, String[].class, String.class);
             m.setAccessible(true);
             Process p = (Process) m.invoke(null,
-                    new String[]{"sh", "-c", "top -b -n 1 -m 15 -s 6"}, null, null);
+                    // top's own "used" counts cache Android frees on demand, so the real figures
+                    // come from meminfo; pressure says how long apps stalled waiting for memory.
+                    new String[]{"sh", "-c", "top -b -n 1 -m 15 -s 6; echo __MEMINFO__; cat /proc/meminfo;"
+                        + " echo __PSI__; cat /proc/pressure/memory 2>/dev/null"}, null, null);
             r = new BufferedReader(new InputStreamReader(p.getInputStream()));
             StringBuilder sb = new StringBuilder();
             String line;
@@ -1909,6 +1933,14 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             return String.format("CPU %d%%", pct);
         } catch (Throwable e) { return "CPU ?"; }
     }
+    /** A /proc/meminfo figure in kB, or -1 when the reading did not include it. */
+    private long meminfoKb(String raw, String key) {
+        int at = raw.indexOf("__MEMINFO__");
+        if (at < 0) return -1;
+        String v = matchOne(raw.substring(at), "(?m)^" + key + ":\\s+(\\d+) kB");
+        return v.isEmpty() ? -1 : Long.parseLong(v);
+    }
+
     private long matchMB(String l, String key) {
         String v = matchOne(l, "(\\d+)M\\s+" + key);
         return v.isEmpty() ? 0 : Long.parseLong(v);
