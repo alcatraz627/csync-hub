@@ -1124,8 +1124,48 @@ public final class MediaActivity extends AppCompatActivity {
     private void coverSheet() {
         new Thread(() -> {
             JSONObject screen = DisplaySheet.screenInUse(client);
-            ui.post(() -> { if (screenActive) drawCoverSheet(screen); });
+            JSONArray kept = null;
+            try { kept = client.get("/v1/covers").optJSONArray("covers"); } catch (Exception none) { }
+            JSONArray covers = kept;
+            ui.post(() -> { if (screenActive) { keptCovers = covers; drawCoverSheet(screen); } });
         }, "media-cover-sheet").start();
+    }
+
+    private JSONArray keptCovers;
+
+    /** Every cover set before, as pictures; a tap puts that one back on the Pi screen. */
+    private void addCoverGallery(Kit.Sheet sheet) {
+        if (keptCovers == null || keptCovers.length() < 2) return;
+        Kit.label(sheet.rows, "Earlier covers");
+        java.util.List<Pictures.Tile> tiles = new java.util.ArrayList<>();
+        for (int i = 0; i < keptCovers.length(); i++) {
+            JSONObject cover = keptCovers.optJSONObject(i);
+            if (cover == null) continue;
+            String id = cover.optString("id");
+            Pictures.Tile tile = new Pictures.Tile("cover:" + id,
+                () -> client.getBytes("/v1/covers/" + MediaClient.enc(id) + "/image", 10 * 1024 * 1024));
+            tile.marked = cover.optBoolean("current");
+            tile.open = () -> useCover(sheet, id);
+            tiles.add(tile);
+        }
+        Pictures.grid(sheet.rows, tiles, 3);
+    }
+
+    private void useCover(Kit.Sheet sheet, String id) {
+        new Thread(() -> {
+            boolean done;
+            try { client.post("/v1/covers/" + MediaClient.enc(id) + "/use", new JSONObject()); done = true; }
+            catch (Exception refused) { done = false; }
+            boolean ok = done;
+            ui.post(() -> {
+                if (!screenActive) return;
+                sheet.dialog.dismiss();
+                if (!ok) { Kit.failed(this, "The Pi did not change the cover.", null); return; }
+                say("That cover is back on the Pi screen");
+                loadIdleFacts();
+                coverSheet();
+            });
+        }, "media-cover-use").start();
     }
 
     private static final String[] FITS = {"cover", "contain", "stretch"};
@@ -1164,6 +1204,7 @@ public final class MediaActivity extends AppCompatActivity {
             Kit.bindRow(rotate, Kit.Icon.ROTATE, "Rotate", "A quarter turn each tap", turn + "°", false);
             rotate.setOnClickListener(v -> saveCoverFraming(sheet, screen, "coverRotate", (turn + 90) % 360));
         }
+        addCoverGallery(sheet);
         LinearLayout.LayoutParams below = new LinearLayout.LayoutParams(-1, -2);
         below.topMargin = dp(12);
         sheet.rows.addView(Kit.button(this, R.drawable.csi_plus, "Choose an image", R.color.text, () -> {

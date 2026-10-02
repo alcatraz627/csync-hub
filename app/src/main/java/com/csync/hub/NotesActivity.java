@@ -833,14 +833,20 @@ public final class NotesActivity extends AppCompatActivity {
                     return;
                 }
                 Kit.label(host, "In this note");
-                LinearLayout group = Kit.group(host);
+                // The note's pictures as pictures; its other files as rows under them.
+                java.util.List<Pictures.Tile> tiles = new java.util.ArrayList<>();
                 for (int i = 0; i < images.length(); i++) {
                     JSONObject image = images.optJSONObject(i);
                     if (image == null) continue;
                     String imageId = image.optString("id");
-                    Kit.bindRow(Kit.addRow(group), Kit.Icon.PHOTO, images.length() == 1 ? "Picture" : "Picture " + (i + 1),
-                        "Image", null, true).setOnClickListener(v -> pictureChoices(id, imageId));
+                    String path = "/v1/notes/" + MediaClient.enc(id) + "/images/" + MediaClient.enc(imageId);
+                    Pictures.Tile tile = new Pictures.Tile("note:" + id + ":" + imageId, () -> client.getBytes(path, 2 * 1024 * 1024));
+                    tile.open = () -> pictureChoices(id, imageId);
+                    tiles.add(tile);
                 }
+                if (!tiles.isEmpty()) Pictures.grid(host, tiles, 3);
+                LinearLayout group = files != null && files.length() > 0 ? Kit.group(host) : null;
+                if (group != null && !tiles.isEmpty()) ((LinearLayout.LayoutParams) group.getLayoutParams()).topMargin = Kit.dp(this, 8);
                 for (int i = 0; files != null && i < files.length(); i++) {
                     JSONObject file = files.optJSONObject(i);
                     if (file != null) addFileRow(group, id, file);

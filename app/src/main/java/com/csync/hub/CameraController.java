@@ -358,26 +358,32 @@ final class CameraController {
                     captures.removeAllViews();
                     captureCount = 0;
                     // The Pi lists the newest first, so each day's captures arrive together.
+                    // Each day's captures as a grid of pictures; a tap opens the capture's actions.
                     String day = null;
-                    LinearLayout group = null;
+                    java.util.List<Pictures.Tile> tiles = new java.util.ArrayList<>();
                     for (int i = 0; i < files.length(); i++) {
                         JSONObject file = files.optJSONObject(i);
                         if (file == null) continue;
                         String name = file.optString("name");
                         if (!name.endsWith(".jpg") && !name.endsWith(".mp4") && !name.endsWith(".mjpeg")) continue;
                         String taken = captureDay(name);
-                        if (group == null || !taken.equals(day)) {
+                        if (!taken.equals(day)) {
+                            if (!tiles.isEmpty()) Pictures.grid(captures, tiles, 3);
+                            tiles = new java.util.ArrayList<>();
                             day = taken;
                             Kit.label(captures, day);
-                            group = Kit.group(captures);
                         }
                         long bytes = file.optLong("bytes");
-                        View row = Kit.addRow(group);
-                        Kit.bindRow(row, name.endsWith(".jpg") ? Kit.Icon.PHOTO : Kit.Icon.VIDEO, captureTitle(name),
-                            captureDetail(name, bytes), null, true);
-                        row.setOnClickListener(v -> showCapture(name, bytes));
+                        Pictures.Tile tile = new Pictures.Tile("capture:" + name,
+                            () -> active.getBytes("/v1/camera/captures/" + MediaClient.enc(name), 12 * 1024 * 1024));
+                        tile.video = !name.endsWith(".jpg");
+                        Date at = captureTime(name);
+                        tile.label = at == null ? captureTitle(name) : android.text.format.DateFormat.getTimeFormat(activity).format(at);
+                        tile.open = () -> showCapture(name, bytes);
+                        tiles.add(tile);
                         captureCount++;
                     }
+                    if (!tiles.isEmpty()) Pictures.grid(captures, tiles, 3);
                     loadedCapturesWords();
                 });
             } catch (Exception error) {
@@ -454,7 +460,7 @@ final class CameraController {
         sayCaptures("Deleting it from the Pi");
         new Thread(() -> {
             String problem = null;
-            try { active.delete("/v1/camera/captures/" + MediaClient.enc(name), null); }
+            try { active.delete("/v1/camera/captures/" + MediaClient.enc(name), null); Pictures.forget("capture:" + name); }
             catch (Exception error) { problem = error.getMessage() == null ? "The Pi did not answer." : error.getMessage(); }
             String failure = problem;
             ui.post(() -> {
