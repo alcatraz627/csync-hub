@@ -14,20 +14,32 @@ import org.json.JSONObject;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
+/** What plays on the Pi screen and on this phone, as two cards in the floater dock. */
 final class MediaMiniPlayer {
     private final Activity activity;
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final MediaClient client;
     private final Row pi;
     private final Row phone;
+    private final FloaterDock dock;
     private final AtomicBoolean piInFlight = new AtomicBoolean();
     private boolean running;
 
-    MediaMiniPlayer(Activity activity) {
+    MediaMiniPlayer(Activity activity, FloaterDock dock) {
         this.activity = activity;
+        this.dock = dock;
         client = new MediaClient(Prefs.assistIp(activity), Prefs.token(activity));
-        pi = new Row(activity.findViewById(R.id.mini_pi), "pi");
-        phone = new Row(activity.findViewById(R.id.mini_phone), "phone");
+        android.view.LayoutInflater inflater = activity.getLayoutInflater();
+        pi = new Row((LinearLayout) inflater.inflate(R.layout.view_media_mini, null, false), "pi");
+        phone = new Row((LinearLayout) inflater.inflate(R.layout.view_media_mini, null, false), "phone");
+    }
+
+    // Hand the dock whichever outputs are playing; it ignores a list that has not changed.
+    private void publish() {
+        java.util.List<FloaterDock.Floater> cards = new java.util.ArrayList<>();
+        if (pi.root.getVisibility() == View.VISIBLE) cards.add(new FloaterDock.Floater("media-pi", pi.root, 10));
+        if (phone.root.getVisibility() == View.VISIBLE) cards.add(new FloaterDock.Floater("media-phone", phone.root, 11));
+        dock.set("media", cards);
     }
 
     void start() {
@@ -52,16 +64,19 @@ final class MediaMiniPlayer {
         PhonePlaybackService player = PhonePlaybackService.current;
         if (player == null || !player.hasPlayer()) {
             phone.root.setVisibility(View.GONE);
+            publish();
             return;
         }
         JSONObject item = player.item();
         phone.show(item == null ? "Phone media" : item.optString("name", "Phone media"),
             player.playbackState().toUpperCase(java.util.Locale.ROOT), player.position(), player.duration());
+        publish();
     }
 
     private void updatePi() {
         if (Prefs.assistIp(activity).isEmpty() || Prefs.token(activity).isEmpty()) {
             pi.root.setVisibility(View.GONE);
+            publish();
             return;
         }
         if (!piInFlight.compareAndSet(false, true)) return;
@@ -77,6 +92,7 @@ final class MediaMiniPlayer {
                         pi.show(state.optString("name", "Pi media"), status.toUpperCase(java.util.Locale.ROOT),
                             state.optInt("positionMs"), state.optInt("durationMs"));
                     else pi.root.setVisibility(View.GONE);
+                    publish();
                 });
             } catch (Exception error) {
                 ui.post(() -> {

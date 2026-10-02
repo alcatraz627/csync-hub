@@ -43,6 +43,53 @@ public final class HubTiles {
         tile.updateTile();
     }
 
+    /** Open a More child page, such as Timers, from a tile. */
+    private static void openDetail(TileService tile, String detail) {
+        Intent i = new Intent(tile, MainActivity.class)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            .putExtra("destination", "more").putExtra("detail", detail);
+        if (Build.VERSION.SDK_INT >= 34) {
+            tile.startActivityAndCollapse(PendingIntent.getActivity(tile, detail.hashCode(), i,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
+        } else {
+            tile.startActivityAndCollapse(i);
+        }
+    }
+
+    /** Lit while a timer runs, with the soonest time left; a tap opens Timers. */
+    public static class Timers extends TileService {
+        @Override public void onStartListening() {
+            Tile tile = getQsTile();
+            if (tile == null) return;
+            long now = System.currentTimeMillis(), soonest = Long.MAX_VALUE;
+            int live = 0;
+            for (com.csync.hub.Timers.Timer t : com.csync.hub.Timers.all(this)) {
+                if (t.done) continue;
+                live++;
+                soonest = Math.min(soonest, t.left(now));
+            }
+            tile.setState(live > 0 ? Tile.STATE_ACTIVE : Tile.STATE_INACTIVE);
+            if (Build.VERSION.SDK_INT >= 29)
+                tile.setSubtitle(live == 0 ? "None running" : com.csync.hub.Timers.clock(soonest) + (live > 1 ? " +" + (live - 1) : ""));
+            tile.updateTile();
+        }
+        @Override public void onClick() { openDetail(this, "timers"); }
+    }
+
+    /** Its second line is when the next reminder rings; a tap opens the box to add one. */
+    public static class Reminders extends TileService {
+        @Override public void onStartListening() {
+            Tile tile = getQsTile();
+            if (tile == null) return;
+            com.csync.hub.Reminders.Item next = com.csync.hub.Reminders.next(this);
+            tile.setState(Tile.STATE_INACTIVE);
+            if (Build.VERSION.SDK_INT >= 29) tile.setSubtitle(next == null ? "Add one"
+                : android.text.format.DateFormat.getTimeFormat(this).format(new java.util.Date(next.at)));
+            tile.updateTile();
+        }
+        @Override public void onClick() { openDetail(this, "reminder-add"); }
+    }
+
     public static class Camera extends TileService {
         @Override public void onStartListening() { rest(this, "Live"); }
         @Override public void onClick() { open(this, "camera", null); }

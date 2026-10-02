@@ -44,6 +44,10 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private View pageHome, pageShare, pageChat, pageTools, pageSettings, pageCamera, pageMore;
     private CameraController cameraController;
     private MediaMiniPlayer miniPlayer;
+    private FloaterDock floaterDock;
+    private TimerFloaters timerFloaters;
+    private TimersScreen timersScreen;
+    private RemindersScreen remindersScreen;
     private int current = 0;
     private int moreDetail;
     private int settingsDetail;
@@ -108,7 +112,12 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         content.addView(pageMore);
         cameraController = new CameraController(this, pageCamera);
         cameraController.navigation(this::openPlace, this::rootBack);
-        miniPlayer = new MediaMiniPlayer(this);
+        floaterDock = new FloaterDock(this, findViewById(R.id.floater_dock));
+        miniPlayer = new MediaMiniPlayer(this, floaterDock);
+        timerFloaters = new TimerFloaters(this, floaterDock, this::openTimer);
+        timersScreen = new TimersScreen(this, pageMore.findViewById(R.id.timers_rows));
+        remindersScreen = new RemindersScreen(this, pageMore.findViewById(R.id.reminders_rows));
+        Timers.migrate(this);
         getOnBackPressedDispatcher().addCallback(this, backInApp);
         // A conversation uses the whole width; every other page stays one column on a wide screen.
         Appearance.column(this, pageHome.findViewById(R.id.home_refresh), pageShare.findViewById(R.id.share_refresh),
@@ -309,9 +318,31 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             case "guide": showMoreDetail(1); break;
             case "about": showMoreDetail(2); break;
             case "showcase": showMoreDetail(3); break;
-            case "reminders": showMoreDetail(4); break;
+            case "timers": {
+                // A shortcut or a widget tile starts its timer first; a notification opens its timer.
+                long tile = intent.getLongExtra("start_tile", -1);
+                intent.removeExtra("start_tile");
+                long timer = intent.getLongExtra("timer", -1);
+                intent.removeExtra("timer");
+                if (tile > 0) {
+                    Timers.Timer started = Timers.startTile(this, tile);
+                    if (started == null) toast(Timers.tile(this, tile) == null ? "That timer tile was deleted" : "Four timers is the most at once");
+                    else timer = started.id;
+                }
+                openTimer(timer);
+                break;
+            }
+            case "reminders": showMoreDetail(5); break;
+            case "reminder-add": showMoreDetail(5); remindersScreen.show(true); break;
             default:
         }
+    }
+
+    /** Open Timers, on one timer when an id is given. */
+    private void openTimer(long id) {
+        if (current != 6) show(6);
+        if (moreDetail != 4) showMoreDetail(4);
+        timersScreen.show(id);
     }
 
     // Keep the open surface across a theme or accent change, which recreates the
@@ -342,6 +373,10 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageSettings.setVisibility(page == 4 ? View.VISIBLE : View.GONE);
         pageCamera.setVisibility(page == 5 ? View.VISIBLE : View.GONE);
         pageMore.setVisibility(page == 6 ? View.VISIBLE : View.GONE);
+        if (floaterDock != null) {
+            dockTimersHidden();
+            if (page != 6) { timersScreen.hide(); remindersScreen.hide(); }
+        }
         if (resumed) arrive();
         markBar();
         if (page == 6) showMoreDetail(0);
@@ -384,7 +419,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             case 3: return toolsDetail == 1 ? "process" : toolsDetail == 2 ? "widgets" : "pi";
             case 4: return settingsDetail != 0 ? "connection" : "settings";
             case 5: return "camera";
-            case 6: return moreDetail == 1 ? "guide" : moreDetail == 2 ? "help" : moreDetail == 3 ? "showcase" : moreDetail == 4 ? "reminders" : "more";
+            case 6: return morePlace(moreDetail);
             default: return "home";
         }
     }
@@ -444,6 +479,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         if (current == 3 && toolsDetail == 1) ensureShizuku();
         if (current == 5) cameraController.show();
         miniPlayer.start();
+        timerFloaters.start();
+        if (current == 6 && moreDetail == 4) timersScreen.show(-1);
+        if (current == 6 && moreDetail == 5) remindersScreen.show(false);
     }
 
     @Override
@@ -453,6 +491,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         resumed = false;
         cameraController.hide();
         miniPlayer.stop();
+        timerFloaters.stop();
+        timersScreen.hide();
+        remindersScreen.hide();
         ChatService.uiForeground = false;
         try { unregisterReceiver(chatReceiver); } catch (Throwable ignore) {}
     }
@@ -675,10 +716,12 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageMore.findViewById(R.id.more_guide).setVisibility(detail == 1 ? View.VISIBLE : View.GONE);
         pageMore.findViewById(R.id.more_help).setVisibility(detail == 2 ? View.VISIBLE : View.GONE);
         pageMore.findViewById(R.id.more_showcase).setVisibility(detail == 3 ? View.VISIBLE : View.GONE);
-        pageMore.findViewById(R.id.more_reminders).setVisibility(detail == 4 ? View.VISIBLE : View.GONE);
-        Kit.pageTop(pageMore.findViewById(R.id.more_crumb),
-            detail == 0 ? "more" : detail == 1 ? "guide" : detail == 2 ? "help" : detail == 3 ? "showcase" : "reminders",
-            this::openPlace, visitBack());
+        pageMore.findViewById(R.id.more_timers).setVisibility(detail == 4 ? View.VISIBLE : View.GONE);
+        pageMore.findViewById(R.id.more_reminders).setVisibility(detail == 5 ? View.VISIBLE : View.GONE);
+        Kit.pageTop(pageMore.findViewById(R.id.more_crumb), morePlace(detail), this::openPlace, visitBack());
+        dockTimersHidden();
+        if (detail != 4) timersScreen.hide();
+        if (detail != 5) remindersScreen.hide();
         if (resumed) arrive();
         if (detail == 1) renderGuide();
         if (detail == 2) {
@@ -693,141 +736,24 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             });
         }
         if (detail == 3) renderShowcase();
-        if (detail == 4) renderReminders();
+        if (detail == 4) timersScreen.show(-1);
+        if (detail == 5) remindersScreen.show(false);
     }
 
-    private static final int[] TIMER_MINUTES = {1, 5, 10, 25};
+    // The Timers page shows its own timers, so the dock leaves them out there and only there.
+    private void dockTimersHidden() {
+        floaterDock.hide("timers", current == 6 && moreDetail == 4);
+    }
 
-    /**
-     * Timers and reminders: quick timers in one tap, a timer of any length, a reminder at a time,
-     * then what is coming up with its countdown, and what rang today.
-     */
-    private void renderReminders() {
-        LinearLayout page = pageMore.findViewById(R.id.reminders_rows);
-        page.removeAllViews();
-        Reminders.tidy(this);
-        Kit.label(page, "Quick timer, in minutes");
-        LinearLayout quick = new LinearLayout(this);
-        quick.setOrientation(LinearLayout.HORIZONTAL);
-        page.addView(quick, new LinearLayout.LayoutParams(-1, -2));
-        for (int i = 0; i < TIMER_MINUTES.length; i++) {
-            int minutes = TIMER_MINUTES[i];
-            LinearLayout.LayoutParams cell = new LinearLayout.LayoutParams(0, -2, 1);
-            if (i > 0) cell.setMarginStart(dp(8));
-            quick.addView(Kit.compactButton(this, R.drawable.csi_history, String.valueOf(minutes), i == 2,
-                () -> startTimer(minutes, "")), cell);
+    private static String morePlace(int detail) {
+        switch (detail) {
+            case 1: return "guide";
+            case 2: return "help";
+            case 3: return "showcase";
+            case 4: return "timers";
+            case 5: return "reminders";
+            default: return "more";
         }
-        LinearLayout make = Kit.group(page);
-        ((LinearLayout.LayoutParams) make.getLayoutParams()).topMargin = dp(12);
-        Kit.bindRow(Kit.addRow(make), R.drawable.csi_sliders, "A timer of any length", "Up to three hours, with a name", null, true)
-            .setOnClickListener(v -> timerLengthSheet());
-        Kit.bindRow(Kit.addRow(make), Kit.Icon.NOTES, "A reminder at a time", "What to remember, then when", null, true)
-            .setOnClickListener(v -> Kit.fieldSheet(this, "Remind me to", null, "Call home, take the bins out", null,
-                R.drawable.csi_forward, "Pick a time", this::pickReminderTime));
-        if (!Reminders.exact(this)) {
-            TextView note = new TextView(this);
-            note.setTextAppearance(R.style.Kit_Text_RowSub);
-            note.setText("Android has not let csync ring on the exact minute, so a reminder may ring a little late.");
-            note.setPadding(dp(2), dp(8), 0, 0);
-            page.addView(note);
-        }
-
-        java.util.List<Reminders.Item> items = Reminders.all(this);
-        java.util.List<Reminders.Item> coming = new java.util.ArrayList<>(), rang = new java.util.ArrayList<>();
-        for (Reminders.Item i : items) (i.fired ? rang : coming).add(i);
-        if (coming.isEmpty() && rang.isEmpty()) {
-            Kit.empty(page, R.drawable.csi_history, "Nothing set", "Start a timer or set a reminder above.", null);
-            return;
-        }
-        if (!coming.isEmpty()) {
-            Kit.label(page, "Coming up");
-            LinearLayout group = Kit.group(page);
-            for (Reminders.Item i : coming) {
-                View row = Kit.addRow(group);
-                String when = android.text.format.DateFormat.getTimeFormat(this).format(new java.util.Date(i.at));
-                Kit.bindRow(row, i.timer() ? R.drawable.csi_history : Kit.Icon.NOTES,
-                    i.label.isEmpty() ? (i.timer() ? "Timer" : "Reminder") : i.label,
-                    (i.timer() ? "Timer, rings at " : "Rings at ") + when, untilWords(i.at), false);
-                Kit.rowAction(row, R.drawable.csi_trash, "Cancel it", v -> { Reminders.cancel(this, i.id); renderReminders(); });
-            }
-            // The countdowns move, so the page redraws each minute while it is open.
-            ui.removeCallbacks(reminderTick);
-            ui.postDelayed(reminderTick, 30000);
-        }
-        if (!rang.isEmpty()) {
-            Kit.label(page, "Rang today");
-            LinearLayout group = Kit.group(page);
-            for (int k = rang.size() - 1; k >= 0; k--) {
-                Reminders.Item i = rang.get(k);
-                View row = Kit.addRow(group);
-                String when = android.text.format.DateFormat.getTimeFormat(this).format(new java.util.Date(i.at));
-                Kit.bindRow(row, Kit.Icon.HISTORY, i.label.isEmpty() ? (i.timer() ? "Timer" : "Reminder") : i.label,
-                    "Rang at " + when, null, false);
-                Kit.rowAction(row, R.drawable.csi_trash, "Clear it", v -> { Reminders.cancel(this, i.id); renderReminders(); });
-            }
-        }
-    }
-
-    private final Runnable reminderTick = () -> { if (current == 6 && moreDetail == 4) renderReminders(); };
-
-    /** Choose a length with the slider, then Next asks for a name; the drawer closes as it moves on. */
-    private void timerLengthSheet() {
-        Kit.Sheet sheet = new Kit.Sheet(this, "Timer length", minutesWords(15));
-        com.google.android.material.slider.Slider slider = new com.google.android.material.slider.Slider(this);
-        slider.setValueFrom(1);
-        slider.setValueTo(180);
-        slider.setStepSize(1);
-        slider.setValue(15);
-        slider.setTickVisible(false);
-        slider.setLabelFormatter(value -> minutesWords(Math.round(value)));
-        sheet.rows.addView(slider, new LinearLayout.LayoutParams(-1, -2));
-        LinearLayout.LayoutParams below = new LinearLayout.LayoutParams(-1, -2);
-        below.topMargin = dp(12);
-        sheet.rows.addView(Kit.primaryButton(this, R.drawable.csi_forward, "Next", () -> {
-            int minutes = Math.round(slider.getValue());
-            sheet.dialog.dismiss();
-            Kit.fieldSheet(this, "Name the timer", minutesWords(minutes), "Tea, laundry, a break",
-                "Leave it empty for a plain timer.", R.drawable.csi_history, "Start", name -> startTimer(minutes, name.trim()));
-        }), below);
-        sheet.show();
-        TextView sub = sheet.dialog.findViewById(R.id.kit_sub);
-        slider.addOnChangeListener((s, value, fromUser) -> { if (sub != null) sub.setText(minutesWords(Math.round(value))); });
-    }
-
-    private static String minutesWords(int minutes) {
-        if (minutes < 60) return minutes + (minutes == 1 ? " minute" : " minutes");
-        int hours = minutes / 60, rest = minutes % 60;
-        String h = hours + (hours == 1 ? " hour" : " hours");
-        return rest == 0 ? h : h + " " + rest + " min";
-    }
-
-    private void startTimer(int minutes, String name) {
-        Reminders.add(this, "timer", name, System.currentTimeMillis() + minutes * 60000L);
-        toast((name.isEmpty() ? "Timer" : name) + " rings in " + minutesWords(minutes));
-        renderReminders();
-    }
-
-    private void pickReminderTime(String words) {
-        java.util.Calendar soon = java.util.Calendar.getInstance();
-        soon.add(java.util.Calendar.HOUR_OF_DAY, 1);
-        new android.app.TimePickerDialog(this, (picker, hour, minute) -> {
-            java.util.Calendar at = java.util.Calendar.getInstance();
-            at.set(java.util.Calendar.HOUR_OF_DAY, hour);
-            at.set(java.util.Calendar.MINUTE, minute);
-            at.set(java.util.Calendar.SECOND, 0);
-            // A time already gone today means the same time tomorrow.
-            if (at.getTimeInMillis() <= System.currentTimeMillis()) at.add(java.util.Calendar.DAY_OF_YEAR, 1);
-            Reminders.add(this, "reminder", words.trim(), at.getTimeInMillis());
-            toast("Reminder set for " + android.text.format.DateFormat.getTimeFormat(this).format(at.getTime()));
-            renderReminders();
-        }, soon.get(java.util.Calendar.HOUR_OF_DAY), 0, android.text.format.DateFormat.is24HourFormat(this)).show();
-    }
-
-    private static String untilWords(long at) {
-        long minutes = Math.max(0, (at - System.currentTimeMillis() + 59999) / 60000);
-        if (minutes < 60) return "in " + minutes + " min";
-        long hours = minutes / 60, rest = minutes % 60;
-        return rest == 0 ? "in " + hours + " h" : "in " + hours + " h " + rest + " min";
     }
 
     /**
@@ -925,8 +851,10 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         LinearLayout group = Kit.group(page);
         Kit.bindRow(Kit.addRow(group), Kit.Icon.DEVICE, "Process monitor", "What is using memory and the processor", null, true)
             .setOnClickListener(v -> openPlace("process"));
-        Kit.bindRow(Kit.addRow(group), R.drawable.csi_history, "Reminders", "Timers, and reminders at a time", null, true)
+        Kit.bindRow(Kit.addRow(group), R.drawable.csi_timer, "Timers", "Up to four at once, and saved ones", null, true)
             .setOnClickListener(v -> showMoreDetail(4));
+        Kit.bindRow(Kit.addRow(group), R.drawable.csi_bell, "Reminders", "Something to remember at a time", null, true)
+            .setOnClickListener(v -> showMoreDetail(5));
         Kit.bindRow(Kit.addRow(group), R.drawable.csi_launcher, "Widgets", "Widgets, tiles, shortcuts and the share menu", null, true)
             .setOnClickListener(v -> openPlace("widgets"));
 
@@ -1190,6 +1118,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             case "notes": startActivity(new Intent(this, NotesActivity.class)); break;
             case "settings": show(4); break;
             case "camera": show(5); break;
+            case "timers": if (current != 6) show(6); showMoreDetail(4); break;
+            case "reminders": if (current != 6) show(6); showMoreDetail(5); break;
             default: break;
         }
     }
@@ -1301,6 +1231,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         else if (visitor) finish();
         else if (current == 2 && chatReturn != null) { Runnable back = chatReturn; chatReturn = null; back.run(); }
         else if (current == 2 && chatConvoMode) openPlace(fromHome ? "home" : "chat");
+        else if (current == 6 && moreDetail == 4 && timersScreen.onBack()) return;
         else if (current == 6 && moreDetail != 0) { if (fromHome) openPlace("home"); else showMoreDetail(0); }
         else if (current == 4 && settingsDetail != 0) closeSettingsDetail();
         // The process monitor and Widgets belong to More's This phone section.
@@ -1537,6 +1468,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             case "process": fromHome(R.id.nav_more, () -> openPlace("process")); fromHome = true; break;
             case "widgets": fromHome(R.id.nav_more, () -> openPlace("widgets")); fromHome = true; break;
             case "guide": fromHome(R.id.nav_more, () -> showMoreDetail(1)); break;
+            case "timers": fromHome(R.id.nav_more, () -> showMoreDetail(4)); break;
+            case "reminders": fromHome(R.id.nav_more, () -> showMoreDetail(5)); break;
             case "settings": fromHome(R.id.nav_more, () -> show(4)); break;
             default: break;
         }

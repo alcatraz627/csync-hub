@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="48dp"
+    android:orientation="horizontal" android:gravity="center_vertical">
+    <LinearLayout android:id="@+id/wm_open" android:layout_width="0dp" android:layout_weight="1"
+        android:layout_height="match_parent" android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/wm_when" android:layout_width="58dp" android:layout_height="wrap_content"
+            android:textSize="13sp" android:textColor="@color/dim" android:fontFamily="monospace" android:maxLines="1"/>
+        <TextView android:id="@+id/wm_label" android:layout_width="0dp" android:layout_weight="1"
+            android:layout_height="wrap_content" android:textSize="14sp" android:textColor="@color/text"
+            android:maxLines="1" android:ellipsize="none"/>
+    </LinearLayout>
+    <ImageButton android:id="@+id/wm_snooze" android:layout_width="40dp" android:layout_height="40dp"
+        android:layout_marginStart="6dp" android:padding="10dp" android:scaleType="fitCenter" android:tint="@color/text"
+        android:src="@drawable/wg_snooze" android:background="@drawable/wg_btn" android:contentDescription="Again in 10 minutes"/>
+    <ImageButton android:id="@+id/wm_done" android:layout_width="40dp" android:layout_height="40dp"
+        android:layout_marginStart="4dp" android:padding="10dp" android:scaleType="fitCenter" android:tint="@color/text"
+        android:src="@drawable/wg_check" android:background="@drawable/wg_btn" android:contentDescription="Done"/>
+</LinearLayout>

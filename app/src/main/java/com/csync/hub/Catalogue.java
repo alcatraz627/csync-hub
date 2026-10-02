@@ -35,6 +35,8 @@ final class Catalogue {
         add("pi", R.drawable.csi_system, "Raspberry Pi", "Health, drives and power", true);
         add("chat-new", Kit.Icon.CHAT, "New conversation", "Ask the Pi assistant", true);
         add("videos", Kit.Icon.VIDEO, "Videos", "Every film on the drives", true);
+        add("timers", R.drawable.csi_timer, "Timers", "Up to four at once", true);
+        add("reminders", R.drawable.csi_bell, "Reminders", "Something to remember at a time", true);
         add("received", R.drawable.csi_download, "Received", "From your devices", false);
         add("process", Kit.Icon.DEVICE, "Process monitor", "What this phone is busy with", false);
         add("search", Kit.Icon.SEARCH, "Search", "Films, chats, files", false);

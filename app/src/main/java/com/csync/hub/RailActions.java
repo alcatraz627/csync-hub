@@ -147,6 +147,7 @@ final class RailActions {
             case "guide": main(a, "more", "guide"); return;
             case "about": main(a, "more", "about"); return;
             case "showcase": main(a, "more", "showcase"); return;
+            case "timers": main(a, "more", "timers"); return;
             case "reminders": main(a, "more", "reminders"); return;
             case "update": main(a, "tools", "update"); return;
             case "search": jump(a, new Intent(a, SearchActivity.class)); return;

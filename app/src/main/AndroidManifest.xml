@@ -7,6 +7,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <!-- Timers and reminders ring on the minute, and survive a restart. -->
@@ -192,13 +193,21 @@
             android:configChanges="orientation|screenSize"/>
 
         <receiver android:name=".AppUpdateReceiver" android:exported="false"/>
-        <!-- Rings timers and reminders, and arms them again after a restart or an update. -->
+        <!-- Rings reminders and hears their buttons; after a restart or an update it arms reminders and timers again. -->
         <receiver android:name=".Reminders$Receiver" android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED"/>
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
             </intent-filter>
         </receiver>
+        <!-- Rings timers and hears the buttons on their notifications and widget. -->
+        <receiver android:name=".Timers$Receiver" android:exported="false"/>
+        <!-- Redraws running timers' notifications while one counts down. -->
+        <service android:name=".TimerService" android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Shows the time left on the timers the person started"/>
+        </service>
 
         <provider android:name=".VlcStreamProvider"
             android:authorities="${applicationId}.media"
@@ -318,6 +327,14 @@
             android:icon="@drawable/ti_screen" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE"/></intent-filter>
         </service>
+        <service android:name=".HubTiles$Timers" android:exported="true" android:label="@string/ti_timers"
+            android:icon="@drawable/wg_timer" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE"/></intent-filter>
+        </service>
+        <service android:name=".HubTiles$Reminders" android:exported="true" android:label="@string/ti_reminders"
+            android:icon="@drawable/wg_bell" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE"/></intent-filter>
+        </service>
         <service android:name=".HubTiles$Photo" android:exported="true" android:label="@string/ti_photo"
             android:icon="@drawable/ti_photo" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE"/></intent-filter>
@@ -345,6 +362,18 @@
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_camera_info"/>
+        </receiver>
+        <receiver android:name=".HubWidgets$TimerWidget" android:exported="true" android:label="@string/wg_timers_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_timers_info"/>
+        </receiver>
+        <receiver android:name=".HubWidgets$ReminderWidget" android:exported="true" android:label="@string/wg_reminders_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_reminders_info"/>
         </receiver>
         <receiver android:name=".HubWidgets$Ask" android:exported="true" android:label="@string/wg_ask_name">
             <intent-filter>

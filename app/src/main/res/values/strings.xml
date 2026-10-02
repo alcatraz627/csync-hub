@@ -10,6 +10,12 @@
     <!-- Tile names are short on purpose: the system cuts anything longer than the tile. -->
     <string name="ti_clipboard">Clipboard</string>
     <string name="ti_screen">Pi screen</string>
+    <string name="ti_timers">Timers</string>
+    <string name="ti_reminders">Reminders</string>
+    <string name="wg_timers_name">Timers</string>
+    <string name="wg_timers_about">Running timers with Pause, Add a minute and Stop, and your saved timers to start one.</string>
+    <string name="wg_reminders_name">Reminders</string>
+    <string name="wg_reminders_about">What is coming up, with Done and a snooze, and a way to add one.</string>
     <string name="ti_photo">Last photo</string>
     <string name="wg_status_name">Pi status</string>
     <string name="wg_status_about">Whether the Raspberry Pi is online, its power and its drives.</string>
