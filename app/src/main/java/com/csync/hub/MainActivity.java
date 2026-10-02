@@ -480,6 +480,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         if (current == 5) cameraController.show();
         miniPlayer.start();
         timerFloaters.start();
+        Timers.listen(homeLive);
+        Reminders.listen(homeLive);
+        bindHomeLive();
         if (current == 6 && moreDetail == 4) timersScreen.show(-1);
         if (current == 6 && moreDetail == 5) remindersScreen.show(false);
     }
@@ -492,6 +495,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         cameraController.hide();
         miniPlayer.stop();
         timerFloaters.stop();
+        Timers.unlisten(homeLive);
+        Reminders.unlisten(homeLive);
         timersScreen.hide();
         remindersScreen.hide();
         ChatService.uiForeground = false;
@@ -1398,6 +1403,28 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
      * One capability as a card. A primary card carries the accent wash, a tinted icon and a line
      * saying what it is for; a secondary card is a flat tile with its icon and name.
      */
+    // The second lines of Home's Timers and Reminders cards, which say what is going on.
+    private TextView homeTimersLine, homeRemindersLine;
+    private final Runnable homeLive = this::bindHomeLive;
+
+    private void bindHomeLive() {
+        if (homeTimersLine != null) {
+            int running = 0, paused = 0, done = 0;
+            for (Timers.Timer t : Timers.all(this)) { if (t.done) done++; else if (t.paused) paused++; else running++; }
+            java.util.List<String> parts = new java.util.ArrayList<>();
+            if (done > 0) parts.add(done == 1 ? "1 has rung" : done + " have rung");
+            if (running > 0) parts.add(running + " running");
+            if (paused > 0) parts.add(paused + " paused");
+            homeTimersLine.setText(parts.isEmpty() ? "Up to four at once" : String.join(", ", parts));
+        }
+        if (homeRemindersLine != null) {
+            Reminders.Item next = Reminders.next(this);
+            homeRemindersLine.setText(next == null ? "Nothing coming up"
+                : next.label + ", " + RemindersScreen.dayWords(next.at).toLowerCase(java.util.Locale.ROOT) + " "
+                    + android.text.format.DateFormat.getTimeFormat(this).format(new java.util.Date(next.at)));
+        }
+    }
+
     private View capabilityCard(Catalogue.Entry entry, boolean primary) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(primary ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
@@ -1437,6 +1464,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             sub.setText(entry.sub);
             sub.setTag("sub");
             words.addView(sub);
+            if (entry.id.equals("timers")) { homeTimersLine = sub; bindHomeLive(); }
+            if (entry.id.equals("reminders")) { homeRemindersLine = sub; bindHomeLive(); }
         }
         LinearLayout.LayoutParams wordsAt = new LinearLayout.LayoutParams(primary ? -1 : 0, -2, primary ? 0 : 1);
         if (primary) wordsAt.topMargin = dp(12); else wordsAt.setMarginStart(dp(10));

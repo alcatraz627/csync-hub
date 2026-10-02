@@ -192,6 +192,7 @@ final class Viewer {
             word.setTextColor(ink);
             word.setTextSize(12);
             word.setSingleLine();
+            word.setGravity(Gravity.CENTER);
             word.setPadding(0, Kit.dp(a, 4), 0, 0);
             button.addView(word);
             button.setContentDescription(action.label);

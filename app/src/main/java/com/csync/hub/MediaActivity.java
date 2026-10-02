@@ -1626,7 +1626,7 @@ public final class MediaActivity extends AppCompatActivity {
             file.own.put(ItemActions.Act.OPEN, () -> playPhone(item, 0));
         }
         file.more.add(new Kit.Action(R.drawable.csi_info, "File details", null, () -> fileDetails(item), true));
-        ItemActions.sheet(this, file);
+        ItemActions.open(this, file);
     }
 
     /** Where this file was left on an output, in milliseconds, or 0 when it starts from the beginning. */
