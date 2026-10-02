@@ -91,6 +91,96 @@
             </intent-filter>
             <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts"/>
         </activity-alias>
+        <activity-alias android:name=".IconMark01" android:targetActivity=".MainActivity"
+            android:exported="true" android:enabled="false"
+            android:icon="@mipmap/ic_launcher_mark01" android:roundIcon="@mipmap/ic_launcher_mark01">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts"/>
+        </activity-alias>
+        <activity-alias android:name=".IconMark02" android:targetActivity=".MainActivity"
+            android:exported="true" android:enabled="false"
+            android:icon="@mipmap/ic_launcher_mark02" android:roundIcon="@mipmap/ic_launcher_mark02">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts"/>
+        </activity-alias>
+        <activity-alias android:name=".IconMark03" android:targetActivity=".MainActivity"
+            android:exported="true" android:enabled="false"
+            android:icon="@mipmap/ic_launcher_mark03" android:roundIcon="@mipmap/ic_launcher_mark03">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts"/>
+        </activity-alias>
+        <activity-alias android:name=".IconMark04" android:targetActivity=".MainActivity"
+            android:exported="true" android:enabled="false"
+            android:icon="@mipmap/ic_launcher_mark04" android:roundIcon="@mipmap/ic_launcher_mark04">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts"/>
+        </activity-alias>
+        <activity-alias android:name=".IconMark05" android:targetActivity=".MainActivity"
+            android:exported="true" android:enabled="false"
+            android:icon="@mipmap/ic_launcher_mark05" android:roundIcon="@mipmap/ic_launcher_mark05">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts"/>
+        </activity-alias>
+        <activity-alias android:name=".IconMark06" android:targetActivity=".MainActivity"
+            android:exported="true" android:enabled="false"
+            android:icon="@mipmap/ic_launcher_mark06" android:roundIcon="@mipmap/ic_launcher_mark06">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts"/>
+        </activity-alias>
+        <activity-alias android:name=".IconMark07" android:targetActivity=".MainActivity"
+            android:exported="true" android:enabled="false"
+            android:icon="@mipmap/ic_launcher_mark07" android:roundIcon="@mipmap/ic_launcher_mark07">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts"/>
+        </activity-alias>
+        <activity-alias android:name=".IconMark08" android:targetActivity=".MainActivity"
+            android:exported="true" android:enabled="false"
+            android:icon="@mipmap/ic_launcher_mark08" android:roundIcon="@mipmap/ic_launcher_mark08">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts"/>
+        </activity-alias>
+        <activity-alias android:name=".IconMark09" android:targetActivity=".MainActivity"
+            android:exported="true" android:enabled="false"
+            android:icon="@mipmap/ic_launcher_mark09" android:roundIcon="@mipmap/ic_launcher_mark09">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts"/>
+        </activity-alias>
+        <activity-alias android:name=".IconMark10" android:targetActivity=".MainActivity"
+            android:exported="true" android:enabled="false"
+            android:icon="@mipmap/ic_launcher_mark10" android:roundIcon="@mipmap/ic_launcher_mark10">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts"/>
+        </activity-alias>
 
         <activity android:name=".NotesActivity" android:exported="false"/>
         <activity android:name=".SearchActivity" android:exported="false"/>
