@@ -164,7 +164,8 @@ final class TimersScreen {
         time.setTypeface(androidx.core.content.res.ResourcesCompat.getFont(a, R.font.mono));
         time.setGravity(Gravity.CENTER);
         time.setSingleLine(true);
-        centre.addView(time);
+        // A fixed slot inside the ring, so "1:45:00" and "05:00" never clip or shift the play button.
+        centre.addView(time, new LinearLayout.LayoutParams(Kit.dp(a, 200), -2));
         box.addView(centre, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
 
         if (t == null) {
