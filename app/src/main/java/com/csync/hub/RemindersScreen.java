@@ -431,7 +431,8 @@ final class RemindersScreen {
         long today = Reminders.startOfDay(System.currentTimeMillis());
         GridLayout grid = new GridLayout(a);
         grid.setColumnCount(8);
-        grid.addView(new View(a), cell(0, 1f));
+        // The first column holds the part-of-day names, so it is wider than a day.
+        grid.addView(new View(a), cell(0, 1.5f));
         for (int k = 0; k < 7; k++) {
             long d = addDays(today, k);
             Calendar cal = Calendar.getInstance();
@@ -458,10 +459,11 @@ final class RemindersScreen {
             TextView words = new TextView(a);
             words.setText(BANDS[b][0]);
             words.setTextSize(9.5f);
+            words.setSingleLine(true);
             words.setGravity(Gravity.CENTER);
             words.setTextColor(ContextCompat.getColor(a, R.color.dim));
             label.addView(words);
-            grid.addView(label, cell(Kit.dp(a, 56), 1f));
+            grid.addView(label, cell(Kit.dp(a, 56), 1.5f));
             for (int k = 0; k < 7; k++) {
                 long d = addDays(today, k);
                 int bandIndex = b;

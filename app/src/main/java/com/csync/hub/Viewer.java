@@ -77,21 +77,36 @@ final class Viewer {
         // The bars sit inside the system bars; a picture still runs beneath them.
         root.setOnApplyWindowInsetsListener((v, insets) -> {
             int topInset = insets.getSystemWindowInsetTop(), bottomInset = insets.getSystemWindowInsetBottom();
-            top.setPadding(top.getPaddingLeft(), topInset + Kit.dp(a, 4), top.getPaddingRight(), Kit.dp(a, 12));
-            bottom.setPadding(bottom.getPaddingLeft(), Kit.dp(a, 12), bottom.getPaddingRight(), bottomInset + Kit.dp(a, 12));
+            top.setPadding(top.getPaddingLeft(), topInset + Kit.dp(a, 4), top.getPaddingRight(), Kit.dp(a, 10));
+            bottom.setPadding(bottom.getPaddingLeft(), Kit.dp(a, 8), bottom.getPaddingRight(), bottomInset + Kit.dp(a, 10));
             if (!picture) stage.setPadding(0, 0, 0, 0);
             return insets.consumeSystemWindowInsets();
         });
 
+        ZoomView[] zoom = new ZoomView[1];
+        // With the bars showing, a picture sits between them, so a screenshot's own bars never
+        // collide with the viewer's; with them hidden it takes the whole screen.
+        Runnable fitRoom = () -> {
+            if (zoom[0] == null) return;
+            boolean barsUp = top.getVisibility() == View.VISIBLE && top.getAlpha() > 0.5f;
+            zoom[0].setRoom(barsUp ? top.getHeight() : 0,
+                barsUp && bottom.getVisibility() != View.GONE ? bottom.getHeight() : 0);
+        };
         Runnable toggleBars = () -> {
             float to = top.getAlpha() > 0.5f ? 0f : 1f;
             for (View bar : new View[]{top, bottom}) {
+                if (bar.getVisibility() == View.GONE) continue;
                 if (to == 1f) bar.setVisibility(View.VISIBLE);
                 bar.animate().alpha(to).setDuration(160).withEndAction(() -> { if (to == 0f) bar.setVisibility(View.INVISIBLE); }).start();
             }
+            top.postDelayed(fitRoom, 170);
         };
 
-        if (picture) showPicture(a, item, stage, toggleBars, dialog, root);
+        if (picture) {
+            zoom[0] = showPicture(a, item, stage, toggleBars, dialog, root);
+            top.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> fitRoom.run());
+            bottom.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> fitRoom.run());
+        }
         else if (item.file == null) showWords(a, stage, item.text, top, bottom);
         else if (isText(item.mime)) showTextFile(a, item, stage, top, bottom);
         else showCard(a, item, stage);
@@ -123,7 +138,7 @@ final class Viewer {
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setGravity(Gravity.CENTER_VERTICAL);
         bar.setPadding(Kit.dp(a, 4), 0, Kit.dp(a, 4), 0);
-        if (picture) bar.setBackground(scrim(true));
+        if (picture) bar.setBackgroundColor(Color.BLACK);
         bar.addView(iconButton(a, R.drawable.csi_back, "Close", ink, dialog::dismiss));
         LinearLayout words = new LinearLayout(a);
         words.setOrientation(LinearLayout.VERTICAL);
@@ -155,7 +170,7 @@ final class Viewer {
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setGravity(Gravity.CENTER);
         bar.setPadding(Kit.dp(a, 8), 0, Kit.dp(a, 8), 0);
-        if (picture) bar.setBackground(scrim(false));
+        if (picture) bar.setBackgroundColor(Color.BLACK);
         else {
             GradientDrawable line = new GradientDrawable();
             line.setColor(ContextCompat.getColor(a, R.color.bg));
@@ -246,15 +261,10 @@ final class Viewer {
         text.setFadingEdgeLength(Kit.dp(text.getContext(), 24));
     }
 
-    private static GradientDrawable scrim(boolean fromTop) {
-        return new GradientDrawable(fromTop ? GradientDrawable.Orientation.TOP_BOTTOM : GradientDrawable.Orientation.BOTTOM_TOP,
-            new int[]{0x99000000, 0x4D000000, 0x00000000});
-    }
-
     // ---- what is shown ----
 
-    private static void showPicture(Activity a, ItemActions.Item item, FrameLayout stage, Runnable toggleBars,
-                                    Dialog dialog, View root) {
+    private static ZoomView showPicture(Activity a, ItemActions.Item item, FrameLayout stage, Runnable toggleBars,
+                                        Dialog dialog, View root) {
         ZoomView zoom = new ZoomView(a);
         zoom.setContentDescription(item.title);
         zoom.onTap = toggleBars;
@@ -273,6 +283,7 @@ final class Viewer {
                 zoom.setPicture(picture);
             });
         }, "viewer-picture").start());
+        return zoom;
     }
 
     /** Read a picture scaled to the screen, so a large photo does not run the phone out of memory. */
@@ -467,21 +478,34 @@ final class Viewer {
 
         @Override protected void onSizeChanged(int w, int h, int ow, int oh) { fitToView(); }
 
+        /** Fit the picture between {@code top} and {@code bottom} pixels, as the bars leave room. */
+        void setRoom(int top, int bottom) {
+            if (top == getPaddingTop() && bottom == getPaddingBottom()) return;
+            setPadding(0, top, 0, bottom);
+            scale = 1f;
+            dx = dy = 0;
+            fitToView();
+        }
+
+        private float roomHeight() { return getHeight() - getPaddingTop() - getPaddingBottom(); }
+
+        private float baseY() { return getPaddingTop() + (roomHeight() - picture.getHeight() * fit) / 2f; }
+
         private void fitToView() {
             if (picture == null || getWidth() == 0) return;
-            fit = Math.min(getWidth() / (float) picture.getWidth(), getHeight() / (float) picture.getHeight());
+            fit = Math.min(getWidth() / (float) picture.getWidth(), roomHeight() / (float) picture.getHeight());
             clamp();
             invalidate();
         }
 
-        // Keep the picture centred when it is smaller than the screen and its edges on screen when larger.
+        // Keep the picture centred in its room when it is smaller and its edges on screen when larger.
         private void clamp() {
             if (picture == null) return;
             float w = picture.getWidth() * fit * scale, h = picture.getHeight() * fit * scale;
-            float baseX = (getWidth() - picture.getWidth() * fit) / 2f, baseY = (getHeight() - picture.getHeight() * fit) / 2f;
+            float baseX = (getWidth() - picture.getWidth() * fit) / 2f, baseY = baseY();
             if (w <= getWidth()) dx = (getWidth() - w) / 2f - baseX * scale;
             else dx = Math.min(-baseX * scale, Math.max(getWidth() - w - baseX * scale, dx));
-            if (h <= getHeight()) dy = (getHeight() - h) / 2f - baseY * scale;
+            if (h <= roomHeight()) dy = getPaddingTop() + (roomHeight() - h) / 2f - baseY * scale;
             else dy = Math.min(-baseY * scale, Math.max(getHeight() - h - baseY * scale, dy));
         }
 
@@ -530,7 +554,7 @@ final class Viewer {
             if (picture == null) return;
             matrix.reset();
             matrix.postScale(fit, fit);
-            matrix.postTranslate((getWidth() - picture.getWidth() * fit) / 2f, (getHeight() - picture.getHeight() * fit) / 2f);
+            matrix.postTranslate((getWidth() - picture.getWidth() * fit) / 2f, baseY());
             matrix.postScale(scale, scale);
             matrix.postTranslate(dx, dy + pull);
             canvas.drawBitmap(picture, matrix, paint);
