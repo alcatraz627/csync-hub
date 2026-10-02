@@ -422,7 +422,9 @@ final class CameraController {
         if (!stamp.find()) return null;
         try {
             SimpleDateFormat input = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US);
-            input.setTimeZone(TimeZone.getTimeZone("UTC"));
+            // The camera names its own photos and recordings in UTC; files sent to the Pi are
+            // named by the mesh agent in the Pi's local time, which is the owner's.
+            if (name.startsWith("photo-") || name.startsWith("video-")) input.setTimeZone(TimeZone.getTimeZone("UTC"));
             return input.parse(stamp.group(1));
         } catch (Exception unreadable) { return null; }
     }

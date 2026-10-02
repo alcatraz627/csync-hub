@@ -196,7 +196,8 @@ public class HubWidgetJob extends JobService {
                 reached = true;
                 for (int i = 0; captures != null && i < captures.length(); i++) {
                     String name = captures.optJSONObject(i).optString("name");
-                    if (!name.endsWith(".jpg")) continue;
+                    // Only the camera's own photos: pictures sent to the Pi screen share the folder.
+                    if (!name.startsWith("photo-") || !name.endsWith(".jpg")) continue;
                     photo = small(client.getBytes("/v1/camera/captures/" + name, 8 * 1024 * 1024));
                     break;
                 }
