@@ -810,6 +810,7 @@ public final class MediaActivity extends AppCompatActivity {
         android.widget.FrameLayout stop = findViewById(R.id.player_shown_stop);
         stop.setVisibility(shownOnly ? View.VISIBLE : View.GONE);
         if (shownOnly) drawShownControls(stop, onPi ? shownPages : null);
+        previewShown(onPi && shownOnly ? title : null);
         boolean showing = state.equals("playing") || state.equals("paused");
         ((TextView) findViewById(R.id.player_art)).setText(
             showing && onPi ? "The picture is on the Pi screen" :
@@ -852,6 +853,40 @@ public final class MediaActivity extends AppCompatActivity {
     private int[] shownPages;
     private Bitmap coverPicture;
     private String displayName;
+    // Which shown picture the player's art area holds, so it is fetched once per picture.
+    private String previewFor;
+
+    /**
+     * While the Pi screen shows a picture, paint it behind the player's art area, so the phone
+     * shows what the screen shows; otherwise the plain poster returns. {@code name} is the shown
+     * item's name, or null when nothing is shown.
+     */
+    private void previewShown(String name) {
+        View art = findViewById(R.id.player_art);
+        if (name == null) {
+            if (previewFor != null) { previewFor = null; art.setBackgroundResource(R.drawable.player_poster_bg); }
+            return;
+        }
+        if (name.equals(previewFor)) return;
+        previewFor = name;
+        new Thread(() -> {
+            android.graphics.Bitmap picture = null;
+            try {
+                java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+                client.stream("/v1/display/showing/image", bytes, 15000, (done, total) -> { }, () -> false);
+                BitmapFactory.Options scaled = new BitmapFactory.Options();
+                scaled.inSampleSize = 2;
+                picture = BitmapFactory.decodeByteArray(bytes.toByteArray(), 0, bytes.size(), scaled);
+            } catch (Exception notAPicture) { }
+            android.graphics.Bitmap shown = picture;
+            ui.post(() -> {
+                if (shown == null || !name.equals(previewFor)) return;
+                android.graphics.drawable.BitmapDrawable fill = new android.graphics.drawable.BitmapDrawable(getResources(), shown);
+                art.setBackground(fill);
+                art.setClipToOutline(true);
+            });
+        }, "pi-shown-preview").start();
+    }
     // What the Pi screen is playing at the last check, for "replaces" on Play rows; null when nothing.
     private String piNowName;
 

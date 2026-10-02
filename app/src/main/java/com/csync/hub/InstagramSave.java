@@ -419,8 +419,11 @@ final class InstagramSave {
                 //noinspection ResultOfMethodCallIgnored
                 file.delete();
                 boolean lit = client.showImage(jpeg.toByteArray(), "Instagram").optBoolean("sentToDisplay");
-                main.post(() -> Toast.makeText(a, lit ? "Showing on the Pi screen" : "Sent. The Pi screen is off",
-                    Toast.LENGTH_SHORT).show());
+                main.post(() -> {
+                    Toast.makeText(a, lit ? "Showing on the Pi screen" : "Sent. The Pi screen is off", Toast.LENGTH_SHORT).show();
+                    // The Pi screen page carries the screen's own settings, so the choice lands there.
+                    a.startActivity(new Intent(a, MediaActivity.class).putExtra("player_target", "pi"));
+                });
             } catch (Exception failed) {
                 main.post(() -> Kit.failed(a, "It was not shown. " + failed.getMessage(), this::showOnPi));
             }
