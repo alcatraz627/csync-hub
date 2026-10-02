@@ -4626,7 +4626,12 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             boolean code = i % 2 == 1 && i < pieces.length - 1;
             String piece = i % 2 == 1 && !code ? "```" + pieces[i] : pieces[i];
             if (piece.trim().isEmpty()) continue;
-            if (code) { box.addView(codeBlock(piece)); continue; }
+            if (code) {
+                // A card the assistant composed is drawn as a card; any other block stays code.
+                View card = ChatCard.from(this, piece, words -> { chatInput.setText(words); sendChat(); });
+                box.addView(card != null ? card : codeBlock(piece));
+                continue;
+            }
             TextView tv = new TextView(this); markwon.setMarkdown(tv, piece.trim());
             ChatFind.mark(tv);
             tv.setTextColor(col(R.color.text)); tv.setTextSize(14); tv.setLineSpacing(0, 1.2f);
