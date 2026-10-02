@@ -34,23 +34,29 @@ final class AppUpdater {
     private static final long MAX_APK = 100L * 1024 * 1024;
     private static final AtomicBoolean updating = new AtomicBoolean();
 
-    /** What the Pi holds, when it is newer than this app: its version name. Null otherwise. */
-    interface Found { void newer(String versionName); }
+    /**
+     * What the Pi holds, when it is newer than this app: its version name, or null otherwise.
+     * {@code reached} is false when the Pi could not be asked, so "no newer build" is unknown.
+     */
+    interface Found { void newer(String versionName, boolean reached); }
 
     /** Ask the Pi which build it holds; {@code found} hears back on the main thread. */
     static void check(Context c, Found found) {
         String host = Prefs.assistIp(c), token = Prefs.token(c);
         Handler ui = new Handler(Looper.getMainLooper());
-        if (host.isEmpty() || token.isEmpty()) { found.newer(null); return; }
+        if (host.isEmpty() || token.isEmpty()) { found.newer(null, false); return; }
         new Thread(() -> {
             String newer = null;
+            boolean reached = false;
             try {
                 JSONObject staged = new MediaClient(host, token).get("/v1/app/version");
+                reached = true;
                 long code = staged.optLong("versionCode", 0);
                 if (staged.optBoolean("staged") && code > installedCode(c)) newer = staged.optString("versionName", "a newer build");
             } catch (Exception unreachable) { }
             String said = newer;
-            ui.post(() -> found.newer(said));
+            boolean asked = reached;
+            ui.post(() -> found.newer(said, asked));
         }, "csync-update-check").start();
     }
 

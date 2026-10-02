@@ -304,7 +304,6 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             case "update":
                 show(6);
                 showMoreDetail(2);
-                AppUpdater.check(this, newer -> { stagedUpdate = newer; if (current == 6 && moreDetail == 2) renderHelp(); });
                 break;
             case "connection": revealSettingsDetail(R.id.settings_connection_detail); break;
             case "guide": showMoreDetail(1); break;
@@ -682,7 +681,17 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             this::openPlace, visitBack());
         if (resumed) arrive();
         if (detail == 1) renderGuide();
-        if (detail == 2) renderHelp();
+        if (detail == 2) {
+            // About states the Pi's answer, so it asks afresh each time it opens.
+            updateState = UPDATE_CHECKING;
+            renderHelp();
+            AppUpdater.check(this, (newer, reached) -> {
+                stagedUpdate = newer;
+                updateState = newer != null ? UPDATE_READY : reached ? UPDATE_CURRENT : UPDATE_UNKNOWN;
+                if (current == 6 && moreDetail == 2) renderHelp();
+                if (pageHome != null) bindUpdateFooter(newer);
+            });
+        }
         if (detail == 3) renderShowcase();
         if (detail == 4) renderReminders();
     }
@@ -1051,7 +1060,11 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             Kit.bindRow(update, R.drawable.csi_download, "csync " + stagedUpdate + " is ready", "Tap to install", null, true);
             update.setOnClickListener(v -> { AppUpdater.start(this, null); stagedUpdate = null; renderHelp(); });
         } else {
-            Kit.facts(page, java.util.Arrays.asList(new String[]{"Version", appVersion()}, new String[]{"Updates", "Up to date"}));
+            String said = AppUpdater.running() ? "Updating now"
+                : updateState == UPDATE_CHECKING ? "Asking the Pi"
+                : updateState == UPDATE_UNKNOWN ? "The Pi could not be asked"
+                : "Up to date";
+            Kit.facts(page, java.util.Arrays.asList(new String[]{"Version", appVersion()}, new String[]{"Updates", said}));
         }
 
         Kit.label(page, "Your Pi");
@@ -1306,7 +1319,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private void refreshHome() {
         final String home = Prefs.homeIp(this), assist = Prefs.assistIp(this), token = Prefs.token(this);
         renderPickUp(null);
-        AppUpdater.check(this, newer -> { stagedUpdate = newer; bindUpdateFooter(newer); });
+        AppUpdater.check(this, (newer, reached) -> { stagedUpdate = newer; bindUpdateFooter(newer); });
         new Thread(() -> {
             final boolean mac = !home.isEmpty() && MeshClient.reachable(home, MeshClient.PORT);
             final boolean pi = !assist.isEmpty() && MeshClient.reachable(assist, MeshClient.ASSIST_PORT);
@@ -1367,6 +1380,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
     // The newer build the Pi holds, by name, or null when this app is the newest.
     private String stagedUpdate;
+    // What About last learned from the Pi about updates.
+    private static final int UPDATE_CHECKING = 0, UPDATE_READY = 1, UPDATE_CURRENT = 2, UPDATE_UNKNOWN = 3;
+    private int updateState = UPDATE_CHECKING;
 
     /**
      * Home's foot line is the app itself: greyed "Up to date" with the version, or, when the Pi
@@ -1705,7 +1721,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         renderThemeChoice();
         String size = Prefs.textSize(this);
         Kit.segmented(pageSettings.findViewById(R.id.set_text_size_group),
-            new int[]{R.drawable.csi_text, R.drawable.csi_text, R.drawable.csi_text},
+            new int[]{R.drawable.csi_text_small, R.drawable.csi_text_medium, R.drawable.csi_text},
             new String[]{"Small", "Medium", "Large"}, Math.max(0, java.util.Arrays.asList(TEXT_SIZES).indexOf(size)),
             i -> { Prefs.saveTextSize(this, TEXT_SIZES[i]); recreate(); });
         wireAccent(R.id.set_accent_coral, "coral", R.color.coral);
@@ -2875,7 +2891,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             + android.text.format.Formatter.formatShortFileSize(this, file.length());
         item.file = ItemActions.local(this, file, mime);
         if (textFile) item.more.add(new Kit.Action(R.drawable.csi_copy, "Copy the text", null, () -> copyFile(file)));
-        ItemActions.sheet(this, item);
+        ItemActions.open(this, item);
     }
 
     private void copyFile(java.io.File f) {
@@ -2957,8 +2973,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         int[] seconds = {5, 10, 15, 30};
         int now = how.getInt("skip_seconds", 10), chosen = 1;
         for (int i = 0; i < seconds.length; i++) if (seconds[i] == now) chosen = i;
-        Kit.segmented(lengths, new int[]{R.drawable.csi_fastforward, R.drawable.csi_fastforward, R.drawable.csi_fastforward,
-                R.drawable.csi_fastforward}, new String[]{"5 s", "10 s", "15 s", "30 s"}, chosen,
+        Kit.segmented(lengths, new int[]{R.drawable.csi_speed_1, R.drawable.csi_speed_125, R.drawable.csi_speed_15,
+                R.drawable.csi_speed_2}, new String[]{"5 s", "10 s", "15 s", "30 s"}, chosen,
             picked -> { how.edit().putInt("skip_seconds", seconds[picked]).apply(); renderPlaybackSettings(); });
     }
 

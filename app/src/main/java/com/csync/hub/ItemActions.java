@@ -149,7 +149,25 @@ final class ItemActions {
 
     private static void add(List<Kit.Action> list, Activity a, Item item, Act act, int icon, String label, boolean opens) {
         Runnable own = item.own.get(act);
-        list.add(new Kit.Action(icon, label, item.notes.get(act), own != null ? own : () -> common(a, item, act), opens));
+        Kit.Action action = new Kit.Action(icon, label, item.notes.get(act), own != null ? own : () -> common(a, item, act), opens);
+        action.key = act;
+        list.add(action);
+    }
+
+    /**
+     * Look at an item on the whole screen when it can be shown here, otherwise list its choices.
+     * This is what tapping an item does wherever it is listed.
+     */
+    static void open(Activity a, Item item) {
+        if (Viewer.shows(item)) Viewer.show(a, item);
+        else sheet(a, item);
+    }
+
+    /** Hand the item to whichever app on this phone opens its kind of file. */
+    static void openElsewhere(Activity a, Item item) {
+        if (item.file == null) return;
+        item.file.open((uri, mime) -> start(a, view(a, uri, mime == null ? "application/octet-stream" : mime, item.title),
+            "No app on this phone can open this file"));
     }
 
     // ---- the common way ----
@@ -194,7 +212,7 @@ final class ItemActions {
             String type = mime == null ? "application/octet-stream" : mime;
             switch (act) {
                 case OPEN:
-                    if (item.kind == Kind.IMAGE) { look(a, item.title, uri); return; }
+                    if (item.kind == Kind.IMAGE || Viewer.isText(type)) { Viewer.show(a, item); return; }
                     start(a, view(a, uri, type, item.title), "No app on this phone can open this file");
                     return;
                 case PLAY_PHONE:
@@ -232,29 +250,6 @@ final class ItemActions {
     private static void start(Activity a, Intent intent, String whenNothingCan) {
         try { a.startActivity(intent); }
         catch (Exception nothing) { toast(a, whenNothingCan == null ? "It could not be opened" : whenNothingCan); }
-    }
-
-    /** Show an image in a drawer, scaled down so a large photo does not run the phone out of memory. */
-    private static void look(Activity a, String title, Uri uri) {
-        Handler main = new Handler(Looper.getMainLooper());
-        new Thread(() -> {
-            Bitmap picture = null;
-            try {
-                BitmapFactory.Options bounds = new BitmapFactory.Options();
-                bounds.inJustDecodeBounds = true;
-                try (InputStream in = a.getContentResolver().openInputStream(uri)) { BitmapFactory.decodeStream(in, null, bounds); }
-                BitmapFactory.Options scaled = new BitmapFactory.Options();
-                scaled.inSampleSize = 1;
-                while (Math.max(bounds.outWidth, bounds.outHeight) / scaled.inSampleSize > 2048) scaled.inSampleSize *= 2;
-                try (InputStream in = a.getContentResolver().openInputStream(uri)) { picture = BitmapFactory.decodeStream(in, null, scaled); }
-            } catch (Exception unreadable) { picture = null; }
-            Bitmap shown = picture;
-            main.post(() -> {
-                if (a.isFinishing() || a.isDestroyed()) return;
-                if (shown == null) toast(a, "This image could not be opened");
-                else Kit.pictureSheet(a, title, shown);
-            });
-        }, "item-look").start();
     }
 
     private static void toast(Activity a, String words) {

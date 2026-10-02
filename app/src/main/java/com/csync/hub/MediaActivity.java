@@ -532,7 +532,7 @@ public final class MediaActivity extends AppCompatActivity {
         LinearLayout volumes = new LinearLayout(this);
         sheet.rows.addView(volumes, new LinearLayout.LayoutParams(-1, -2));
         // The control draws only the choice it is given, so each pick draws it again.
-        int[] volumeIcons = {Kit.Icon.VOLUME, Kit.Icon.VOLUME, Kit.Icon.VOLUME, Kit.Icon.VOLUME};
+        int[] volumeIcons = {R.drawable.csi_volume_off, R.drawable.csi_volume_low, R.drawable.csi_volume_half, Kit.Icon.VOLUME};
         String[] volumeWords = {"Muted", "Low", "Half", "Full"};
         Kit.Pick[] onVolume = new Kit.Pick[1];
         onVolume[0] = i -> { volume[0] = i; Kit.segmented(volumes, volumeIcons, volumeWords, i, onVolume[0]); };
@@ -540,7 +540,7 @@ public final class MediaActivity extends AppCompatActivity {
         Kit.label(sheet.rows, "Speed");
         LinearLayout speeds = new LinearLayout(this);
         sheet.rows.addView(speeds, new LinearLayout.LayoutParams(-1, -2));
-        int[] speedIcons = {Kit.Icon.SPEED, Kit.Icon.SPEED, Kit.Icon.SPEED, Kit.Icon.SPEED};
+        int[] speedIcons = {R.drawable.csi_speed_1, R.drawable.csi_speed_125, R.drawable.csi_speed_15, R.drawable.csi_speed_2};
         String[] speedWords = {"1×", "1.25×", "1.5×", "2×"};
         Kit.Pick[] onSpeed = new Kit.Pick[1];
         onSpeed[0] = i -> { speed[0] = i; Kit.segmented(speeds, speedIcons, speedWords, i, onSpeed[0]); };

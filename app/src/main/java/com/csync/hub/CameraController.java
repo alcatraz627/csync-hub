@@ -474,7 +474,7 @@ final class CameraController {
         item.more.add(new Kit.Action(R.drawable.csi_trash, "Delete", null, () ->
             Kit.confirm(activity, "Delete this " + (kind == ItemActions.Kind.IMAGE ? "photo" : "recording") + "?",
                 "It is removed from the Pi.", R.drawable.csi_trash, "Delete", () -> deleteCapture(name)), true));
-        ItemActions.sheet(activity, item);
+        ItemActions.open(activity, item);
     }
 
     private void deleteCapture(String name) {

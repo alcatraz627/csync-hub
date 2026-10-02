@@ -200,6 +200,8 @@ final class Kit {
         final boolean opens;
         // What the choice is set to now, written at the row's end. Null leaves the end empty.
         String value;
+        // What kind of choice this is, for a place that picks some choices out by what they do.
+        Object key;
         Action(int icon, String label, String sub, Runnable run) { this(icon, label, sub, run, false); }
         Action(int icon, String label, String sub, Runnable run, boolean opens) {
             this.icon = icon; this.label = label; this.sub = sub; this.run = run; this.opens = opens;
