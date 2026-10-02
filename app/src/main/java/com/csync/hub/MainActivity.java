@@ -1107,6 +1107,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             if (peer.optBoolean("online")) online++;
         }
         ((HeroView) pageHome.findViewById(R.id.home_hero_art)).setNodes(nodes);
+        lastHeroNodes = nodes;
         TextView line = pageHome.findViewById(R.id.home_hero_line);
         line.setTypeface(androidx.core.content.res.ResourcesCompat.getFont(this, R.font.mono));
         line.setText(nodes.isEmpty() ? "no devices yet" : online + " of " + nodes.size() + " devices around");
@@ -1469,6 +1470,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         ((android.widget.ImageView) custom).setImageTintList(
             android.content.res.ColorStateList.valueOf(android.graphics.Color.WHITE));
         custom.setOnClickListener(v -> showCustomAccentPicker());
+        renderHeroChoices();
         renderIconChoices();
         renderRailSettings();
     }
@@ -1594,6 +1596,60 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         for (int i = 0; i < list.size(); i++) if (RailActions.same(list.get(i), action)) return i;
         return -1;
     }
+
+    /**
+     * The Home banner picker under Appearance: the chosen banner large and moving, with every banner
+     * small underneath. A tap on a thumbnail chooses it at once; Home draws it the next time it shows.
+     */
+    private void renderHeroChoices() {
+        String now = HeroPainters.find(Prefs.heroVariant(this)).id;
+        HeroView preview = pageSettings.findViewById(R.id.set_hero_preview);
+        preview.setNodes(heroNodes());
+        preview.show(now, false);
+        ((TextView) pageSettings.findViewById(R.id.set_hero_name)).setText(HeroPainters.find(now).name);
+        LinearLayout row = pageSettings.findViewById(R.id.set_hero_row);
+        row.removeAllViews();
+        for (HeroPainters.Variant v : HeroPainters.ALL) {
+            boolean picked = v.id.equals(now);
+            LinearLayout cell = new LinearLayout(this);
+            cell.setOrientation(LinearLayout.VERTICAL);
+            cell.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
+            cell.setPadding(dp(4), dp(6), dp(4), dp(6));
+            android.widget.FrameLayout holder = new android.widget.FrameLayout(this);
+            android.graphics.drawable.GradientDrawable ring = new android.graphics.drawable.GradientDrawable();
+            ring.setCornerRadius(dp(13));
+            ring.setStroke(dp(2), picked ? accent() : android.graphics.Color.TRANSPARENT);
+            holder.setBackground(ring);
+            holder.setPadding(dp(3), dp(3), dp(3), dp(3));
+            HeroView thumb = new HeroView(this);
+            thumb.setNodes(heroNodes());
+            thumb.show(v.id, true);
+            holder.addView(thumb, new android.widget.FrameLayout.LayoutParams(dp(96), dp(54)));
+            cell.addView(holder);
+            TextView label = new TextView(this);
+            label.setText(v.name);
+            label.setTextSize(12);
+            label.setTextColor(picked ? Kit.accentText(this) : col(R.color.dim));
+            label.setGravity(android.view.Gravity.CENTER);
+            label.setPadding(0, dp(4), 0, 0);
+            cell.addView(label, new LinearLayout.LayoutParams(dp(102), -2));
+            cell.setContentDescription(v.name + " banner" + (picked ? ", chosen" : ""));
+            cell.setOnClickListener(click -> {
+                Prefs.saveHeroVariant(this, v.id);
+                Kit.tick(cell);
+                renderHeroChoices();
+                ((HeroView) pageHome.findViewById(R.id.home_hero_art)).refresh();
+            });
+            row.addView(cell);
+        }
+    }
+
+    /** The real devices when Home has them, otherwise a sample, so the preview is never empty. */
+    private java.util.List<HeroView.Node> heroNodes() {
+        return lastHeroNodes.isEmpty() ? HeroView.sample() : lastHeroNodes;
+    }
+
+    private java.util.List<HeroView.Node> lastHeroNodes = new java.util.ArrayList<>();
 
     /** The row of launcher icons under Appearance. The chosen one carries a ring and its name in the accent. */
     private void renderIconChoices() {

@@ -5,6 +5,7 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.util.AttributeSet;
@@ -18,29 +19,41 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Home's hero: the owner's devices as a small slowly turning constellation around the Pi.
+ * Home's hero: the owner's devices reaching each other through the Pi, drawn in the banner the
+ * owner chose under Settings > Appearance. A device that is online glows in the accent and moves;
+ * one that is offline sits dim. It is decoration with meaning, not a status readout.
  *
- * Each device is a dot on an orbit, joined to the Pi by a line. A device that is online
- * glows in the accent and a spark travels along its line; one that is offline sits dim.
- * It is decoration with meaning, not a status readout: nothing here needs reading.
+ * The same view draws Settings' preview and its thumbnails: a thumbnail is still, so ten of them
+ * cost one frame each rather than an animation each.
  */
 public final class HeroView extends View {
     static final class Node { final String name; final boolean online; Node(String n, boolean o) { name = n; online = o; } }
 
+    /** Devices to show where the real list is not known yet, as in Settings. */
+    static List<Node> sample() {
+        List<Node> s = new ArrayList<>();
+        s.add(new Node("Mac", true));
+        s.add(new Node("Phone", true));
+        s.add(new Node("Laptop", false));
+        s.add(new Node("Tablet", true));
+        s.add(new Node("Watch", false));
+        return s;
+    }
+
     private final List<Node> nodes = new ArrayList<>();
-    private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint line = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint glow = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final RectF card = new RectF();
+    private final Paint card = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RectF bounds = new RectF();
+    private final Path clip = new Path();
+    private final HeroPainters.Frame frame = new HeroPainters.Frame();
     private ValueAnimator clock;
-    private float time;
+    private long started = System.currentTimeMillis();
+    private String fixedVariant;
+    private boolean still;
 
     public HeroView(Context c) { this(c, null); }
 
     public HeroView(Context c, AttributeSet attrs) {
         super(c, attrs);
-        line.setStyle(Paint.Style.STROKE);
-        line.setStrokeWidth(Kit.dp(c, 1));
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
     }
 
@@ -51,61 +64,66 @@ public final class HeroView extends View {
         invalidate();
     }
 
+    /** Draw this banner instead of the saved choice; a still one does not animate. */
+    void show(String variantId, boolean still) {
+        fixedVariant = variantId;
+        if (this.still != still) {
+            this.still = still;
+            if (isAttachedToWindow()) { stopClock(); if (!still) startClock(); }
+        }
+        invalidate();
+    }
+
+    /** Pick up a new saved choice, as Home does when it comes back from Settings. */
+    void refresh() { invalidate(); }
+
     @Override protected void onAttachedToWindow() {
         super.onAttachedToWindow();
-        // One full turn a minute: slow enough to be calm, fast enough to be noticed.
+        if (!still) startClock();
+    }
+
+    @Override protected void onDetachedFromWindow() {
+        stopClock();
+        super.onDetachedFromWindow();
+    }
+
+    private void startClock() {
         clock = ValueAnimator.ofFloat(0f, 1f);
         clock.setDuration(60000);
         clock.setRepeatCount(ValueAnimator.INFINITE);
         clock.setInterpolator(new LinearInterpolator());
-        clock.addUpdateListener(a -> { time = (float) a.getAnimatedValue(); invalidate(); });
+        clock.addUpdateListener(a -> invalidate());
         clock.start();
     }
 
-    @Override protected void onDetachedFromWindow() {
+    private void stopClock() {
         if (clock != null) clock.cancel();
-        super.onDetachedFromWindow();
+        clock = null;
     }
 
     @Override protected void onDraw(Canvas canvas) {
         Context c = getContext();
         int accent = Kit.accentText(c);
         int surface = ContextCompat.getColor(c, R.color.surface);
-        int dim = ContextCompat.getColor(c, R.color.dim);
-        float w = getWidth(), h = getHeight(), radius = Kit.dp(c, 18);
-        card.set(0, 0, w, h);
-        fill.setShader(new LinearGradient(0, 0, w, h,
+        float w = getWidth(), h = getHeight();
+        float radius = Kit.dp(c, still ? 10 : 18);
+        bounds.set(0, 0, w, h);
+        card.setShader(new LinearGradient(0, 0, w, h,
             ColorUtils.blendARGB(surface, accent, 0.22f), surface, Shader.TileMode.CLAMP));
-        canvas.drawRoundRect(card, radius, radius, fill);
-        fill.setShader(null);
-
-        // The Pi sits right of centre, leaving the left for the greeting.
-        float cx = w * 0.77f, cy = h * 0.5f;
-        float orbitX = Math.min(w * 0.18f, Kit.dp(c, 110)), orbitY = h * 0.36f;
-        int count = Math.max(nodes.size(), 1);
-        double turn = time * Math.PI * 2;
-        for (int i = 0; i < nodes.size(); i++) {
-            Node node = nodes.get(i);
-            double angle = turn + i * Math.PI * 2 / count;
-            float x = cx + (float) Math.cos(angle) * orbitX, y = cy + (float) Math.sin(angle) * orbitY;
-            int color = node.online ? accent : dim;
-            line.setColor(ColorUtils.setAlphaComponent(color, node.online ? 110 : 50));
-            canvas.drawLine(cx, cy, x, y, line);
-            if (node.online) {
-                // A spark runs out along the line and starts again, a little out of step per device.
-                float t = (time * 12f + i * 0.37f) % 1f;
-                glow.setColor(ColorUtils.setAlphaComponent(accent, (int) (200 * (1 - t))));
-                canvas.drawCircle(cx + (x - cx) * t, cy + (y - cy) * t, Kit.dp(c, 2), glow);
-                glow.setColor(ColorUtils.setAlphaComponent(accent, 60));
-                canvas.drawCircle(x, y, Kit.dp(c, 9), glow);
-            }
-            fill.setColor(color);
-            canvas.drawCircle(x, y, Kit.dp(c, node.online ? 5 : 4), fill);
-        }
-        float breathe = 0.5f + 0.5f * (float) Math.sin(time * Math.PI * 2 * 15);
-        glow.setColor(ColorUtils.setAlphaComponent(accent, (int) (40 + 50 * breathe)));
-        canvas.drawCircle(cx, cy, Kit.dp(c, 16), glow);
-        fill.setColor(accent);
-        canvas.drawCircle(cx, cy, Kit.dp(c, 8), fill);
+        canvas.drawRoundRect(bounds, radius, radius, card);
+        clip.reset();
+        clip.addRoundRect(bounds, radius, radius, Path.Direction.CW);
+        canvas.save();
+        canvas.clipPath(clip);
+        // A still banner is caught a few seconds in, when every motion is under way.
+        float t = still ? 2.4f : (System.currentTimeMillis() - started) / 1000f;
+        frame.set(canvas, w, h, t);
+        frame.accent = accent;
+        frame.surface = surface;
+        frame.dim = ContextCompat.getColor(c, R.color.dim);
+        frame.nodes = nodes;
+        String id = fixedVariant != null ? fixedVariant : Prefs.heroVariant(c);
+        HeroPainters.find(id).painter.draw(frame);
+        canvas.restore();
     }
 }

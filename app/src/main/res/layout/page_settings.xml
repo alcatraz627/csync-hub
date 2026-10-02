@@ -71,6 +71,20 @@
                         </LinearLayout>
                     </HorizontalScrollView>
                     <TextView style="@style/CsyncAppearanceHeading" android:layout_marginTop="20dp"
+                        android:text="Home banner"/>
+                    <!-- The chosen banner large and moving, its name, then every banner small to pick from. -->
+                    <com.csync.hub.HeroView android:id="@+id/set_hero_preview"
+                        android:layout_width="match_parent" android:layout_height="140dp"
+                        android:layout_marginTop="8dp"/>
+                    <TextView android:id="@+id/set_hero_name" android:layout_width="match_parent"
+                        android:layout_height="wrap_content" android:layout_marginTop="6dp"
+                        style="@style/Kit.Text.RowSub"/>
+                    <HorizontalScrollView android:id="@+id/set_hero_scroll" android:layout_width="match_parent"
+                        android:layout_height="wrap_content" android:layout_marginTop="6dp" android:scrollbars="none">
+                        <LinearLayout android:id="@+id/set_hero_row" android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" android:orientation="horizontal"/>
+                    </HorizontalScrollView>
+                    <TextView style="@style/CsyncAppearanceHeading" android:layout_marginTop="20dp"
                         android:text="App icon"/>
                     <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:layout_marginTop="8dp" android:scrollbars="none">

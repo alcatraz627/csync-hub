@@ -55,6 +55,13 @@ public final class Prefs {
         p(c).edit().putString("accent", accent).apply();
     }
 
+    /** The Home banner's painter, by a stable id; an id no longer offered falls back in HeroPainters. */
+    static String heroVariant(Context c) { return p(c).getString("hero_variant", "orbit"); }
+
+    static void saveHeroVariant(Context c, String id) {
+        p(c).edit().putString("hero_variant", id).apply();
+    }
+
     static int customAccent(Context c) {
         return p(c).getInt("custom_accent", 0xFF8B5CF6);
     }
