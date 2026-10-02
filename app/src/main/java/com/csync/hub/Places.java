@@ -56,6 +56,7 @@ final class Places {
         add("connection", "Connection", R.drawable.csi_wifi, "settings");
         add("guide", "Assistant guide", R.drawable.csi_help, "more");
         add("help", "About", R.drawable.csi_info, "more");
+        add("showcase", "Design system", R.drawable.csi_palette, "more");
     }
 
     static Place of(String id) { return ALL.get(id); }
@@ -87,6 +88,7 @@ final class Places {
             case "connection": return "The Pi's address and token";
             case "guide": return "What to ask the assistant";
             case "help": return "Version and your Pi";
+            case "showcase": return "Every part the app is built from";
             default: return null;
         }
     }

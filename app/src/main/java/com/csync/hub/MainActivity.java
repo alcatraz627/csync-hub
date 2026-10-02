@@ -309,6 +309,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             case "connection": revealSettingsDetail(R.id.settings_connection_detail); break;
             case "guide": showMoreDetail(1); break;
             case "about": showMoreDetail(2); break;
+            case "showcase": showMoreDetail(3); break;
             default:
         }
     }
@@ -383,7 +384,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             case 3: return toolsDetail == 1 ? "process" : toolsDetail == 2 ? "widgets" : "pi";
             case 4: return settingsDetail != 0 ? "connection" : "settings";
             case 5: return "camera";
-            case 6: return moreDetail == 1 ? "guide" : moreDetail == 2 ? "help" : "more";
+            case 6: return moreDetail == 1 ? "guide" : moreDetail == 2 ? "help" : moreDetail == 3 ? "showcase" : "more";
             default: return "home";
         }
     }
@@ -514,6 +515,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         LinearLayout group = Kit.group(page);
         Kit.bindRow(Kit.addRow(group), Kit.Icon.DISPLAY, "Pi screen", "Play, show or share on the screen", null, true)
             .setOnClickListener(v -> startActivity(new Intent(this, MediaActivity.class).putExtra("player_target", "pi")));
+        Kit.bindRow(Kit.addRow(group), Kit.Icon.FILES, "Browse Pi media", "Drives, files and playback", null, true)
+            .setOnClickListener(v -> startActivity(new Intent(this, MediaActivity.class)));
         // The camera opened from here is the Pi page's child, so Back climbs to this page, not Home.
         Kit.bindRow(Kit.addRow(group), Kit.Icon.CAMERA, "Pi camera", "Live picture, photos and recordings", null, true)
             .setOnClickListener(v -> { fromHome = false; show(5); });
@@ -671,10 +674,94 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageMore.findViewById(R.id.more_overview).setVisibility(detail == 0 ? View.VISIBLE : View.GONE);
         pageMore.findViewById(R.id.more_guide).setVisibility(detail == 1 ? View.VISIBLE : View.GONE);
         pageMore.findViewById(R.id.more_help).setVisibility(detail == 2 ? View.VISIBLE : View.GONE);
-        Kit.pageTop(pageMore.findViewById(R.id.more_crumb), detail == 0 ? "more" : detail == 1 ? "guide" : "help", this::openPlace, visitBack());
+        pageMore.findViewById(R.id.more_showcase).setVisibility(detail == 3 ? View.VISIBLE : View.GONE);
+        Kit.pageTop(pageMore.findViewById(R.id.more_crumb),
+            detail == 0 ? "more" : detail == 1 ? "guide" : detail == 2 ? "help" : "showcase", this::openPlace, visitBack());
         if (resumed) arrive();
         if (detail == 1) renderGuide();
         if (detail == 2) renderHelp();
+        if (detail == 3) renderShowcase();
+    }
+
+    /**
+     * The design system as the app draws it: every shared part, live, in the current theme and
+     * colour, so a change to one part can be seen everywhere it is used.
+     */
+    private void renderShowcase() {
+        LinearLayout page = pageMore.findViewById(R.id.showcase_rows);
+        page.removeAllViews();
+        Kit.label(page, "Banner");
+        HeroView hero = new HeroView(this);
+        hero.setNodes(heroNodes());
+        page.addView(hero, new LinearLayout.LayoutParams(-1, dp(140)));
+
+        Kit.label(page, "Stat cards");
+        Kit.statCards(page, java.util.Arrays.asList(new Kit.Stat(R.drawable.csi_cpu, "CPU", "24%", 24),
+            new Kit.Stat(R.drawable.csi_ram, "RAM", "61%", 61), new Kit.Stat(R.drawable.csi_menu, "Running", "412", -1)));
+
+        Kit.label(page, "Rows");
+        LinearLayout group = Kit.group(page);
+        Kit.bindRow(Kit.addRow(group), Kit.Icon.DEVICE, "A row that opens a page", "Its subtitle says what is there", null, true);
+        View status = Kit.addRow(group);
+        Kit.bindRow(status, Kit.Icon.DISPLAY, "A row with a status", "Good, warning, bad and idle", null, false);
+        Kit.rowStatus(status, Kit.Status.GOOD, "Online");
+        View toggle = Kit.addRow(group);
+        Kit.bindRow(toggle, Kit.Icon.LOOP, "A row with a switch", "The whole row flips it", null, false);
+        Kit.rowToggle(toggle, true, on -> { });
+        View action = Kit.addRow(group);
+        Kit.bindRow(action, Kit.Icon.FILE, "A row with its own action", null, "12 MB", false);
+        Kit.rowAction(action, R.drawable.csi_trash, "Remove", v -> toast("The row's own action"));
+
+        Kit.label(page, "Statuses");
+        LinearLayout states = Kit.group(page);
+        Kit.Status[] all = {Kit.Status.GOOD, Kit.Status.WARN, Kit.Status.BAD, Kit.Status.IDLE};
+        String[] words = {"Good", "Warning", "Bad", "Idle"};
+        for (int i = 0; i < all.length; i++) {
+            View row = Kit.addRow(states);
+            Kit.bindRow(row, Kit.Icon.DEVICE, words[i], null, null, false);
+            Kit.rowStatus(row, all[i], words[i]);
+        }
+
+        Kit.label(page, "Choice");
+        LinearLayout segments = new LinearLayout(this);
+        page.addView(segments, new LinearLayout.LayoutParams(-1, -2));
+        Kit.segmented(segments, new int[]{R.drawable.csi_system, R.drawable.csi_sun, R.drawable.csi_moon},
+            new String[]{"System", "Light", "Dark"}, 0, i -> { });
+
+        Kit.label(page, "Buttons");
+        LinearLayout buttons = new LinearLayout(this);
+        buttons.setOrientation(LinearLayout.VERTICAL);
+        page.addView(buttons, new LinearLayout.LayoutParams(-1, -2));
+        buttons.addView(Kit.primaryButton(this, Kit.Icon.DISPLAY, "Primary", () -> toast("Primary")));
+        LinearLayout.LayoutParams gap = new LinearLayout.LayoutParams(-1, -2);
+        gap.topMargin = dp(8);
+        buttons.addView(Kit.tonalButton(this, R.drawable.csi_check, "Tonal, inside a drawer", () -> toast("Tonal")), gap);
+        LinearLayout.LayoutParams gap2 = new LinearLayout.LayoutParams(-1, -2);
+        gap2.topMargin = dp(8);
+        buttons.addView(Kit.button(this, R.drawable.csi_plus, "Plain", R.color.text, () -> toast("Plain")), gap2);
+
+        Kit.label(page, "Meters");
+        LinearLayout meters = Kit.group(page);
+        Kit.meterRow(meters, Kit.Icon.DEVICE, "busy app", 42, 18);
+        Kit.meterRow(meters, Kit.Icon.DEVICE, "quiet app", 3, 6);
+
+        Kit.label(page, "Facts");
+        Kit.facts(page, java.util.Arrays.asList(new String[]{"Version", appVersion()}, new String[]{"Accent", Prefs.accent(this)}));
+
+        Kit.label(page, "Drawers");
+        LinearLayout drawers = Kit.group(page);
+        Kit.bindRow(Kit.addRow(drawers), R.drawable.csi_menu, "A drawer of choices", null, null, true).setOnClickListener(v ->
+            Kit.sheet(this, "A drawer", "Picking a choice closes it",
+                new Kit.Action(Kit.Icon.PHOTO, "First choice", "With a subtitle", () -> toast("First")),
+                new Kit.Action(Kit.Icon.VIDEO, "Second choice", null, () -> toast("Second"))));
+        Kit.bindRow(Kit.addRow(drawers), R.drawable.csi_trash, "Asking before something is lost", null, null, true).setOnClickListener(v ->
+            Kit.confirm(this, "Delete this?", "It is removed for good.", R.drawable.csi_trash, "Delete", () -> toast("Deleted")));
+
+        Kit.label(page, "Empty state");
+        LinearLayout empty = new LinearLayout(this);
+        empty.setOrientation(LinearLayout.VERTICAL);
+        page.addView(empty, new LinearLayout.LayoutParams(-1, -2));
+        Kit.empty(empty, Kit.Icon.NOTES, "Nothing here yet", "What to do to fill it", null);
     }
 
     /**
@@ -700,6 +787,10 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         group = Kit.group(page);
         Kit.bindRow(Kit.addRow(group), R.drawable.csi_help, "Assistant guide", "What you can ask the Pi assistant", null, true)
             .setOnClickListener(v -> showMoreDetail(1));
+        Kit.bindRow(Kit.addRow(group), R.drawable.csi_history, "Roadmap", "What is planned next", null, true)
+            .setOnClickListener(v -> openMediaModal("/media/tasks.md", "markdown", "tasks.md"));
+        Kit.bindRow(Kit.addRow(group), R.drawable.csi_palette, "Design system", "Every part the app is built from", null, true)
+            .setOnClickListener(v -> showMoreDetail(3));
         Kit.bindRow(Kit.addRow(group), R.drawable.csi_info, "About", "Version " + appVersion(), null, true)
             .setOnClickListener(v -> showMoreDetail(2));
     }
@@ -751,9 +842,25 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                 Kit.bindRow(Kit.addRow(group), Kit.Icon.CHAT, ask, null, null, true).setOnClickListener(v -> tryAsk(ask));
             }
         }
+        // What it can use, read from the Pi, drawn the same way as Chat's Tools view.
+        LinearLayout tools = new LinearLayout(this);
+        tools.setOrientation(LinearLayout.VERTICAL);
+        page.addView(tools, new LinearLayout.LayoutParams(-1, -2));
+        final String ip = Prefs.assistIp(this), token = Prefs.token(this);
+        if (!ip.isEmpty() && !token.isEmpty()) new Thread(() -> {
+            JSONArray observed = null;
+            try { observed = MeshClient.capabilities(ip, token); } catch (Exception ignored) { }
+            JSONArray got = observed;
+            ui.post(() -> {
+                if (current != 6 || moreDetail != 1 || got == null || got.length() == 0) return;
+                tools.removeAllViews();
+                Kit.label(tools, "What it can use");
+                drawToolGroups(tools, got);
+            });
+        }, "guide-tools").start();
         LinearLayout.LayoutParams below = new LinearLayout.LayoutParams(-2, -2);
         below.topMargin = dp(18);
-        page.addView(Kit.button(this, Kit.Icon.TOOLS, "See what it can use", R.color.text, () -> {
+        page.addView(Kit.button(this, Kit.Icon.TOOLS, "Open in Chat", R.color.text, () -> {
             ((com.google.android.material.bottomnavigation.BottomNavigationView) findViewById(R.id.nav))
                 .setSelectedItemId(R.id.nav_chat);
             showChatList();
@@ -3302,6 +3409,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             case "list_peers": return new String[]{"Devices and files", "Your devices", "Named devices and whether each is online"};
             case "send_to_peer": return new String[]{"Devices and files", "Send to a device", "Send text to a named device"};
             case "send_file": return new String[]{"Devices and files", "Share a Pi file", "Bring a file from the Pi into the conversation"};
+            case "phone_diagnostics": return new String[]{"Devices and files", "Phone slowdown", "Read what slows this phone and why"};
             case "notes": return new String[]{"Notes", "Notes", "Read, write and delete notes on the Pi"};
             case "list_skills": case "load_skill":
                 return new String[]{"Skills and commands", "Saved skills", "List and read saved skills"};
@@ -3326,26 +3434,31 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                 if (observed == null) { sayChatTools("The Pi assistant did not answer", "Check Tools under More"); return; }
                 if (observed.length() == 0) { sayChatTools("The assistant has no tools", "It can still answer questions"); return; }
                 chatToolsList.removeAllViews();
-                String[] order = {"Media", "Camera", "Devices and files", "Notes", "Skills and commands", "Other"};
-                int[] icons = {Kit.Icon.MEDIA, Kit.Icon.CAMERA, Kit.Icon.DEVICE, Kit.Icon.NOTES, Kit.Icon.TOOLS, Kit.Icon.TOOLS};
-                for (int g = 0; g < order.length; g++) {
-                    LinearLayout group = null;
-                    java.util.Set<String> listed = new java.util.HashSet<>();
-                    for (int i = 0; i < observed.length(); i++) {
-                        JSONObject tool = observed.optJSONObject(i);
-                        if (tool == null) continue;
-                        String[] line = chatToolLine(tool.optString("name"));
-                        if (line == null) line = new String[]{"Other", chatToolTitle(tool.optString("name")), "Available through the Pi assistant"};
-                        if (!line[0].equals(order[g]) || !listed.add(line[1])) continue;
-                        if (group == null) {
-                            Kit.label(chatToolsList, order[g]);
-                            group = Kit.group(chatToolsList);
-                        }
-                        Kit.bindRow(Kit.addRow(group), icons[g], line[1], line[2], null, false).setClickable(false);
-                    }
-                }
+                drawToolGroups(chatToolsList, observed);
             });
         }, "chat-tools").start();
+    }
+
+    /** What the assistant can use, in its groups, one line per job; Chat's Tools view and the guide share it. */
+    private void drawToolGroups(LinearLayout host, JSONArray observed) {
+        String[] order = {"Media", "Camera", "Devices and files", "Notes", "Skills and commands", "Other"};
+        int[] icons = {Kit.Icon.MEDIA, Kit.Icon.CAMERA, Kit.Icon.DEVICE, Kit.Icon.NOTES, Kit.Icon.TOOLS, Kit.Icon.TOOLS};
+        for (int g = 0; g < order.length; g++) {
+            LinearLayout group = null;
+            java.util.Set<String> listed = new java.util.HashSet<>();
+            for (int i = 0; i < observed.length(); i++) {
+                JSONObject tool = observed.optJSONObject(i);
+                if (tool == null) continue;
+                String[] line = chatToolLine(tool.optString("name"));
+                if (line == null) line = new String[]{"Other", chatToolTitle(tool.optString("name")), "Available through the Pi assistant"};
+                if (!line[0].equals(order[g]) || !listed.add(line[1])) continue;
+                if (group == null) {
+                    Kit.label(host, order[g]);
+                    group = Kit.group(host);
+                }
+                Kit.bindRow(Kit.addRow(group), icons[g], line[1], line[2], null, false).setClickable(false);
+            }
+        }
     }
 
     private String chatToolTitle(String name) {

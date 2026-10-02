@@ -647,10 +647,16 @@ public final class NotesActivity extends AppCompatActivity {
             Kit.bindRow(Kit.addRow(Kit.group(rows)), ItemActions.icon(ItemActions.kindOf(held.optString("mime"))),
                 held.optString("name", "File"), android.text.format.Formatter.formatShortFileSize(this, held.optLong("size")),
                 null, true).setOnClickListener(v -> pinChoices(pin));
-        } else {
-            link = labelled("Link", "A web address", pin == null ? initialUrl : pin.optString("url"), false);
+        } else if (pin != null && !pin.optString("url").isEmpty() && !pin.optString("content").isEmpty()) {
+            // A pin kept with both a link and words shows both, so editing it cannot drop either.
+            link = labelled("Link", "A web address", pin.optString("url"), false);
             link.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
-            words = labelled("Text", "Some words to keep", pin == null ? initialText : pin.optString("content"), true);
+            words = labelled("Text", "Some words to keep", pin.optString("content"), true);
+        } else {
+            // One field: a web address is kept as the pin's link, anything else as its words.
+            String start = pin != null ? (pin.optString("url").isEmpty() ? pin.optString("content") : pin.optString("url"))
+                : initialUrl.isEmpty() ? initialText : initialUrl;
+            words = labelled("Link or text", "A web address, or some words to keep", start, true);
         }
         String startTitle = pin != null ? pin.optString("title")
             : initialUrl.isEmpty() ? "" : String.valueOf(Uri.parse(initialUrl).getHost());
@@ -680,11 +686,19 @@ public final class NotesActivity extends AppCompatActivity {
         rows.addView(buttons, below);
     }
 
+    /** One web address and nothing else, the way a copied link looks. */
+    private static boolean isWebAddress(String text) {
+        if (text.isEmpty() || text.contains(" ") || text.contains("\n")) return false;
+        Uri parsed = Uri.parse(text);
+        return ("http".equals(parsed.getScheme()) || "https".equals(parsed.getScheme())) && parsed.getHost() != null;
+    }
+
     private void savePin(JSONObject pin, boolean holdsFile, EditText link, EditText words, EditText name,
                          EditText tagField, EditText about, Runnable done) {
         if (noteSaving) return;
         String url = link == null ? "" : link.getText().toString().trim();
         String content = words == null ? "" : words.getText().toString().trim();
+        if (link == null && isWebAddress(content)) { url = content; content = ""; }
         if (url.isEmpty() && content.isEmpty() && !holdsFile) { words.setError("Add a link or some text"); return; }
         if (!url.isEmpty()) {
             Uri parsed = Uri.parse(url);

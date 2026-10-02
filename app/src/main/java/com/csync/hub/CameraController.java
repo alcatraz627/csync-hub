@@ -384,6 +384,27 @@ final class CameraController {
                         captureCount++;
                     }
                     if (!tiles.isEmpty()) Pictures.grid(captures, tiles, 3);
+                    // How many are kept and the room they take, first; a tap reads the folder again.
+                    long total = 0;
+                    int photos = 0;
+                    for (int i = 0; i < files.length(); i++) {
+                        JSONObject file = files.optJSONObject(i);
+                        if (file == null) continue;
+                        total += file.optLong("bytes");
+                        if (file.optString("name").endsWith(".jpg")) photos++;
+                    }
+                    if (captureCount > 0) {
+                        LinearLayout summary = new LinearLayout(activity);
+                        summary.setOrientation(LinearLayout.VERTICAL);
+                        captures.addView(summary, 0, new LinearLayout.LayoutParams(-1, -2));
+                        View row = Kit.addRow(Kit.group(summary));
+                        int recordings = captureCount - photos;
+                        Kit.bindRow(row, Kit.Icon.FOLDER, "Saved captures",
+                            photos + (photos == 1 ? " photo, " : " photos, ") + recordings + (recordings == 1 ? " recording" : " recordings"),
+                            android.text.format.Formatter.formatShortFileSize(activity, total), false);
+                        Kit.rowAction(row, R.drawable.csi_refresh, "Read the folder again", v -> loadCaptures());
+                        row.setOnClickListener(v -> loadCaptures());
+                    }
                     loadedCapturesWords();
                 });
             } catch (Exception error) {
