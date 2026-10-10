@@ -1150,12 +1150,19 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             boolean media = false, camera = false;
             JSONObject power = null;
             JSONArray drives = null;
-            try { media = client.get("/v1/health").optBoolean("ok"); } catch (Exception ignored) { }
-            try { power = client.get("/v1/diagnostics").optJSONObject("power"); } catch (Exception ignored) { }
-            try { client.get("/v1/camera/status"); camera = true; } catch (Exception ignored) { }
-            try { drives = client.get("/v1/drives").optJSONArray("drives"); } catch (Exception ignored) { }
+            // When the first read cannot even connect, the rest would each wait out the same
+            // timeout in turn, leaving every row on "Checking" for half a minute. Skip them.
+            boolean unreachable = false;
+            try { media = client.get("/v1/health").optBoolean("ok"); }
+            catch (java.net.ConnectException | java.net.SocketTimeoutException | java.net.UnknownHostException down) { unreachable = true; }
+            catch (Exception ignored) { }
             JSONObject busy = null;
-            try { busy = client.get("/v1/system"); } catch (Exception ignored) { }
+            if (!unreachable) {
+                try { power = client.get("/v1/diagnostics").optJSONObject("power"); } catch (Exception ignored) { }
+                try { client.get("/v1/camera/status"); camera = true; } catch (Exception ignored) { }
+                try { drives = client.get("/v1/drives").optJSONArray("drives"); } catch (Exception ignored) { }
+                try { busy = client.get("/v1/system"); } catch (Exception ignored) { }
+            }
             final JSONObject reading = busy;
             ui.post(() -> showPiBusy(reading));
             boolean assistant = MeshClient.reachable(host, MeshClient.ASSIST_PORT);

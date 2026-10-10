@@ -55,6 +55,8 @@ public final class NotesActivity extends AppCompatActivity {
     private EditText title, body, search;
     private JSONArray listedNotes, listedPins;
     private boolean pinsAvailable = true;
+    // Why the last notes read failed, or null when it did not; drives the unreachable state.
+    private String notesError;
     private MediaClient client;
     private Page page = Page.LIST;
     // Which of the two views the list shows, and whether its search field is open.
@@ -330,7 +332,8 @@ public final class NotesActivity extends AppCompatActivity {
             renderListRows();
             return;
         }
-        if (listedNotes == null) say("Reading from the Pi");
+        // A background reload under the unreachable state stays quiet; "Try again" clears the error first.
+        if (listedNotes == null && notesError == null) say("Reading from the Pi");
         new Thread(() -> {
             try {
                 String route = "/v1/notes" + (query.isEmpty() ? "" : "?q=" + MediaClient.enc(query));
@@ -338,14 +341,17 @@ public final class NotesActivity extends AppCompatActivity {
                 ui.post(() -> {
                     if (request != noteSearchGeneration || page != Page.LIST) return;
                     listedNotes = notes;
+                    notesError = null;
                     say(null);
                     renderListRows();
                     if ((sharedImage != null || sharedFile != null) && !sharedPrompted) chooseSharedNote();
                 });
             } catch (Exception error) {
                 ui.post(() -> {
-                    if (request == noteSearchGeneration && page == Page.LIST)
-                        say("Notes could not be read from the Pi. " + error.getMessage());
+                    if (request != noteSearchGeneration || page != Page.LIST) return;
+                    notesError = whyUnreached(error);
+                    say(null);
+                    renderListRows();
                 });
             }
         }, "csync-note-search").start();
@@ -379,6 +385,17 @@ public final class NotesActivity extends AppCompatActivity {
     }
 
     private void renderNotes(String query) {
+        if (notesError != null) {
+            // Name the address tried: a wrong saved address and a Pi that is down look alike otherwise.
+            Kit.empty(rows, Kit.Icon.NOTES, "The Pi did not answer",
+                notesError + " Is Tailscale on?",
+                Kit.button(this, R.drawable.csi_refresh, "Try again", R.color.text, () -> {
+                    notesError = null;
+                    renderListRows();
+                    loadNotes(query);
+                }));
+            return;
+        }
         if (listedNotes == null) return;
         if (listedNotes.length() == 0) {
             if (query.isEmpty()) Kit.empty(rows, Kit.Icon.NOTES, "No notes yet",
@@ -400,6 +417,15 @@ public final class NotesActivity extends AppCompatActivity {
             Kit.bindRow(Kit.addRow(group), Kit.Icon.NOTES, item.optString("title", "Untitled"), sub, end, true)
                 .setOnClickListener(v -> loadNote(id));
         }
+    }
+
+    /** One short sentence for why the Pi was not reached, naming the address tried. */
+    private String whyUnreached(Exception error) {
+        String host = Prefs.assistIp(this);
+        if (error instanceof java.net.UnknownHostException) return "Could not find " + host + ".";
+        if (error instanceof java.net.SocketTimeoutException || error instanceof java.net.ConnectException)
+            return "Nothing answered at " + host + ".";
+        return "Could not read notes from " + host + ".";
     }
 
     /** The name a pin goes by: its own title, else the site, else its first line. */

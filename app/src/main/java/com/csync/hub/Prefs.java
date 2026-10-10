@@ -20,9 +20,17 @@ public final class Prefs {
         p(c).edit().putString("home_ip", ip.trim()).putString("token", token.trim()).apply();
     }
 
-    // The assistant peer (the Pi running csync-assist). Defaults to the MagicDNS
-    // name, not a raw IP, so it keeps resolving if the Pi's tailnet IP changes.
-    static String assistIp(Context c) { return p(c).getString("assist_ip", "raspberrypi"); }
+    // The assistant peer (the Pi running csync-assist). Defaults to the Pi's tailnet IP,
+    // not its MagicDNS name: a phone with Tailscale DNS off (or Private DNS on) cannot
+    // resolve "raspberrypi" and the app then reads the Pi as down. A tailnet IP is fixed
+    // per node, so it only changes if the Pi is re-registered.
+    static final String PI_TAILNET_IP = "100.65.188.9";
+
+    static String assistIp(Context c) {
+        String saved = p(c).getString("assist_ip", "").trim();
+        // "raspberrypi" was the old default and some installs saved it from Settings.
+        return saved.isEmpty() || saved.equals("raspberrypi") ? PI_TAILNET_IP : saved;
+    }
 
     static void saveAssistIp(Context c, String ip) {
         p(c).edit().putString("assist_ip", ip.trim()).apply();
