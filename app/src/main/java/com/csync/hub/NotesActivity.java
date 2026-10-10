@@ -424,7 +424,46 @@ public final class NotesActivity extends AppCompatActivity {
             Integer tint = noteColor(item.optString("color"));
             if (tint != null) ((android.widget.ImageView) row.findViewById(R.id.kit_icon)).setColorFilter(tint);
             row.setOnClickListener(v -> loadNote(id));
+            row.setOnLongClickListener(v -> { metaSheet(item); return true; });
         }
+    }
+
+    private static final String[] COLORS = { "red", "orange", "yellow", "green", "teal", "blue", "purple", "pink" };
+
+    /** Long-press on a note: pin it, or give it a colour, as Switchboard's right-click does. */
+    private void metaSheet(JSONObject item) {
+        String id = item.optString("id"), current = item.optString("color");
+        boolean pinned = item.optBoolean("pinned");
+        java.util.List<Kit.Action> pin = new java.util.ArrayList<>();
+        pin.add(new Kit.Action(R.drawable.ic_pin, pinned ? "Unpin" : "Pin", pinned ? "Leave the top of the list" : "Keep it at the top of the list",
+            () -> setMeta(id, "pinned", !pinned)));
+        java.util.List<Kit.Action> colours = new java.util.ArrayList<>();
+        for (String c : COLORS)
+            colours.add(new Kit.Action(Kit.Icon.NOTES, Character.toUpperCase(c.charAt(0)) + c.substring(1),
+                c.equals(current) ? "Its colour now" : null, () -> setMeta(id, "color", c)));
+        if (!current.isEmpty()) colours.add(new Kit.Action(Kit.Icon.NOTES, "No colour", null, () -> setMeta(id, "color", "")));
+        java.util.List<Kit.Section> sections = new java.util.ArrayList<>();
+        sections.add(new Kit.Section("Pin", pin));
+        sections.add(new Kit.Section("Colour", colours));
+        Kit.sheet(this, item.optString("title", "Note"), null, sections);
+    }
+
+    /** Saves a colour or pin on the Pi, then shows the note as the Pi now has it. */
+    private void setMeta(String id, String key, Object value) {
+        task(() -> {
+            JSONObject note = client.put("/v1/notes/" + MediaClient.enc(id) + "/meta", new JSONObject().put(key, value)).getJSONObject("note");
+            ui.post(() -> {
+                for (int i = 0; listedNotes != null && i < listedNotes.length(); i++) {
+                    JSONObject n = listedNotes.optJSONObject(i);
+                    if (n == null || !id.equals(n.optString("id"))) continue;
+                    try {
+                        n.put("pinned", note.optBoolean("pinned"));
+                        if (note.has("color")) n.put("color", note.optString("color")); else n.remove("color");
+                    } catch (org.json.JSONException ignored) { }
+                }
+                renderListRows();
+            });
+        });
     }
 
     /** The eight tag colours by name, the macOS system set Switchboard uses; null for none. */
