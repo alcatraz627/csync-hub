@@ -393,8 +393,11 @@ public final class NotesActivity extends AppCompatActivity {
             if (item == null) continue;
             String id = item.optString("id");
             int kept = item.optInt("items");
-            Kit.bindRow(Kit.addRow(group), Kit.Icon.NOTES, item.optString("title", "Untitled"),
-                edited(item.optLong("updatedAt")), kept > 0 ? plural(kept, "item", "items") : null, true)
+            // a note an agent wrote says so; one edited on two devices apart says both sides are in it
+            String agent = item.optString("agent");
+            String sub = edited(item.optLong("updatedAt")) + (agent.isEmpty() ? "" : " · by " + agent);
+            String end = item.optBoolean("conflicted") ? "both sides" : kept > 0 ? plural(kept, "item", "items") : null;
+            Kit.bindRow(Kit.addRow(group), Kit.Icon.NOTES, item.optString("title", "Untitled"), sub, end, true)
                 .setOnClickListener(v -> loadNote(id));
         }
     }
@@ -1076,6 +1079,8 @@ public final class NotesActivity extends AppCompatActivity {
                     client.put("/v1/notes/" + MediaClient.enc(id), data.put("expectedRevision", expected));
                 JSONObject saved = result.getJSONObject("note");
                 ui.post(() -> {
+                    // a save on top of an edit made elsewhere is kept, both versions in the body, marked
+                    if (saved.optBoolean("conflicted")) say("Saved. It changed elsewhere too: both versions are in the note, marked.");
                     if (sharedImage != null || sharedFile != null) {
                         // Leave the editor first, so what arrives lands on the saved note's page.
                         showNote(saved);
