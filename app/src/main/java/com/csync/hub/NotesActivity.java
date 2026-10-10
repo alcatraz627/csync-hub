@@ -407,17 +407,38 @@ public final class NotesActivity extends AppCompatActivity {
             return;
         }
         LinearLayout group = Kit.group(rows);
-        for (int i = 0; i < listedNotes.length(); i++) {
-            JSONObject item = listedNotes.optJSONObject(i);
-            if (item == null) continue;
+        // pinned first, as Switchboard's quick page keeps them; otherwise the Pi's order (newest edit first)
+        java.util.List<JSONObject> ordered = new java.util.ArrayList<>();
+        for (int i = 0; i < listedNotes.length(); i++) if (listedNotes.optJSONObject(i) != null) ordered.add(listedNotes.optJSONObject(i));
+        java.util.Collections.sort(ordered, (a, b) -> Boolean.compare(b.optBoolean("pinned"), a.optBoolean("pinned")));
+        for (JSONObject item : ordered) {
             String id = item.optString("id");
             int kept = item.optInt("items");
             // a note an agent wrote says so; one edited on two devices apart says both sides are in it
             String agent = item.optString("agent");
             String sub = edited(item.optLong("updatedAt")) + (agent.isEmpty() ? "" : " · by " + agent);
             String end = item.optBoolean("conflicted") ? "both sides" : kept > 0 ? plural(kept, "item", "items") : null;
-            Kit.bindRow(Kit.addRow(group), Kit.Icon.NOTES, item.optString("title", "Untitled"), sub, end, true)
-                .setOnClickListener(v -> loadNote(id));
+            boolean pinned = item.optBoolean("pinned");
+            View row = Kit.bindRow(Kit.addRow(group), pinned ? R.drawable.ic_pin : Kit.Icon.NOTES, item.optString("title", "Untitled"), sub, end, true);
+            // the note's colour tag, as Switchboard and bfb show it
+            Integer tint = noteColor(item.optString("color"));
+            if (tint != null) ((android.widget.ImageView) row.findViewById(R.id.kit_icon)).setColorFilter(tint);
+            row.setOnClickListener(v -> loadNote(id));
+        }
+    }
+
+    /** The eight tag colours by name, the macOS system set Switchboard uses; null for none. */
+    private static Integer noteColor(String name) {
+        switch (name) {
+            case "red": return 0xFFFF3B30;
+            case "orange": return 0xFFFF9500;
+            case "yellow": return 0xFFFFCC00;
+            case "green": return 0xFF34C759;
+            case "teal": return 0xFF30B0C7;
+            case "blue": return 0xFF007AFF;
+            case "purple": return 0xFFAF52DE;
+            case "pink": return 0xFFFF2D55;
+            default: return null;
         }
     }
 
