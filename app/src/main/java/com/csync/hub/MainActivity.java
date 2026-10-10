@@ -1154,7 +1154,10 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             // timeout in turn, leaving every row on "Checking" for half a minute. Skip them.
             boolean unreachable = false;
             try { media = client.get("/v1/health").optBoolean("ok"); }
-            catch (java.net.ConnectException | java.net.SocketTimeoutException | java.net.UnknownHostException down) { unreachable = true; }
+            // connect-phase failures only: refused, no route, network down, unknown host, or a connect timeout;
+            // a Pi that connected but answered slowly is still checked part by part
+            catch (java.net.SocketException | java.net.UnknownHostException down) { unreachable = true; }
+            catch (java.net.SocketTimeoutException slow) { unreachable = String.valueOf(slow.getMessage()).contains("connect"); }
             catch (Exception ignored) { }
             JSONObject busy = null;
             if (!unreachable) {
@@ -1165,6 +1168,16 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             }
             final JSONObject reading = busy;
             ui.post(() -> showPiBusy(reading));
+            if (unreachable) {
+                // nothing more to wait for: every part says it was not checked, at once
+                ui.post(() -> {
+                    for (int i = 0; i < TOOL_PARTS.length; i++)
+                        setToolPart(i, Kit.Status.IDLE, "Not checked", "The Pi did not answer at " + host + ", so this was not checked.");
+                    setToolsLead(Kit.Status.BAD, "The Pi cannot be reached");
+                    pulled.setRefreshing(false);
+                });
+                return;
+            }
             boolean assistant = MeshClient.reachable(host, MeshClient.ASSIST_PORT);
             final boolean mediaUp = media, cameraUp = camera, assistantUp = assistant;
             final JSONObject currentPower = power;
@@ -2902,7 +2915,9 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         connToken = pageSettings.findViewById(R.id.set_token);
         connStatus = pageSettings.findViewById(R.id.set_conn_status);
         connHome.setText(Prefs.homeIp(this));
-        connAssist.setText(Prefs.assistIp(this));
+        // only what the owner saved; the default shows as the hint, so Save never pins it
+        connAssist.setText(Prefs.savedAssistIp(this));
+        connAssist.setHint(Prefs.PI_TAILNET_IP);
         connToken.setText(Prefs.token(this));
         pageSettings.findViewById(R.id.set_save).setOnClickListener(v -> {
             Prefs.save(this, connHome.getText().toString(), connToken.getText().toString());

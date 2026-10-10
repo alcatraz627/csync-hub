@@ -32,6 +32,12 @@ public final class Prefs {
         return saved.isEmpty() || saved.equals("raspberrypi") ? PI_TAILNET_IP : saved;
     }
 
+    /** The address the owner typed in Settings, empty when they never set one. */
+    static String savedAssistIp(Context c) {
+        String saved = p(c).getString("assist_ip", "").trim();
+        return saved.equals("raspberrypi") ? "" : saved;
+    }
+
     static void saveAssistIp(Context c, String ip) {
         p(c).edit().putString("assist_ip", ip.trim()).apply();
     }

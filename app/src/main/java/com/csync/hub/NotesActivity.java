@@ -349,6 +349,8 @@ public final class NotesActivity extends AppCompatActivity {
             } catch (Exception error) {
                 ui.post(() -> {
                     if (request != noteSearchGeneration || page != Page.LIST) return;
+                    // a list already on screen stays; only a first read with nothing to show gets the error state
+                    if (listedNotes != null) { say("Could not refresh. " + whyUnreached(error)); return; }
                     notesError = whyUnreached(error);
                     say(null);
                     renderListRows();
