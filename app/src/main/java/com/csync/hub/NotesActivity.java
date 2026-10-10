@@ -440,7 +440,7 @@ public final class NotesActivity extends AppCompatActivity {
         java.util.List<Kit.Action> colours = new java.util.ArrayList<>();
         for (String c : COLORS)
             colours.add(new Kit.Action(Kit.Icon.NOTES, Character.toUpperCase(c.charAt(0)) + c.substring(1),
-                c.equals(current) ? "Its colour now" : null, () -> setMeta(id, "color", c)));
+                c.equals(current) ? "Its colour now" : null, () -> setMeta(id, "color", c)).tint(noteColor(c)));
         if (!current.isEmpty()) colours.add(new Kit.Action(Kit.Icon.NOTES, "No colour", null, () -> setMeta(id, "color", "")));
         java.util.List<Kit.Section> sections = new java.util.ArrayList<>();
         sections.add(new Kit.Section("Pin", pin));

@@ -207,6 +207,9 @@ final class Kit {
             this.icon = icon; this.label = label; this.sub = sub; this.run = run; this.opens = opens;
         }
         Action value(String now) { value = now; return this; }
+        // A colour for the icon when the choice IS a colour (a note's tag); null keeps the row's own.
+        Integer tint;
+        Action tint(int color) { tint = color; return this; }
     }
 
     /** A labelled set of choices. A null label draws the set without a heading. */
@@ -231,6 +234,7 @@ final class Kit {
             for (Action action : section.actions) {
                 View row = addRow(rows);
                 bindRow(row, action.icon, action.label, action.sub, action.value, action.opens);
+            if (action.tint != null) ((ImageView) row.findViewById(R.id.kit_icon)).setColorFilter(action.tint);
                 row.setOnClickListener(v -> { if (before != null) before.run(); action.run.run(); });
             }
         }
@@ -278,6 +282,7 @@ final class Kit {
                 for (Action action : section.actions) {
                     View row = addRow(group);
                     bindRow(row, action.icon, action.label, action.sub, action.value, action.opens);
+            if (action.tint != null) ((ImageView) row.findViewById(R.id.kit_icon)).setColorFilter(action.tint);
                     row.setOnClickListener(v -> {
                         if (action.opens) { dialog.dismiss(); action.run.run(); return; }
                         action.run.run();
@@ -697,6 +702,7 @@ final class Kit {
         for (Action action : actions) {
             View row = addRow(rows);
             bindRow(row, action.icon, action.label, action.sub, action.value, action.opens);
+            if (action.tint != null) ((ImageView) row.findViewById(R.id.kit_icon)).setColorFilter(action.tint);
             row.setOnClickListener(v -> { dialog.dismiss(); action.run.run(); });
         }
         dialog.setContentView(scrolling(body));
