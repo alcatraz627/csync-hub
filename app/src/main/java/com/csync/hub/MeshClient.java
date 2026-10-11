@@ -308,6 +308,53 @@ public final class MeshClient {
         return withRetry(ip, () -> sendOnce(ip, token, from, kind, name, body));
     }
 
+    /**
+     * Send to a device by the name the owner picked. The tailnet address is tried first, since a
+     * phone with Tailscale DNS off cannot resolve the name; the name is the fallback. A device
+     * whose address was never seen is looked up once through the Mac or the Pi. Blocks.
+     */
+    static String sendTo(android.content.Context ctx, String peer, String token, String from,
+                         String kind, String name, byte[] body) throws Exception {
+        java.util.List<String> hosts = new java.util.ArrayList<>();
+        String ip = PeerStore.ip(ctx, peer);
+        if (ip.isEmpty()) ip = lookUpAddress(ctx, peer, token);
+        if (!ip.isEmpty()) hosts.add(ip);
+        hosts.add(peer);
+        Exception last = null;
+        for (int round = 0; round < 3; round++) {
+            for (java.util.Iterator<String> it = hosts.iterator(); it.hasNext(); ) {
+                String host = it.next();
+                try {
+                    return sendOnce(host, token, from, kind, name, body);
+                } catch (java.net.UnknownHostException e) {
+                    last = e;
+                    it.remove(); // a name that does not resolve will not resolve on the next round
+                } catch (java.io.IOException e) {
+                    last = e;
+                }
+            }
+            if (hosts.isEmpty()) break;
+            try { Thread.sleep(1200); } catch (InterruptedException ignore) {}
+        }
+        boolean nameOnly = last instanceof java.net.UnknownHostException && ip.isEmpty();
+        throw new Exception(nameOnly
+            ? "Can't find " + peer + ": its address is not known yet. Connect Tailscale, then check who is online."
+            : "Can't reach " + peer + ". Check that Tailscale is connected on this phone and that " + peer + " is on.");
+    }
+
+    /** Ask the Mac, then the Pi, for the roster and return the address of one device, or "". */
+    private static String lookUpAddress(android.content.Context ctx, String peer, String token) {
+        for (String host : new String[]{Prefs.homeIp(ctx), Prefs.assistIp(ctx)}) {
+            if (host.isEmpty()) continue;
+            try {
+                PeerStore.mergeScan(ctx, peersOnce(host, token));
+                String ip = PeerStore.ip(ctx, peer);
+                if (!ip.isEmpty()) return ip;
+            } catch (Exception unreachable) { /* try the next host */ }
+        }
+        return "";
+    }
+
     private static String sendOnce(String ip, String token, String from, String kind,
                                    String name, byte[] body) throws Exception {
         URL url = new URL("http://" + ip + ":" + PORT + "/send");

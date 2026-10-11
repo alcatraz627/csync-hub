@@ -158,6 +158,49 @@ final class MediaClient {
         } finally { connection.disconnect(); }
     }
 
+    /** Make a new, empty folder inside a folder on a drive. A name already in use is refused. */
+    JSONObject makeFolder(String driveId, String path, String name) throws Exception {
+        return post("/v1/folders", new JSONObject().put("driveId", driveId).put("path", path).put("name", name));
+    }
+
+    /** Save a video, song or picture into a folder on a drive. The Pi never replaces a file of the same name. */
+    JSONObject uploadToFolder(String driveId, String path, String name, long size, InputStream input,
+                              java.util.function.LongConsumer progress) throws Exception {
+        if (size < 1) throw new Exception("That file is empty");
+        HttpURLConnection connection = (HttpURLConnection) new URL(url("/v1/files?driveId=" + enc(driveId) +
+            "&path=" + enc(path) + "&name=" + enc(name))).openConnection();
+        connection.setRequestMethod("POST");
+        connection.setConnectTimeout(5000);
+        connection.setReadTimeout(30000);
+        connection.setRequestProperty("X-Csync-Token", token);
+        connection.setRequestProperty("Content-Type", "application/octet-stream");
+        connection.setDoOutput(true);
+        connection.setFixedLengthStreamingMode(size);
+        try {
+            try (OutputStream out = connection.getOutputStream()) {
+                byte[] buffer = new byte[65536];
+                long sent = 0;
+                while (sent < size) {
+                    int count = input.read(buffer, 0, (int) Math.min(buffer.length, size - sent));
+                    if (count < 0) throw new Exception("The selected file ended during upload");
+                    out.write(buffer, 0, count);
+                    sent += count;
+                    progress.accept(sent);
+                }
+            }
+            int status = connection.getResponseCode();
+            InputStream response = status < 400 ? connection.getInputStream() : connection.getErrorStream();
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            byte[] chunk = new byte[4096];
+            int count;
+            while ((count = response.read(chunk)) != -1) output.write(chunk, 0, count);
+            JSONObject result = new JSONObject(output.toString("UTF-8"));
+            if (status >= 400) throw new MediaException(result.optString("code", "MEDIA_ERROR"),
+                result.optString("message", "The file could not be saved on the Pi"));
+            return result;
+        } finally { connection.disconnect(); }
+    }
+
     byte[] getBytes(String path, int maxBytes) throws Exception {
         HttpURLConnection connection = (HttpURLConnection) new URL(url(path)).openConnection();
         connection.setConnectTimeout(5000);

@@ -223,6 +223,24 @@ final class Kit {
      * {@code before} runs ahead of whichever choice is tapped; a drawer uses it to close itself.
      */
     static void sections(ViewGroup parent, java.util.List<Section> sections, Runnable before) {
+        sections(parent, sections, before, false);
+    }
+
+    /**
+     * Make the words on a row selectable: a long press selects and offers the system Copy. A tap
+     * still opens the row, because the words pass it on.
+     */
+    static void selectable(View row) {
+        for (int id : new int[]{R.id.kit_title, R.id.kit_sub}) {
+            TextView words = row.findViewById(id);
+            if (words == null) continue;
+            words.setTextIsSelectable(true);
+            words.setOnClickListener(v -> row.performClick());
+        }
+    }
+
+    /** The same, with {@code selectable} to let the owner select and copy any of the words. */
+    static void sections(ViewGroup parent, java.util.List<Section> sections, Runnable before, boolean selectable) {
         boolean first = true;
         for (Section section : sections) {
             if (section.actions.isEmpty()) continue;
@@ -236,6 +254,7 @@ final class Kit {
                 bindRow(row, action.icon, action.label, action.sub, action.value, action.opens);
             if (action.tint != null) ((ImageView) row.findViewById(R.id.kit_icon)).setColorFilter(action.tint);
                 row.setOnClickListener(v -> { if (before != null) before.run(); action.run.run(); });
+                if (selectable) selectable(row);
             }
         }
     }
@@ -243,12 +262,22 @@ final class Kit {
     /** Open a bottom drawer whose choices come in labelled sets. */
     static com.google.android.material.bottomsheet.BottomSheetDialog sheet(
             Context c, CharSequence title, CharSequence sub, java.util.List<Section> sections) {
+        return sheet(c, title, sub, sections, false);
+    }
+
+    /** The same, with every word on it selectable (long press) so any part can be copied. */
+    static com.google.android.material.bottomsheet.BottomSheetDialog sheet(
+            Context c, CharSequence title, CharSequence sub, java.util.List<Section> sections, boolean selectable) {
         com.google.android.material.bottomsheet.BottomSheetDialog dialog =
             new com.google.android.material.bottomsheet.BottomSheetDialog(c);
         View body = LayoutInflater.from(c).inflate(R.layout.kit_sheet, null, false);
         ((TextView) body.findViewById(R.id.kit_title)).setText(title);
         setOptional(body.findViewById(R.id.kit_sub), sub);
-        sections(body.findViewById(R.id.kit_rows), sections, dialog::dismiss);
+        if (selectable) {
+            ((TextView) body.findViewById(R.id.kit_title)).setTextIsSelectable(true);
+            ((TextView) body.findViewById(R.id.kit_sub)).setTextIsSelectable(true);
+        }
+        sections(body.findViewById(R.id.kit_rows), sections, dialog::dismiss, selectable);
         dialog.setContentView(scrolling(body));
         openFully(dialog);
         dialog.show();
@@ -647,6 +676,13 @@ final class Kit {
      */
     static void fieldSheet(Context c, CharSequence title, CharSequence sub, String hint, String note,
                            int icon, String go, Typed typed) {
+        fieldSheet(c, title, sub, hint, note, icon, go, typed,
+            android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
+    }
+
+    /** The same, with the kind of keyboard named: a name wants ordinary text, not a web address. */
+    static void fieldSheet(Context c, CharSequence title, CharSequence sub, String hint, String note,
+                           int icon, String go, Typed typed, int inputType) {
         com.google.android.material.bottomsheet.BottomSheetDialog dialog =
             new com.google.android.material.bottomsheet.BottomSheetDialog(c);
         View body = LayoutInflater.from(c).inflate(R.layout.kit_sheet, null, false);
@@ -662,7 +698,7 @@ final class Kit {
         field.setBackgroundResource(R.drawable.card_bg);
         field.setPadding(dp(c, 14), dp(c, 12), dp(c, 14), dp(c, 12));
         field.setMinHeight(dp(c, 48));
-        field.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
+        field.setInputType(inputType);
         rows.addView(field, new LinearLayout.LayoutParams(-1, -2));
         if (note != null) {
             TextView help = new TextView(c);
