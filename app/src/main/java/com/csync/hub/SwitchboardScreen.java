@@ -98,8 +98,12 @@ final class SwitchboardScreen {
     private void staleLine(LinearLayout body, long at) {
         TextView line = new TextView(a);
         line.setTextAppearance(R.style.Kit_Text_Meta);
-        line.setText("From " + new java.text.SimpleDateFormat("d MMM, HH:mm", java.util.Locale.getDefault()).format(new java.util.Date(at))
-            + ", the Mac is not answering");
+        // Today's copy says just the time; an older one says the day too.
+        boolean today = android.text.format.DateUtils.isToday(at);
+        String when = new java.text.SimpleDateFormat(today ? "HH:mm" : "d MMM HH:mm", java.util.Locale.getDefault()).format(new java.util.Date(at));
+        line.setText("From " + when + ", the Mac is not answering");
+        line.setSingleLine(true);
+        line.setEllipsize(android.text.TextUtils.TruncateAt.END);
         line.setPadding(Kit.dp(a, 4), Kit.dp(a, 8), Kit.dp(a, 4), 0);
         body.addView(line, new LinearLayout.LayoutParams(-1, -2));
     }
@@ -392,18 +396,25 @@ final class SwitchboardScreen {
         String label = r.optString("label"), note = r.optString("note", "");
         List<Kit.Section> sections = new ArrayList<>();
         JSONArray children = r.optJSONArray("children");
-        List<Kit.Action> facts = new ArrayList<>();
+        // Short facts (When, Source, State, a path) share one card as name and value on a line;
+        // long text (About, a description) keeps a block of its own.
+        List<Kit.Action> facts = new ArrayList<>(), shortFacts = new ArrayList<>(), longFacts = new ArrayList<>();
         for (int i = 0; children != null && i < children.length(); i++) {
             JSONObject child = children.optJSONObject(i);
             if (child == null) continue;
-            String words = child.optString("note", "");
-            facts.add(new Kit.Action(R.drawable.csi_info, child.optString("label"), words.isEmpty() ? null : words,
-                () -> copy(words.isEmpty() ? child.optString("label") : words)));
+            String name = child.optString("label"), words = child.optString("note", "");
+            Kit.Action fact = new Kit.Action(R.drawable.csi_info, name, words.isEmpty() ? null : words,
+                () -> copy(words.isEmpty() ? name : words));
+            facts.add(fact);
+            boolean brief = !words.isEmpty() && words.length() <= 100 && name.length() <= 18 && words.indexOf('\n') < 0;
+            (brief ? shortFacts : longFacts).add(fact);
         }
         // A long drawer opens with Copy all, so it is not hidden below the lines it copies.
         if (!facts.isEmpty()) {
             sections.add(new Kit.Section(null, java.util.Collections.singletonList(copyAll(r))));
-            sections.add(new Kit.Section("Tap to copy a line, hold to select", facts));
+            String hint = "Tap to copy a line, hold to select";
+            if (!shortFacts.isEmpty()) sections.add(new Kit.Section(hint, shortFacts).compact());
+            if (!longFacts.isEmpty()) sections.add(new Kit.Section(shortFacts.isEmpty() ? hint : null, longFacts));
         }
         List<Kit.Action> actions = new ArrayList<>();
         // The Mac's own buttons run on the Mac; Copy is done here, on the phone.
