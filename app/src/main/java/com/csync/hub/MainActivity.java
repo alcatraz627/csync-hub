@@ -48,6 +48,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     private TimerFloaters timerFloaters;
     private TimersScreen timersScreen;
     private RemindersScreen remindersScreen;
+    private SwitchboardScreen switchboardScreen;
     private int current = 0;
     private int moreDetail;
     private int settingsDetail;
@@ -117,6 +118,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         timerFloaters = new TimerFloaters(this, floaterDock, this::openTimer);
         timersScreen = new TimersScreen(this, pageMore.findViewById(R.id.timers_rows));
         remindersScreen = new RemindersScreen(this, pageMore.findViewById(R.id.reminders_rows));
+        switchboardScreen = new SwitchboardScreen(this, pageMore.findViewById(R.id.switchboard_rows),
+            () -> { show(4); revealSettingsDetail(R.id.settings_connection_detail); });
         Timers.migrate(this);
         getOnBackPressedDispatcher().addCallback(this, backInApp);
         // A conversation uses the whole width; every other page stays one column on a wide screen.
@@ -727,10 +730,12 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         pageMore.findViewById(R.id.more_showcase).setVisibility(detail == 3 ? View.VISIBLE : View.GONE);
         pageMore.findViewById(R.id.more_timers).setVisibility(detail == 4 ? View.VISIBLE : View.GONE);
         pageMore.findViewById(R.id.more_reminders).setVisibility(detail == 5 ? View.VISIBLE : View.GONE);
+        pageMore.findViewById(R.id.more_switchboard).setVisibility(detail == 6 ? View.VISIBLE : View.GONE);
         Kit.pageTop(pageMore.findViewById(R.id.more_crumb), morePlace(detail), this::openPlace, visitBack());
         dockTimersHidden();
         if (detail != 4) timersScreen.hide();
         if (detail != 5) remindersScreen.hide();
+        if (detail != 6) switchboardScreen.hide();
         if (resumed) arrive();
         if (detail == 1) renderGuide();
         if (detail == 2) {
@@ -747,6 +752,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         if (detail == 3) renderShowcase();
         if (detail == 4) timersScreen.show(-1);
         if (detail == 5) remindersScreen.show(false);
+        if (detail == 6) switchboardScreen.show();
     }
 
     // The Timers page shows its own timers, so the dock leaves them out there and only there.
@@ -761,6 +767,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             case 3: return "showcase";
             case 4: return "timers";
             case 5: return "reminders";
+            case 6: return "switchboard";
             default: return "more";
         }
     }
@@ -866,6 +873,11 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             .setOnClickListener(v -> showMoreDetail(5));
         Kit.bindRow(Kit.addRow(group), R.drawable.csi_launcher, "Widgets", "Widgets, tiles, shortcuts and the share menu", null, true)
             .setOnClickListener(v -> openPlace("widgets"));
+
+        Kit.label(page, "Your Mac");
+        group = Kit.group(page);
+        Kit.bindRow(Kit.addRow(group), R.drawable.csi_sliders, "Switchboard", "Ledger, queue, plugins, rules and library", null, true)
+            .setOnClickListener(v -> showMoreDetail(6));
 
         Kit.label(page, "This app");
         group = Kit.group(page);
@@ -1129,6 +1141,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             case "camera": show(5); break;
             case "timers": if (current != 6) show(6); showMoreDetail(4); break;
             case "reminders": if (current != 6) show(6); showMoreDetail(5); break;
+            case "switchboard": if (current != 6) show(6); showMoreDetail(6); break;
             default: break;
         }
     }

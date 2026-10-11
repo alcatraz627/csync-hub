@@ -59,6 +59,7 @@ final class Places {
         add("showcase", "Design system", R.drawable.csi_palette, "more");
         add("timers", "Timers", R.drawable.csi_timer, "more");
         add("reminders", "Reminders", R.drawable.csi_bell, "more");
+        add("switchboard", "Switchboard", R.drawable.csi_sliders, "more");
     }
 
     static Place of(String id) { return ALL.get(id); }
@@ -93,6 +94,7 @@ final class Places {
             case "showcase": return "Every part the app is built from";
             case "timers": return "Up to four at once, and saved ones";
             case "reminders": return "Something to remember at a time";
+            case "switchboard": return "Your Mac's ledger, queue, plugins, rules";
             default: return null;
         }
     }
