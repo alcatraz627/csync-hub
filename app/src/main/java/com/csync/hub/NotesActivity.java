@@ -492,16 +492,18 @@ public final class NotesActivity extends AppCompatActivity {
             else Kit.empty(rows, Kit.Icon.SEARCH, "No note matches \"" + query + "\"", null, null);
             return;
         }
-        // Pinned notes in their own section, as Switchboard keeps them; then the rest, newest edit first,
-        // with the note just saved here first even before the Pi's list has caught up with it.
+        // Pinned notes in their own section, as Switchboard keeps them; then the rest. Each keeps the
+        // Pi's order, which is the shared order. Only a note the Pi's list does not hold yet goes first.
         java.util.List<JSONObject> pinnedNotes = new java.util.ArrayList<>(), others = new java.util.ArrayList<>();
         String fresh = justSaved == null || !query.isEmpty() ? null : justSaved.optString("id");
+        boolean freshListed = false;
         for (int i = 0; i < listedNotes.length(); i++) {
             JSONObject n = listedNotes.optJSONObject(i);
-            if (n == null || n.optString("id").equals(fresh) || waitingIds.contains(n.optString("id"))) continue;
+            if (n == null || waitingIds.contains(n.optString("id"))) continue;
+            if (n.optString("id").equals(fresh)) freshListed = true;
             (n.optBoolean("pinned") ? pinnedNotes : others).add(n);
         }
-        if (fresh != null) (justSaved.optBoolean("pinned") ? pinnedNotes : others).add(0, justSaved);
+        if (fresh != null && !freshListed) (justSaved.optBoolean("pinned") ? pinnedNotes : others).add(0, justSaved);
         if (!pinnedNotes.isEmpty()) {
             Kit.label(rows, "Pinned");
             noteRows(Kit.group(rows), pinnedNotes);
@@ -610,8 +612,46 @@ public final class NotesActivity extends AppCompatActivity {
         // the everyday actions first; the eight colours are long and go last
         sections.add(new Kit.Section("Note", acts));
         sections.add(new Kit.Section("Pin", pin));
+        java.util.List<Kit.Action> moves = moveActions(id, pinned);
+        if (!moves.isEmpty()) sections.add(new Kit.Section("Order", moves));
         sections.add(new Kit.Section("Colour", colours));
         Kit.sheet(this, item.optString("title", "Note"), null, sections);
+    }
+
+    /**
+     * Move up, Move down and Move to top for a note, among the notes now on screen that share its pin
+     * group. The Pi settles the order; "after" names the note it should sit under, null for the top.
+     * A note already first has nothing to move up to, and one last has nothing to move down to.
+     */
+    private java.util.List<Kit.Action> moveActions(String id, boolean pinned) {
+        java.util.List<Kit.Action> out = new java.util.ArrayList<>();
+        if (listedNotes == null) return out;
+        java.util.List<String> group = new java.util.ArrayList<>();
+        for (int i = 0; i < listedNotes.length(); i++) {
+            JSONObject n = listedNotes.optJSONObject(i);
+            if (n != null && n.optBoolean("pinned") == pinned && n.optInt("revision") >= 1) group.add(n.optString("id"));
+        }
+        int at = group.indexOf(id);
+        if (at < 0 || group.size() < 2) return out;
+        if (at > 0) {
+            String above = at >= 2 ? group.get(at - 2) : null;
+            out.add(new Kit.Action(R.drawable.csi_move_up, "Move up", "One place higher", () -> moveNote(id, above)));
+        }
+        if (at < group.size() - 1) {
+            String below = group.get(at + 1);
+            out.add(new Kit.Action(R.drawable.csi_move_down, "Move down", "One place lower", () -> moveNote(id, below)));
+        }
+        if (at > 0) out.add(new Kit.Action(R.drawable.csi_move_top, "Move to top",
+            pinned ? "First among the pinned" : "First below the pinned", () -> moveNote(id, null)));
+        return out;
+    }
+
+    /** Ask the Pi to put a note after another (or first), then read the list again in the order it kept. */
+    private void moveNote(String id, String after) {
+        task(() -> {
+            client.put("/v1/notes/" + MediaClient.enc(id) + "/meta", new JSONObject().put("after", after == null ? JSONObject.NULL : after));
+            ui.post(() -> loadNotes(search.getText().toString().trim()));
+        });
     }
 
     /** Every save of a note, newest first; one opens to read, copy or bring back. */
