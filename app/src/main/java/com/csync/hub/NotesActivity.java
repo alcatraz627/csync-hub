@@ -90,6 +90,11 @@ public final class NotesActivity extends AppCompatActivity {
     // The waiting entry being edited again, so a good save can clear it.
     private String editingKey;
     private Runnable retryWaiting;
+    // The strip above the keyboard while a note is being written, and the two buttons that need a saved note.
+    private android.widget.HorizontalScrollView formatBar;
+    private View pictureButton, cameraButton;
+    // Where the camera is told to put the photo it takes.
+    private File cameraFile;
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -146,6 +151,7 @@ public final class NotesActivity extends AppCompatActivity {
         rows.setOrientation(LinearLayout.VERTICAL);
         rows.setPadding(dp(20), 0, dp(20), dp(16));
         scroll.addView(rows);
+        buildFormatBar();
         com.google.android.material.bottomnavigation.BottomNavigationView nav = new SixTabNavigationView(this);
         nav.inflateMenu(R.menu.nav_menu);
         nav.setLabelVisibilityMode(com.google.android.material.navigation.NavigationBarView.LABEL_VISIBILITY_UNLABELED);
@@ -277,6 +283,7 @@ public final class NotesActivity extends AppCompatActivity {
         preview = null;
         modeHost = null;
         keptHost = null;
+        if (formatBar != null) formatBar.setVisibility(View.GONE);
         heading.setText(title);
         heading.setVisibility(title == null ? View.GONE : View.VISIBLE);
         // A long title stays on one line with its middle left out; on a note, tapping it opens the whole title to edit.
@@ -360,7 +367,6 @@ public final class NotesActivity extends AppCompatActivity {
         new Thread(() -> {
             try {
                 // Notes written while the Pi was out of reach go first, so the list below already has them.
-                if (NoteOutbox.any(this)) NoteOutbox.flush(this, client);
                 if (PiQueue.any(this)) PiQueue.flush(this, client);
                 String route = "/v1/notes" + (query.isEmpty() ? "" : "?q=" + MediaClient.enc(query));
                 JSONArray notes = client.get(route).getJSONArray("notes");
@@ -393,9 +399,9 @@ public final class NotesActivity extends AppCompatActivity {
     /** While notes wait for the Pi, look again every half minute without bothering anyone. */
     private void watchWaiting() {
         if (retryWaiting != null) ui.removeCallbacks(retryWaiting);
-        if (!NoteOutbox.any(this) && !PiQueue.any(this)) return;
+        if (!PiQueue.any(this)) return;
         retryWaiting = () -> {
-            if (page == Page.LIST && !showingPins && (NoteOutbox.any(this) || PiQueue.any(this))) loadNotes(search.getText().toString().trim());
+            if (page == Page.LIST && !showingPins && PiQueue.any(this)) loadNotes(search.getText().toString().trim());
         };
         ui.postDelayed(retryWaiting, 30_000);
     }
@@ -432,17 +438,25 @@ public final class NotesActivity extends AppCompatActivity {
         else renderNotes(query);
     }
 
+    private boolean noteSavesWaiting() {
+        JSONArray queued = PiQueue.all(this);
+        for (int i = 0; i < queued.length(); i++) if (queued.optJSONObject(i) != null && PiQueue.isNote(queued.optJSONObject(i))) return true;
+        return false;
+    }
+
     /** The notes written while the Pi was out of reach, each marked, ahead of everything else. Returns their ids. */
     private java.util.Set<String> waitingRows() {
         java.util.Set<String> covered = new java.util.HashSet<>();
-        JSONArray waiting = NoteOutbox.all(this);
+        JSONArray waiting = new JSONArray();
+        JSONArray queued = PiQueue.all(this);
+        for (int i = 0; i < queued.length(); i++) if (queued.optJSONObject(i) != null && PiQueue.isNote(queued.optJSONObject(i))) waiting.put(queued.optJSONObject(i));
         if (waiting.length() == 0) return covered;
         Kit.label(rows, "Not synced yet");
         LinearLayout group = Kit.group(rows);
         for (int i = waiting.length() - 1; i >= 0; i--) {
             JSONObject op = waiting.optJSONObject(i);
             if (op == null) continue;
-            JSONObject note = NoteOutbox.asNote(op);
+            JSONObject note = PiQueue.asNote(op);
             if (!op.optString("id").isEmpty()) covered.add(op.optString("id"));
             String shown = note.optString("title");
             View row = Kit.bindRow(Kit.addRow(group), Kit.Icon.NOTES, shown.isEmpty() ? "Untitled" : shown,
@@ -460,7 +474,7 @@ public final class NotesActivity extends AppCompatActivity {
 
     /** Open a waiting note in the editor with the words that were saved on the phone. */
     private void editWaiting(JSONObject op) {
-        JSONObject note = NoteOutbox.asNote(op);
+        JSONObject note = PiQueue.asNote(op);
         String id = op.optString("id");
         noteId = id.isEmpty() ? null : id;
         revision = op.optInt("expected");
@@ -474,7 +488,8 @@ public final class NotesActivity extends AppCompatActivity {
 
     private void renderNotes(String query) {
         java.util.Set<String> waitingIds = query.isEmpty() ? waitingRows() : new java.util.HashSet<>();
-        boolean haveWaiting = query.isEmpty() && NoteOutbox.any(this);
+        boolean haveWaiting = query.isEmpty() && noteSavesWaiting();
+        java.util.Set<String> unsynced = PiQueue.noteIdsWaiting(this);
         if (notesError != null) {
             // Name the address tried: a wrong saved address and a Pi that is down look alike otherwise.
             Kit.empty(rows, Kit.Icon.NOTES, "The Pi did not answer",
@@ -509,21 +524,22 @@ public final class NotesActivity extends AppCompatActivity {
         if (fresh != null && !freshListed) (justSaved.optBoolean("pinned") ? pinnedNotes : others).add(0, justSaved);
         if (!pinnedNotes.isEmpty()) {
             Kit.label(rows, "Pinned");
-            noteRows(Kit.group(rows), pinnedNotes);
+            noteRows(Kit.group(rows), pinnedNotes, unsynced);
         }
         if (!others.isEmpty()) {
             if (!pinnedNotes.isEmpty()) Kit.label(rows, "Notes");
-            noteRows(Kit.group(rows), others);
+            noteRows(Kit.group(rows), others, unsynced);
         }
     }
 
-    private void noteRows(LinearLayout group, java.util.List<JSONObject> ordered) {
+    private void noteRows(LinearLayout group, java.util.List<JSONObject> ordered, java.util.Set<String> unsynced) {
         for (JSONObject item : ordered) {
             String id = item.optString("id");
             int kept = item.optInt("items");
             // a note an agent wrote says so; one edited on two devices apart says both sides are in it
             String agent = item.optString("agent");
-            String when = edited(item.optLong("updatedAt"));
+            // anything of the note's still waiting for the Pi (a pin, colour, move or reminder) says so in place of its edit time
+            String when = unsynced.contains(id) ? "Not synced yet" : edited(item.optLong("updatedAt"));
             String sub = lead(when, (agent.isEmpty() ? "" : " · by " + agent) + tagWords(item));
             String end = item.optBoolean("conflicted") ? "both sides" : kept > 0 ? plural(kept, "item", "items") : null;
             boolean pinned = item.optBoolean("pinned");
@@ -651,10 +667,8 @@ public final class NotesActivity extends AppCompatActivity {
 
     /** Ask the Pi to put a note after another (or first), then read the list again in the order it kept. */
     private void moveNote(String id, String after) {
-        task(() -> {
-            client.put("/v1/notes/" + MediaClient.enc(id) + "/meta", new JSONObject().put("after", after == null ? JSONObject.NULL : after));
-            ui.post(() -> loadNotes(search.getText().toString().trim()));
-        });
+        try { writeMeta(id, new JSONObject().put("after", after == null ? JSONObject.NULL : after)); }
+        catch (org.json.JSONException impossible) { }
     }
 
     /** Every save of a note, newest first; one opens to read, copy or bring back. */
@@ -828,11 +842,29 @@ public final class NotesActivity extends AppCompatActivity {
                 ui.post(() -> loadNotes(search.getText().toString().trim()));
             } catch (MediaClient.MediaException refused) {
                 // The Pi answered no; there is nothing to retry.
+                ui.post(() -> say(refused.getMessage()));
             } catch (Exception unreached) {
                 PiQueue.put(this, key, "PUT", path, mergeWaiting(key, body));
-                ui.post(this::watchWaiting);
+                ui.post(() -> {
+                    // the row shows what was asked for, marked as not synced, until the Pi answers
+                    showWaitingMeta(id, body);
+                    watchWaiting();
+                });
             }
         });
+    }
+
+    /** Show a pin or colour that is waiting for the Pi on the note's row, which then reads "Not synced yet". */
+    private void showWaitingMeta(String id, JSONObject body) {
+        for (int i = 0; listedNotes != null && i < listedNotes.length(); i++) {
+            JSONObject n = listedNotes.optJSONObject(i);
+            if (n == null || !id.equals(n.optString("id"))) continue;
+            try {
+                if (body.has("pinned")) n.put("pinned", body.optBoolean("pinned"));
+                if (body.has("color")) { if (body.optString("color").isEmpty()) n.remove("color"); else n.put("color", body.optString("color")); }
+            } catch (org.json.JSONException ignored) { }
+        }
+        renderListRows();
     }
 
     /** A waiting meta write for the same note, with this one's fields on top, so one write carries both. */
@@ -870,22 +902,10 @@ public final class NotesActivity extends AppCompatActivity {
         });
     }
 
-    /** Saves a colour or pin on the Pi, then shows the note as the Pi now has it. */
+    /** Saves a colour or pin on the Pi, or leaves it waiting on the phone, then shows the note as the Pi has it. */
     private void setMeta(String id, String key, Object value) {
-        task(() -> {
-            JSONObject note = client.put("/v1/notes/" + MediaClient.enc(id) + "/meta", new JSONObject().put(key, value)).getJSONObject("note");
-            ui.post(() -> {
-                for (int i = 0; listedNotes != null && i < listedNotes.length(); i++) {
-                    JSONObject n = listedNotes.optJSONObject(i);
-                    if (n == null || !id.equals(n.optString("id"))) continue;
-                    try {
-                        n.put("pinned", note.optBoolean("pinned"));
-                        if (note.has("color")) n.put("color", note.optString("color")); else n.remove("color");
-                    } catch (org.json.JSONException ignored) { }
-                }
-                renderListRows();
-            });
-        });
+        try { writeMeta(id, new JSONObject().put(key, value)); }
+        catch (org.json.JSONException impossible) { }
     }
 
     /** The eight tag colours by name, the macOS system set Switchboard uses; null for none. */
@@ -1516,6 +1536,16 @@ public final class NotesActivity extends AppCompatActivity {
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == 45) {
+            File photo = cameraFile;
+            cameraFile = null;
+            if (resultCode == Activity.RESULT_OK && photo != null && photo.length() > 0) addPictureToWords(Uri.fromFile(photo));
+            return;
+        }
+        if (requestCode == 44) {
+            if (resultCode == Activity.RESULT_OK && data != null && data.getData() != null) addPictureToWords(data.getData());
+            return;
+        }
         if (resultCode != Activity.RESULT_OK || data == null || data.getData() == null) return;
         if (noteId == null) {
             // A note not saved yet holds what was picked; the save puts it on the Pi.
@@ -1554,6 +1584,8 @@ public final class NotesActivity extends AppCompatActivity {
         // A long note puts the Save button far below, so the bar carries one as well.
         Kit.topAction(topBar, R.drawable.csi_check, "Save", v -> saveNote());
         title = labelled("Title", "Title", currentTitle, false);
+        wrapTitle(title);
+        showFormatBar();
         modeHost = new LinearLayout(this);
         LinearLayout.LayoutParams modeParams = new LinearLayout.LayoutParams(-1, -2);
         modeParams.topMargin = dp(12);
@@ -1677,7 +1709,172 @@ public final class NotesActivity extends AppCompatActivity {
         drawModes(java.util.Arrays.asList(MODES).indexOf(mode), picked -> setEditorMode(MODES[picked]));
     }
 
-    private static final String NOT_SYNCED = "This note has not synced yet; try again in a minute";
+    /** The title box shows every word, wrapping inside the box; a line break typed or pasted becomes a space. */
+    private void wrapTitle(EditText box) {
+        box.setSingleLine(false);
+        box.setHorizontallyScrolling(false);
+        box.setMaxLines(8);
+        box.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_NEXT);
+        box.setFilters(new android.text.InputFilter[] {
+            (source, start, end, dest, dstart, dend) -> {
+                String piece = source.subSequence(start, end).toString();
+                return piece.indexOf('\n') < 0 ? null : piece.replace('\n', ' ');
+            }
+        });
+    }
+
+    // ---- the strip above the keyboard ----
+
+    /** Eight formatting buttons and two picture buttons in a row that scrolls sideways; hidden until a note is being written. */
+    private void buildFormatBar() {
+        formatBar = new android.widget.HorizontalScrollView(this);
+        formatBar.setHorizontalScrollBarEnabled(false);
+        formatBar.setBackgroundColor(getColor(R.color.surface));
+        formatBar.setVisibility(View.GONE);
+        LinearLayout strip = new LinearLayout(this);
+        strip.setPadding(dp(8), dp(4), dp(8), dp(4));
+        formatBar.addView(strip, new android.widget.FrameLayout.LayoutParams(-2, -2));
+        addFormat(strip, R.drawable.csi_fmt_bold, "Bold", () -> wrapSelection("**", "**"));
+        addFormat(strip, R.drawable.csi_fmt_italic, "Italic", () -> wrapSelection("_", "_"));
+        addFormat(strip, R.drawable.csi_fmt_heading, "Heading", () -> prefixLines("## "));
+        addFormat(strip, R.drawable.csi_fmt_list, "Bullet list", () -> prefixLines("- "));
+        addFormat(strip, R.drawable.csi_fmt_checklist, "Checklist", () -> prefixLines("- [ ] "));
+        addFormat(strip, R.drawable.csi_link, "Link", this::insertLink);
+        addFormat(strip, R.drawable.csi_fmt_code, "Code", () -> wrapSelection("`", "`"));
+        addFormat(strip, R.drawable.csi_fmt_quote, "Quote", () -> prefixLines("> "));
+        pictureButton = addFormat(strip, R.drawable.csi_photo, "Add a picture from the gallery", () -> pick("image/*", 44));
+        cameraButton = addFormat(strip, R.drawable.csi_camera, "Take a picture", this::takePicture);
+        // Between the page and the navigation bar, so it rides on top of the keyboard while typing.
+        root.addView(formatBar, new LinearLayout.LayoutParams(-1, -2));
+    }
+
+    private View addFormat(LinearLayout strip, int icon, String words, Runnable act) {
+        android.widget.ImageButton button = new android.widget.ImageButton(this);
+        button.setImageResource(icon);
+        button.setColorFilter(getColor(R.color.text));
+        button.setBackground(null);
+        button.setContentDescription(words);
+        androidx.appcompat.widget.TooltipCompat.setTooltipText(button, words);
+        // A tap must not take the keyboard away from the words being typed.
+        button.setFocusable(false);
+        button.setOnClickListener(v -> { if (body != null && page == Page.EDIT) act.run(); });
+        strip.addView(button, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        return button;
+    }
+
+    private void showFormatBar() {
+        formatBar.setVisibility(View.VISIBLE);
+        // Pictures are kept on a saved note; a new one holds them through "Add to this note" until the first save.
+        int shown = noteId == null ? View.GONE : View.VISIBLE;
+        pictureButton.setVisibility(shown);
+        cameraButton.setVisibility(shown);
+    }
+
+    /** Put {@code before} and {@code after} around the selected words, or around nothing with the cursor between. */
+    private void wrapSelection(String before, String after) {
+        Editable text = body.getText();
+        int from = Math.min(body.getSelectionStart(), body.getSelectionEnd());
+        int to = Math.max(body.getSelectionStart(), body.getSelectionEnd());
+        if (from < 0) { from = to = text.length(); }
+        text.insert(to, after);
+        text.insert(from, before);
+        body.setSelection(from + before.length(), to + before.length());
+        body.requestFocus();
+    }
+
+    /** Start each line the selection touches with {@code prefix}; a line that already has it loses it. */
+    private void prefixLines(String prefix) {
+        Editable text = body.getText();
+        String all = text.toString();
+        int from = Math.max(0, Math.min(body.getSelectionStart(), body.getSelectionEnd()));
+        int to = Math.max(from, Math.max(body.getSelectionStart(), body.getSelectionEnd()));
+        int lineStart = all.lastIndexOf('\n', from - 1) + 1;
+        int lineEnd = all.indexOf('\n', to);
+        if (lineEnd < 0) lineEnd = all.length();
+        String[] lines = all.substring(lineStart, lineEnd).split("\n", -1);
+        boolean everyLine = true;
+        for (String line : lines) if (!line.startsWith(prefix)) everyLine = false;
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < lines.length; i++) {
+            if (i > 0) out.append('\n');
+            out.append(everyLine ? lines[i].substring(prefix.length()) : prefix + lines[i]);
+        }
+        text.replace(lineStart, lineEnd, out);
+        body.setSelection(lineStart, lineStart + out.length());
+        body.requestFocus();
+    }
+
+    /** Make a link of the selected words and leave the address selected to type over; with no selection start from "link". */
+    private void insertLink() {
+        Editable text = body.getText();
+        int from = Math.min(body.getSelectionStart(), body.getSelectionEnd());
+        int to = Math.max(body.getSelectionStart(), body.getSelectionEnd());
+        if (from < 0) from = to = text.length();
+        String words = from == to ? "link" : text.subSequence(from, to).toString();
+        String made = "[" + words + "](https://)";
+        text.replace(from, to, made);
+        int addressStart = from + made.length() - "https://)".length();
+        body.setSelection(addressStart, addressStart + "https://".length());
+        body.requestFocus();
+    }
+
+    /** Put {@code piece} where the cursor is, on a line of its own. */
+    private void insertLine(String piece) {
+        Editable text = body.getText();
+        int at = Math.max(body.getSelectionStart(), 0);
+        if (body.getSelectionStart() < 0) at = text.length();
+        boolean lineStart = at == 0 || text.charAt(at - 1) == '\n';
+        String put = (lineStart ? "" : "\n") + piece + "\n";
+        text.insert(at, put);
+        body.setSelection(at + put.length());
+        body.requestFocus();
+    }
+
+    private void takePicture() {
+        try {
+            File folder = new File(getCacheDir(), "share");
+            if (!folder.isDirectory() && !folder.mkdirs()) throw new Exception("This phone has no room for a photo");
+            cameraFile = new File(folder, "note-photo-" + System.currentTimeMillis() + ".jpg");
+            Uri out = FileProvider.getUriForFile(this, getPackageName() + ".share", cameraFile);
+            Intent shoot = new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).putExtra(android.provider.MediaStore.EXTRA_OUTPUT, out);
+            shoot.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivityForResult(shoot, 45);
+        } catch (Exception error) {
+            say(error instanceof android.content.ActivityNotFoundException ? "This phone has no camera app" : error.getMessage());
+        }
+    }
+
+    /** Keep a picture with the open note, then write its line into the words at the cursor. */
+    private void addPictureToWords(Uri source) {
+        String id = noteId;
+        if (id == null || uploading) return;
+        uploading = true;
+        say("Adding the picture to the note");
+        new Thread(() -> {
+            try {
+                JSONObject result = client.uploadNoteImage("/v1/notes/" + MediaClient.enc(id) + "/images", sharedImagePng(source));
+                String imageId = result.getJSONObject("image").getString("id");
+                ui.post(() -> {
+                    uploading = false;
+                    if (page == Page.EDIT && id.equals(noteId) && body != null) {
+                        insertLine("![Picture](/v1/notes/" + id + "/images/" + imageId + ")");
+                        say(null);
+                        loadKept(id);
+                    }
+                });
+            } catch (Exception error) {
+                ui.post(() -> {
+                    uploading = false;
+                    say(null);
+                    Kit.sheet(this, "The picture was not added", error.getMessage(),
+                        new Kit.Action(R.drawable.csi_refresh, "Try again", null, () -> addPictureToWords(source)),
+                        new Kit.Action(Kit.Icon.NOTES, "Carry on without it", null, () -> { }));
+                });
+            }
+        }, "csync-note-picture").start();
+    }
+
+    private static final String NOT_SYNCED ="This note has not synced yet; try again in a minute";
 
     private void saveNote() {
         if (page != Page.EDIT || title == null || body == null || noteSaving) return;
@@ -1707,7 +1904,7 @@ public final class NotesActivity extends AppCompatActivity {
                 final boolean metaLost = metaNotKept(data, saved);
                 ui.post(() -> {
                     justSaved = saved;
-                    NoteOutbox.remove(this, editingKey != null ? editingKey : id == null ? null : NoteOutbox.keyFor(id));
+                    PiQueue.remove(this, editingKey != null ? editingKey : id == null ? null : PiQueue.keyFor(id));
                     editingKey = null;
                     // a save on top of an edit made elsewhere is kept, both versions in the body, marked
                     if (saved.optBoolean("conflicted")) say("Saved. It changed elsewhere too: both versions are in the note, marked.");
@@ -1721,9 +1918,9 @@ public final class NotesActivity extends AppCompatActivity {
             } catch (Exception error) {
                 ui.post(() -> {
                     noteSaving = false;
-                    if (NoteOutbox.unreached(error) && sharedImage == null && sharedFile == null) {
+                    if (PiQueue.unreached(error) && sharedImage == null && sharedFile == null) {
                         // The Pi cannot be reached: keep the words on the phone and send them when it answers.
-                        NoteOutbox.put(this, editingKey != null ? editingKey : NoteOutbox.keyFor(id), id, data, expected);
+                        PiQueue.putNote(this, editingKey != null ? editingKey : PiQueue.keyFor(id), id, data, expected);
                         editingKey = null;
                         justSaved = null;
                         toast("Saved on this phone. It goes to the Pi when it answers.");
