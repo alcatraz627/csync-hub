@@ -315,6 +315,7 @@ public final class NotesActivity extends AppCompatActivity {
 
     private void showList() {
         noteId = null;
+        currentNote = null;
         open(Page.LIST, null, null);
         Kit.pageTop(topBar, this::finish, moreCrumb(), new Kit.Crumb(Kit.Icon.NOTES, "Notes", null));
         Kit.topAction(topBar, Kit.Icon.SEARCH, showingPins ? "Search pins" : "Search notes", v -> {
@@ -592,6 +593,8 @@ public final class NotesActivity extends AppCompatActivity {
         new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
             .setTitle("Rename note").setView(box)
             .setNegativeButton("Cancel", null)
+            .setNegativeButtonIcon(androidx.core.content.ContextCompat.getDrawable(this, R.drawable.csi_close))
+            .setPositiveButtonIcon(androidx.core.content.ContextCompat.getDrawable(this, R.drawable.csi_check))
             .setPositiveButton("Rename", (d, w) -> {
                 String name = field.getText().toString().trim();
                 if (name.isEmpty() || name.equals(note.optString("title"))) return;
@@ -745,6 +748,8 @@ public final class NotesActivity extends AppCompatActivity {
                     ui.post(() -> {
                         noteId = latest.optString("id");
                         revision = latest.optInt("revision");
+                        // the editor starts from this note's pin, colour and tags, not the last one opened
+                        currentNote = latest;
                         String source = latest.optString("body");
                         showEditor(latest.optString("title"), source + (source.isEmpty() ? "" : "\n\n") + caption, "plain");
                     });
@@ -1418,16 +1423,20 @@ public final class NotesActivity extends AppCompatActivity {
         if (name.isEmpty()) { title.setError("Give this note a title"); return; }
         String id = noteId;
         int expected = revision;
+        // Read every field here, on the screen's thread; the save itself runs on another.
+        JSONObject data = new JSONObject();
+        try {
+            data.put("title", name).put("body", source);
+            // only what changed, so a plain save is one version on the Pi, not three
+            if (tagsField != null && !tagsField.getText().toString().trim().equals(baseTags)) data.put("tags", draftTags());
+            if (!draftColor.equals(baseColor)) data.put("color", draftColor);
+            if (draftPinned != basePinned) data.put("pinned", draftPinned);
+        } catch (org.json.JSONException impossible) { return; }
         noteSaving = true;
         Kit.tick(root);
         say("Saving on the Pi");
         new Thread(() -> {
             try {
-                JSONObject data = new JSONObject().put("title", name).put("body", source);
-                // only what changed, so a plain save is one version on the Pi, not three
-                if (tagsField != null && !tagsField.getText().toString().trim().equals(baseTags)) data.put("tags", draftTags());
-                if (!draftColor.equals(baseColor)) data.put("color", draftColor);
-                if (draftPinned != basePinned) data.put("pinned", draftPinned);
                 JSONObject result = id == null ? client.post("/v1/notes", data) :
                     client.put("/v1/notes/" + MediaClient.enc(id), data.put("expectedRevision", expected));
                 JSONObject saved = result.getJSONObject("note");
