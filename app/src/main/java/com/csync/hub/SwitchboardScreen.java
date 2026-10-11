@@ -59,6 +59,13 @@ final class SwitchboardScreen {
         load();
     }
 
+    /** Open on this tab next time the screen shows, for a card on Home that means one tab. */
+    void selectTab(String which) {
+        if (java.util.Arrays.asList(TABS).indexOf(which) < 0) return;
+        tab = which;
+        a.getSharedPreferences("switchboard_view", Activity.MODE_PRIVATE).edit().putString("tab", tab).apply();
+    }
+
     void hide() {
         showing = false;
         asked++;
