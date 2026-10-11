@@ -90,6 +90,11 @@ public final class NotesActivity extends AppCompatActivity {
     // The waiting entry being edited again, so a good save can clear it.
     private String editingKey;
     private Runnable retryWaiting;
+    // The strip above the keyboard while a note is being written, and the two buttons that need a saved note.
+    private android.widget.HorizontalScrollView formatBar;
+    private View pictureButton, cameraButton;
+    // Where the camera is told to put the photo it takes.
+    private File cameraFile;
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -146,6 +151,7 @@ public final class NotesActivity extends AppCompatActivity {
         rows.setOrientation(LinearLayout.VERTICAL);
         rows.setPadding(dp(20), 0, dp(20), dp(16));
         scroll.addView(rows);
+        buildFormatBar();
         com.google.android.material.bottomnavigation.BottomNavigationView nav = new SixTabNavigationView(this);
         nav.inflateMenu(R.menu.nav_menu);
         nav.setLabelVisibilityMode(com.google.android.material.navigation.NavigationBarView.LABEL_VISIBILITY_UNLABELED);
@@ -277,6 +283,7 @@ public final class NotesActivity extends AppCompatActivity {
         preview = null;
         modeHost = null;
         keptHost = null;
+        if (formatBar != null) formatBar.setVisibility(View.GONE);
         heading.setText(title);
         heading.setVisibility(title == null ? View.GONE : View.VISIBLE);
         // A long title stays on one line with its middle left out; on a note, tapping it opens the whole title to edit.
@@ -1516,6 +1523,16 @@ public final class NotesActivity extends AppCompatActivity {
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == 45) {
+            File photo = cameraFile;
+            cameraFile = null;
+            if (resultCode == Activity.RESULT_OK && photo != null && photo.length() > 0) addPictureToWords(Uri.fromFile(photo));
+            return;
+        }
+        if (requestCode == 44) {
+            if (resultCode == Activity.RESULT_OK && data != null && data.getData() != null) addPictureToWords(data.getData());
+            return;
+        }
         if (resultCode != Activity.RESULT_OK || data == null || data.getData() == null) return;
         if (noteId == null) {
             // A note not saved yet holds what was picked; the save puts it on the Pi.
@@ -1554,6 +1571,8 @@ public final class NotesActivity extends AppCompatActivity {
         // A long note puts the Save button far below, so the bar carries one as well.
         Kit.topAction(topBar, R.drawable.csi_check, "Save", v -> saveNote());
         title = labelled("Title", "Title", currentTitle, false);
+        wrapTitle(title);
+        showFormatBar();
         modeHost = new LinearLayout(this);
         LinearLayout.LayoutParams modeParams = new LinearLayout.LayoutParams(-1, -2);
         modeParams.topMargin = dp(12);
@@ -1677,7 +1696,172 @@ public final class NotesActivity extends AppCompatActivity {
         drawModes(java.util.Arrays.asList(MODES).indexOf(mode), picked -> setEditorMode(MODES[picked]));
     }
 
-    private static final String NOT_SYNCED = "This note has not synced yet; try again in a minute";
+    /** The title box shows every word, wrapping inside the box; a line break typed or pasted becomes a space. */
+    private void wrapTitle(EditText box) {
+        box.setSingleLine(false);
+        box.setHorizontallyScrolling(false);
+        box.setMaxLines(8);
+        box.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_NEXT);
+        box.setFilters(new android.text.InputFilter[] {
+            (source, start, end, dest, dstart, dend) -> {
+                String piece = source.subSequence(start, end).toString();
+                return piece.indexOf('\n') < 0 ? null : piece.replace('\n', ' ');
+            }
+        });
+    }
+
+    // ---- the strip above the keyboard ----
+
+    /** Eight formatting buttons and two picture buttons in a row that scrolls sideways; hidden until a note is being written. */
+    private void buildFormatBar() {
+        formatBar = new android.widget.HorizontalScrollView(this);
+        formatBar.setHorizontalScrollBarEnabled(false);
+        formatBar.setBackgroundColor(getColor(R.color.surface));
+        formatBar.setVisibility(View.GONE);
+        LinearLayout strip = new LinearLayout(this);
+        strip.setPadding(dp(8), dp(4), dp(8), dp(4));
+        formatBar.addView(strip, new android.widget.FrameLayout.LayoutParams(-2, -2));
+        addFormat(strip, R.drawable.csi_fmt_bold, "Bold", () -> wrapSelection("**", "**"));
+        addFormat(strip, R.drawable.csi_fmt_italic, "Italic", () -> wrapSelection("_", "_"));
+        addFormat(strip, R.drawable.csi_fmt_heading, "Heading", () -> prefixLines("## "));
+        addFormat(strip, R.drawable.csi_fmt_list, "Bullet list", () -> prefixLines("- "));
+        addFormat(strip, R.drawable.csi_fmt_checklist, "Checklist", () -> prefixLines("- [ ] "));
+        addFormat(strip, R.drawable.csi_link, "Link", this::insertLink);
+        addFormat(strip, R.drawable.csi_fmt_code, "Code", () -> wrapSelection("`", "`"));
+        addFormat(strip, R.drawable.csi_fmt_quote, "Quote", () -> prefixLines("> "));
+        pictureButton = addFormat(strip, R.drawable.csi_photo, "Add a picture from the gallery", () -> pick("image/*", 44));
+        cameraButton = addFormat(strip, R.drawable.csi_camera, "Take a picture", this::takePicture);
+        // Between the page and the navigation bar, so it rides on top of the keyboard while typing.
+        root.addView(formatBar, new LinearLayout.LayoutParams(-1, -2));
+    }
+
+    private View addFormat(LinearLayout strip, int icon, String words, Runnable act) {
+        android.widget.ImageButton button = new android.widget.ImageButton(this);
+        button.setImageResource(icon);
+        button.setColorFilter(getColor(R.color.text));
+        button.setBackground(null);
+        button.setContentDescription(words);
+        androidx.appcompat.widget.TooltipCompat.setTooltipText(button, words);
+        // A tap must not take the keyboard away from the words being typed.
+        button.setFocusable(false);
+        button.setOnClickListener(v -> { if (body != null && page == Page.EDIT) act.run(); });
+        strip.addView(button, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        return button;
+    }
+
+    private void showFormatBar() {
+        formatBar.setVisibility(View.VISIBLE);
+        // Pictures are kept on a saved note; a new one holds them through "Add to this note" until the first save.
+        int shown = noteId == null ? View.GONE : View.VISIBLE;
+        pictureButton.setVisibility(shown);
+        cameraButton.setVisibility(shown);
+    }
+
+    /** Put {@code before} and {@code after} around the selected words, or around nothing with the cursor between. */
+    private void wrapSelection(String before, String after) {
+        Editable text = body.getText();
+        int from = Math.min(body.getSelectionStart(), body.getSelectionEnd());
+        int to = Math.max(body.getSelectionStart(), body.getSelectionEnd());
+        if (from < 0) { from = to = text.length(); }
+        text.insert(to, after);
+        text.insert(from, before);
+        body.setSelection(from + before.length(), to + before.length());
+        body.requestFocus();
+    }
+
+    /** Start each line the selection touches with {@code prefix}; a line that already has it loses it. */
+    private void prefixLines(String prefix) {
+        Editable text = body.getText();
+        String all = text.toString();
+        int from = Math.max(0, Math.min(body.getSelectionStart(), body.getSelectionEnd()));
+        int to = Math.max(from, Math.max(body.getSelectionStart(), body.getSelectionEnd()));
+        int lineStart = all.lastIndexOf('\n', from - 1) + 1;
+        int lineEnd = all.indexOf('\n', to);
+        if (lineEnd < 0) lineEnd = all.length();
+        String[] lines = all.substring(lineStart, lineEnd).split("\n", -1);
+        boolean everyLine = true;
+        for (String line : lines) if (!line.startsWith(prefix)) everyLine = false;
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < lines.length; i++) {
+            if (i > 0) out.append('\n');
+            out.append(everyLine ? lines[i].substring(prefix.length()) : prefix + lines[i]);
+        }
+        text.replace(lineStart, lineEnd, out);
+        body.setSelection(lineStart, lineStart + out.length());
+        body.requestFocus();
+    }
+
+    /** Make a link of the selected words and leave the address selected to type over; with no selection start from "link". */
+    private void insertLink() {
+        Editable text = body.getText();
+        int from = Math.min(body.getSelectionStart(), body.getSelectionEnd());
+        int to = Math.max(body.getSelectionStart(), body.getSelectionEnd());
+        if (from < 0) from = to = text.length();
+        String words = from == to ? "link" : text.subSequence(from, to).toString();
+        String made = "[" + words + "](https://)";
+        text.replace(from, to, made);
+        int addressStart = from + made.length() - "https://)".length();
+        body.setSelection(addressStart, addressStart + "https://".length());
+        body.requestFocus();
+    }
+
+    /** Put {@code piece} where the cursor is, on a line of its own. */
+    private void insertLine(String piece) {
+        Editable text = body.getText();
+        int at = Math.max(body.getSelectionStart(), 0);
+        if (body.getSelectionStart() < 0) at = text.length();
+        boolean lineStart = at == 0 || text.charAt(at - 1) == '\n';
+        String put = (lineStart ? "" : "\n") + piece + "\n";
+        text.insert(at, put);
+        body.setSelection(at + put.length());
+        body.requestFocus();
+    }
+
+    private void takePicture() {
+        try {
+            File folder = new File(getCacheDir(), "share");
+            if (!folder.isDirectory() && !folder.mkdirs()) throw new Exception("This phone has no room for a photo");
+            cameraFile = new File(folder, "note-photo-" + System.currentTimeMillis() + ".jpg");
+            Uri out = FileProvider.getUriForFile(this, getPackageName() + ".share", cameraFile);
+            Intent shoot = new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).putExtra(android.provider.MediaStore.EXTRA_OUTPUT, out);
+            shoot.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivityForResult(shoot, 45);
+        } catch (Exception error) {
+            say(error instanceof android.content.ActivityNotFoundException ? "This phone has no camera app" : error.getMessage());
+        }
+    }
+
+    /** Keep a picture with the open note, then write its line into the words at the cursor. */
+    private void addPictureToWords(Uri source) {
+        String id = noteId;
+        if (id == null || uploading) return;
+        uploading = true;
+        say("Adding the picture to the note");
+        new Thread(() -> {
+            try {
+                JSONObject result = client.uploadNoteImage("/v1/notes/" + MediaClient.enc(id) + "/images", sharedImagePng(source));
+                String imageId = result.getJSONObject("image").getString("id");
+                ui.post(() -> {
+                    uploading = false;
+                    if (page == Page.EDIT && id.equals(noteId) && body != null) {
+                        insertLine("![Picture](/v1/notes/" + id + "/images/" + imageId + ")");
+                        say(null);
+                        loadKept(id);
+                    }
+                });
+            } catch (Exception error) {
+                ui.post(() -> {
+                    uploading = false;
+                    say(null);
+                    Kit.sheet(this, "The picture was not added", error.getMessage(),
+                        new Kit.Action(R.drawable.csi_refresh, "Try again", null, () -> addPictureToWords(source)),
+                        new Kit.Action(Kit.Icon.NOTES, "Carry on without it", null, () -> { }));
+                });
+            }
+        }, "csync-note-picture").start();
+    }
+
+    private static final String NOT_SYNCED ="This note has not synced yet; try again in a minute";
 
     private void saveNote() {
         if (page != Page.EDIT || title == null || body == null || noteSaving) return;
