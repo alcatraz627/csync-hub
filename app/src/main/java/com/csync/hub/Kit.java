@@ -494,6 +494,12 @@ final class Kit {
         scroller.setTag("kit-action");
         scroller.addView(strip, new ViewGroup.LayoutParams(-2, -2));
         host.addView(scroller, new LinearLayout.LayoutParams(-1, -2));
+        // A redraw starts the strip at its left edge; bring the chosen tab back into view.
+        scroller.post(() -> {
+            View chosen = strip.getChildAt(selected);
+            if (chosen != null && chosen.getRight() > scroller.getWidth())
+                scroller.scrollTo(chosen.getRight() - scroller.getWidth() + dp(c, 24), 0);
+        });
         View line = new View(c);
         line.setBackgroundColor(ContextCompat.getColor(c, R.color.border));
         host.addView(line, new LinearLayout.LayoutParams(-1, dp(c, 1)));
