@@ -432,6 +432,30 @@ public final class NotesActivity extends AppCompatActivity {
 
     /** Long-press on a note: pin it, or give it a colour, as Switchboard's right-click does. */
     private void metaSheet(JSONObject item) {
+        if (!item.optBoolean("conflicted")) { showMetaSheet(item, null); return; }
+        // a two-version note: read it first, so each side is named by where it came from
+        String id = item.optString("id");
+        task(() -> {
+            String body = client.get("/v1/notes/" + MediaClient.enc(id)).getJSONObject("note").optString("body");
+            String[] sides = { "first", "second" };
+            for (String line : body.split("\n")) {
+                if (line.startsWith("<<<<<<< ")) sides[0] = sideName(line.substring(8));
+                if (line.startsWith(">>>>>>> ")) { sides[1] = sideName(line.substring(8)); break; }
+            }
+            ui.post(() -> showMetaSheet(item, sides));
+        });
+    }
+
+    /** A clash marker's name as a person says it. */
+    private static String sideName(String marker) {
+        String m = marker.trim();
+        if (m.equals("HEAD")) return "the Mac's";
+        if (m.startsWith("pi") || m.contains("csync")) return "the Pi's";
+        if (m.equals("phone")) return "the phone's";
+        return m + "'s";
+    }
+
+    private void showMetaSheet(JSONObject item, String[] sides) {
         String id = item.optString("id"), current = item.optString("color");
         boolean pinned = item.optBoolean("pinned");
         java.util.List<Kit.Action> pin = new java.util.ArrayList<>();
@@ -443,9 +467,24 @@ public final class NotesActivity extends AppCompatActivity {
                 c.equals(current) ? "Its colour now" : null, () -> setMeta(id, "color", c)).tint(noteColor(c)));
         if (!current.isEmpty()) colours.add(new Kit.Action(Kit.Icon.NOTES, "No colour", null, () -> setMeta(id, "color", "")));
         java.util.List<Kit.Section> sections = new java.util.ArrayList<>();
+        if (sides != null) {
+            java.util.List<Kit.Action> keep = new java.util.ArrayList<>();
+            keep.add(new Kit.Action(Kit.Icon.NOTES, "Keep " + sides[0], "Drop the other version", () -> settle(id, "first")));
+            keep.add(new Kit.Action(Kit.Icon.NOTES, "Keep " + sides[1], "Drop the other version", () -> settle(id, "second")));
+            keep.add(new Kit.Action(Kit.Icon.NOTES, "Keep both", "One after the other, markers removed", () -> settle(id, "both")));
+            sections.add(new Kit.Section("Two versions", keep));
+        }
         sections.add(new Kit.Section("Pin", pin));
         sections.add(new Kit.Section("Colour", colours));
         Kit.sheet(this, item.optString("title", "Note"), null, sections);
+    }
+
+    /** Settles a two-version note on the Pi and reloads the list. */
+    private void settle(String id, String keep) {
+        task(() -> {
+            client.put("/v1/notes/" + MediaClient.enc(id) + "/resolve", new JSONObject().put("keep", keep));
+            ui.post(() -> { toast("Settled"); loadNotes(search.getText().toString().trim()); });
+        });
     }
 
     /** Saves a colour or pin on the Pi, then shows the note as the Pi now has it. */
