@@ -876,7 +876,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
 
         Kit.label(page, "Your Mac");
         group = Kit.group(page);
-        Kit.bindRow(Kit.addRow(group), R.drawable.csi_sliders, "Switchboard", "Ledger, queue, plugins, rules and library", null, true)
+        Kit.bindRow(Kit.addRow(group), R.drawable.csi_sliders, "Switchboard", "Usage, bulbs, agents, ledger, queue, plugins, rules, library", null, true)
             .setOnClickListener(v -> showMoreDetail(6));
 
         Kit.label(page, "This app");

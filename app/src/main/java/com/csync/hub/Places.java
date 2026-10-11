@@ -94,7 +94,7 @@ final class Places {
             case "showcase": return "Every part the app is built from";
             case "timers": return "Up to four at once, and saved ones";
             case "reminders": return "Something to remember at a time";
-            case "switchboard": return "Your Mac's ledger, queue, plugins, rules";
+            case "switchboard": return "Your Mac's usage, bulbs, agents and lists";
             default: return null;
         }
     }
