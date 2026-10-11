@@ -99,7 +99,11 @@ public final class NotesActivity extends AppCompatActivity {
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
         Appearance.apply(this);
-        markwon = Markwon.create(this);
+        markwon = Markwon.builder(this).usePlugin(new io.noties.markwon.AbstractMarkwonPlugin() {
+            @Override public void configureConfiguration(io.noties.markwon.MarkwonConfiguration.Builder builder) {
+                builder.asyncDrawableLoader(new NotePictureLoader());
+            }
+        }).build();
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(getColor(R.color.bg));
@@ -1844,6 +1848,53 @@ public final class NotesActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * Draws a note's picture lines in the reading views: the folder-relative path, or an older
+     * /v1 path, is fetched from the Pi with the token and shown at the width the text allows.
+     */
+    private final class NotePictureLoader extends io.noties.markwon.image.AsyncDrawableLoader {
+        private final java.util.Set<String> cancelled = java.util.Collections.synchronizedSet(new java.util.HashSet<>());
+
+        /** The Pi route for a picture line, or null when the line names something else. */
+        private String route(String destination) {
+            String d = destination;
+            while (d.startsWith("../") || d.startsWith("./")) d = d.substring(d.indexOf('/') + 1);
+            if (d.startsWith("/v1/notes/")) return d;
+            String id = noteId;
+            String head = "attachments/" + id + "-";
+            if (id == null || !d.startsWith(head) || !d.endsWith(".png")) return null;
+            return "/v1/notes/" + MediaClient.enc(id) + "/images/" + MediaClient.enc(d.substring(head.length(), d.length() - 4));
+        }
+
+        @Override public void load(io.noties.markwon.image.AsyncDrawable drawable) {
+            String destination = drawable.getDestination(), path = route(destination);
+            if (path == null) return;
+            cancelled.remove(destination);
+            new Thread(() -> {
+                try {
+                    byte[] data = client.getBytes(path, 2 * 1024 * 1024);
+                    android.graphics.Bitmap bitmap = android.graphics.BitmapFactory.decodeByteArray(data, 0, data.length);
+                    if (bitmap == null || cancelled.contains(destination)) return;
+                    ui.post(() -> {
+                        android.graphics.drawable.BitmapDrawable shown = new android.graphics.drawable.BitmapDrawable(getResources(), bitmap);
+                        shown.setBounds(0, 0, bitmap.getWidth(), bitmap.getHeight());
+                        drawable.setResult(shown);
+                    });
+                } catch (Exception ignored) {
+                    // The line stays as its alt text; the tiles under "In this note" say what is wrong.
+                }
+            }, "csync-note-picture-load").start();
+        }
+
+        @Override public void cancel(io.noties.markwon.image.AsyncDrawable drawable) {
+            cancelled.add(drawable.getDestination());
+        }
+
+        @Override public android.graphics.drawable.Drawable placeholder(io.noties.markwon.image.AsyncDrawable drawable) {
+            return null;
+        }
+    }
+
     /** Keep a picture with the open note, then write its line into the words at the cursor. */
     private void addPictureToWords(Uri source) {
         String id = noteId;
@@ -1853,11 +1904,14 @@ public final class NotesActivity extends AppCompatActivity {
         new Thread(() -> {
             try {
                 JSONObject result = client.uploadNoteImage("/v1/notes/" + MediaClient.enc(id) + "/images", sharedImagePng(source));
-                String imageId = result.getJSONObject("image").getString("id");
+                JSONObject image = result.getJSONObject("image");
+                String imageId = image.getString("id");
+                // The notes folder holds the picture, so the line is the folder-relative path every app reads.
+                String line = image.optString("path", "attachments/" + id + "-" + imageId + ".png");
                 ui.post(() -> {
                     uploading = false;
                     if (page == Page.EDIT && id.equals(noteId) && body != null) {
-                        insertLine("![Picture](/v1/notes/" + id + "/images/" + imageId + ")");
+                        insertLine("![Picture](" + line + ")");
                         say(null);
                         loadKept(id);
                     }
