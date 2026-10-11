@@ -87,6 +87,9 @@ public final class NotesActivity extends AppCompatActivity {
     private Markwon markwon;
     private Runnable pendingNoteSearch;
     private int noteSearchGeneration;
+    // The waiting entry being edited again, so a good save can clear it.
+    private String editingKey;
+    private Runnable retryWaiting;
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -321,6 +324,7 @@ public final class NotesActivity extends AppCompatActivity {
 
     private void showList() {
         noteId = null;
+        editingKey = null;
         currentNote = null;
         open(Page.LIST, null, null);
         Kit.pageTop(topBar, this::finish, moreCrumb(), new Kit.Crumb(Kit.Icon.NOTES, "Notes", null));
@@ -353,6 +357,8 @@ public final class NotesActivity extends AppCompatActivity {
         if (listedNotes == null && notesError == null) say("Reading from the Pi");
         new Thread(() -> {
             try {
+                // Notes written while the Pi was out of reach go first, so the list below already has them.
+                if (NoteOutbox.any(this)) NoteOutbox.flush(this, client);
                 String route = "/v1/notes" + (query.isEmpty() ? "" : "?q=" + MediaClient.enc(query));
                 JSONArray notes = client.get(route).getJSONArray("notes");
                 ui.post(() -> {
@@ -369,6 +375,7 @@ public final class NotesActivity extends AppCompatActivity {
                 ui.post(() -> {
                     if (request != noteSearchGeneration || page != Page.LIST) return;
                     // a list already on screen stays; only a first read with nothing to show gets the error state
+                    watchWaiting();
                     if (listedNotes != null) { say("Could not refresh. " + whyUnreached(error)); return; }
                     notesError = whyUnreached(error);
                     say(null);
@@ -376,6 +383,21 @@ public final class NotesActivity extends AppCompatActivity {
                 });
             }
         }, "csync-note-search").start();
+    }
+
+    /** While notes wait for the Pi, look again every half minute without bothering anyone. */
+    private void watchWaiting() {
+        if (retryWaiting != null) ui.removeCallbacks(retryWaiting);
+        if (!NoteOutbox.any(this)) return;
+        retryWaiting = () -> {
+            if (page == Page.LIST && !showingPins && NoteOutbox.any(this)) loadNotes(search.getText().toString().trim());
+        };
+        ui.postDelayed(retryWaiting, 30_000);
+    }
+
+    @Override protected void onDestroy() {
+        if (retryWaiting != null) ui.removeCallbacks(retryWaiting);
+        super.onDestroy();
     }
 
     private void refreshPins() {
@@ -405,7 +427,49 @@ public final class NotesActivity extends AppCompatActivity {
         else renderNotes(query);
     }
 
+    /** The notes written while the Pi was out of reach, each marked, ahead of everything else. Returns their ids. */
+    private java.util.Set<String> waitingRows() {
+        java.util.Set<String> covered = new java.util.HashSet<>();
+        JSONArray waiting = NoteOutbox.all(this);
+        if (waiting.length() == 0) return covered;
+        Kit.label(rows, "Not synced yet");
+        LinearLayout group = Kit.group(rows);
+        for (int i = waiting.length() - 1; i >= 0; i--) {
+            JSONObject op = waiting.optJSONObject(i);
+            if (op == null) continue;
+            JSONObject note = NoteOutbox.asNote(op);
+            if (!op.optString("id").isEmpty()) covered.add(op.optString("id"));
+            String shown = note.optString("title");
+            View row = Kit.bindRow(Kit.addRow(group), Kit.Icon.NOTES, shown.isEmpty() ? "Untitled" : shown,
+                "Saved on this phone, goes to the Pi when it answers", "not synced yet", true);
+            TextView rowTitle = row.findViewById(R.id.kit_title);
+            rowTitle.setSingleLine(true);
+            rowTitle.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
+            Integer tint = noteColor(note.optString("color"));
+            if (tint != null) ((android.widget.ImageView) row.findViewById(R.id.kit_icon)).setColorFilter(tint);
+            row.setOnClickListener(v -> editWaiting(op));
+            row.setOnLongClickListener(v -> { toast("Not synced yet. Open it to keep writing."); return true; });
+        }
+        return covered;
+    }
+
+    /** Open a waiting note in the editor with the words that were saved on the phone. */
+    private void editWaiting(JSONObject op) {
+        JSONObject note = NoteOutbox.asNote(op);
+        String id = op.optString("id");
+        noteId = id.isEmpty() ? null : id;
+        revision = op.optInt("expected");
+        currentNote = id.isEmpty() ? null : note;
+        editingKey = op.optString("key");
+        showEditor(note.optString("title"), note.optString("body"), "plain");
+        // The words differ from what the Pi holds, so leaving without saving asks first.
+        editorBaseTitle = "";
+        editorBaseBody = "";
+    }
+
     private void renderNotes(String query) {
+        java.util.Set<String> waitingIds = query.isEmpty() ? waitingRows() : new java.util.HashSet<>();
+        boolean haveWaiting = query.isEmpty() && NoteOutbox.any(this);
         if (notesError != null) {
             // Name the address tried: a wrong saved address and a Pi that is down look alike otherwise.
             Kit.empty(rows, Kit.Icon.NOTES, "The Pi did not answer",
@@ -419,6 +483,7 @@ public final class NotesActivity extends AppCompatActivity {
         }
         if (listedNotes == null) return;
         if (listedNotes.length() == 0) {
+            if (haveWaiting) return;
             if (query.isEmpty()) Kit.empty(rows, Kit.Icon.NOTES, "No notes yet",
                 "Notes are kept on the Pi and the assistant can read them.",
                 Kit.button(this, R.drawable.csi_plus, "New note", R.color.text, () -> showEditor("", "", "plain")));
@@ -431,7 +496,7 @@ public final class NotesActivity extends AppCompatActivity {
         String fresh = justSaved == null || !query.isEmpty() ? null : justSaved.optString("id");
         for (int i = 0; i < listedNotes.length(); i++) {
             JSONObject n = listedNotes.optJSONObject(i);
-            if (n == null || n.optString("id").equals(fresh)) continue;
+            if (n == null || n.optString("id").equals(fresh) || waitingIds.contains(n.optString("id"))) continue;
             (n.optBoolean("pinned") ? pinnedNotes : others).add(n);
         }
         if (fresh != null) (justSaved.optBoolean("pinned") ? pinnedNotes : others).add(0, justSaved);
@@ -1132,6 +1197,7 @@ public final class NotesActivity extends AppCompatActivity {
 
     private void showNote(JSONObject note) {
         noteSaving = false;
+        editingKey = null;
         currentNote = note;
         noteId = note.optString("id");
         revision = note.optInt("revision");
@@ -1512,6 +1578,8 @@ public final class NotesActivity extends AppCompatActivity {
                 final boolean metaLost = metaNotKept(data, saved);
                 ui.post(() -> {
                     justSaved = saved;
+                    NoteOutbox.remove(this, editingKey != null ? editingKey : id == null ? null : NoteOutbox.keyFor(id));
+                    editingKey = null;
                     // a save on top of an edit made elsewhere is kept, both versions in the body, marked
                     if (saved.optBoolean("conflicted")) say("Saved. It changed elsewhere too: both versions are in the note, marked.");
                     if (sharedImage != null || sharedFile != null) {
@@ -1524,6 +1592,17 @@ public final class NotesActivity extends AppCompatActivity {
             } catch (Exception error) {
                 ui.post(() -> {
                     noteSaving = false;
+                    if (NoteOutbox.unreached(error) && sharedImage == null && sharedFile == null) {
+                        // The Pi cannot be reached: keep the words on the phone and send them when it answers.
+                        NoteOutbox.put(this, editingKey != null ? editingKey : NoteOutbox.keyFor(id), id, data, expected);
+                        editingKey = null;
+                        justSaved = null;
+                        toast("Saved on this phone. It goes to the Pi when it answers.");
+                        visiting = false;
+                        showingPins = false;
+                        showList();
+                        return;
+                    }
                     if (error instanceof MediaClient.MediaException &&
                         "NOTE_CONFLICT".equals(((MediaClient.MediaException) error).code)) {
                         say("This note changed on the Pi. Your words are still here.");
