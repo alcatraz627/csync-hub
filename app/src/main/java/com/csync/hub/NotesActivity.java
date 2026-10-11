@@ -443,7 +443,7 @@ public final class NotesActivity extends AppCompatActivity {
             if (!op.optString("id").isEmpty()) covered.add(op.optString("id"));
             String shown = note.optString("title");
             View row = Kit.bindRow(Kit.addRow(group), Kit.Icon.NOTES, shown.isEmpty() ? "Untitled" : shown,
-                "Saved on this phone", "not synced yet", true);
+                "Not synced yet, saved on this phone", null, true);
             TextView rowTitle = row.findViewById(R.id.kit_title);
             rowTitle.setSingleLine(true);
             rowTitle.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
