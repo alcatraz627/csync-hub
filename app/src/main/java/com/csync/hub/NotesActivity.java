@@ -367,7 +367,6 @@ public final class NotesActivity extends AppCompatActivity {
         new Thread(() -> {
             try {
                 // Notes written while the Pi was out of reach go first, so the list below already has them.
-                if (NoteOutbox.any(this)) NoteOutbox.flush(this, client);
                 if (PiQueue.any(this)) PiQueue.flush(this, client);
                 String route = "/v1/notes" + (query.isEmpty() ? "" : "?q=" + MediaClient.enc(query));
                 JSONArray notes = client.get(route).getJSONArray("notes");
@@ -400,9 +399,9 @@ public final class NotesActivity extends AppCompatActivity {
     /** While notes wait for the Pi, look again every half minute without bothering anyone. */
     private void watchWaiting() {
         if (retryWaiting != null) ui.removeCallbacks(retryWaiting);
-        if (!NoteOutbox.any(this) && !PiQueue.any(this)) return;
+        if (!PiQueue.any(this)) return;
         retryWaiting = () -> {
-            if (page == Page.LIST && !showingPins && (NoteOutbox.any(this) || PiQueue.any(this))) loadNotes(search.getText().toString().trim());
+            if (page == Page.LIST && !showingPins && PiQueue.any(this)) loadNotes(search.getText().toString().trim());
         };
         ui.postDelayed(retryWaiting, 30_000);
     }
@@ -439,17 +438,25 @@ public final class NotesActivity extends AppCompatActivity {
         else renderNotes(query);
     }
 
+    private boolean noteSavesWaiting() {
+        JSONArray queued = PiQueue.all(this);
+        for (int i = 0; i < queued.length(); i++) if (queued.optJSONObject(i) != null && PiQueue.isNote(queued.optJSONObject(i))) return true;
+        return false;
+    }
+
     /** The notes written while the Pi was out of reach, each marked, ahead of everything else. Returns their ids. */
     private java.util.Set<String> waitingRows() {
         java.util.Set<String> covered = new java.util.HashSet<>();
-        JSONArray waiting = NoteOutbox.all(this);
+        JSONArray waiting = new JSONArray();
+        JSONArray queued = PiQueue.all(this);
+        for (int i = 0; i < queued.length(); i++) if (queued.optJSONObject(i) != null && PiQueue.isNote(queued.optJSONObject(i))) waiting.put(queued.optJSONObject(i));
         if (waiting.length() == 0) return covered;
         Kit.label(rows, "Not synced yet");
         LinearLayout group = Kit.group(rows);
         for (int i = waiting.length() - 1; i >= 0; i--) {
             JSONObject op = waiting.optJSONObject(i);
             if (op == null) continue;
-            JSONObject note = NoteOutbox.asNote(op);
+            JSONObject note = PiQueue.asNote(op);
             if (!op.optString("id").isEmpty()) covered.add(op.optString("id"));
             String shown = note.optString("title");
             View row = Kit.bindRow(Kit.addRow(group), Kit.Icon.NOTES, shown.isEmpty() ? "Untitled" : shown,
@@ -467,7 +474,7 @@ public final class NotesActivity extends AppCompatActivity {
 
     /** Open a waiting note in the editor with the words that were saved on the phone. */
     private void editWaiting(JSONObject op) {
-        JSONObject note = NoteOutbox.asNote(op);
+        JSONObject note = PiQueue.asNote(op);
         String id = op.optString("id");
         noteId = id.isEmpty() ? null : id;
         revision = op.optInt("expected");
@@ -481,7 +488,8 @@ public final class NotesActivity extends AppCompatActivity {
 
     private void renderNotes(String query) {
         java.util.Set<String> waitingIds = query.isEmpty() ? waitingRows() : new java.util.HashSet<>();
-        boolean haveWaiting = query.isEmpty() && NoteOutbox.any(this);
+        boolean haveWaiting = query.isEmpty() && noteSavesWaiting();
+        java.util.Set<String> unsynced = PiQueue.noteIdsWaiting(this);
         if (notesError != null) {
             // Name the address tried: a wrong saved address and a Pi that is down look alike otherwise.
             Kit.empty(rows, Kit.Icon.NOTES, "The Pi did not answer",
@@ -516,21 +524,22 @@ public final class NotesActivity extends AppCompatActivity {
         if (fresh != null && !freshListed) (justSaved.optBoolean("pinned") ? pinnedNotes : others).add(0, justSaved);
         if (!pinnedNotes.isEmpty()) {
             Kit.label(rows, "Pinned");
-            noteRows(Kit.group(rows), pinnedNotes);
+            noteRows(Kit.group(rows), pinnedNotes, unsynced);
         }
         if (!others.isEmpty()) {
             if (!pinnedNotes.isEmpty()) Kit.label(rows, "Notes");
-            noteRows(Kit.group(rows), others);
+            noteRows(Kit.group(rows), others, unsynced);
         }
     }
 
-    private void noteRows(LinearLayout group, java.util.List<JSONObject> ordered) {
+    private void noteRows(LinearLayout group, java.util.List<JSONObject> ordered, java.util.Set<String> unsynced) {
         for (JSONObject item : ordered) {
             String id = item.optString("id");
             int kept = item.optInt("items");
             // a note an agent wrote says so; one edited on two devices apart says both sides are in it
             String agent = item.optString("agent");
-            String when = edited(item.optLong("updatedAt"));
+            // anything of the note's still waiting for the Pi (a pin, colour, move or reminder) says so in place of its edit time
+            String when = unsynced.contains(id) ? "Not synced yet" : edited(item.optLong("updatedAt"));
             String sub = lead(when, (agent.isEmpty() ? "" : " · by " + agent) + tagWords(item));
             String end = item.optBoolean("conflicted") ? "both sides" : kept > 0 ? plural(kept, "item", "items") : null;
             boolean pinned = item.optBoolean("pinned");
@@ -658,10 +667,8 @@ public final class NotesActivity extends AppCompatActivity {
 
     /** Ask the Pi to put a note after another (or first), then read the list again in the order it kept. */
     private void moveNote(String id, String after) {
-        task(() -> {
-            client.put("/v1/notes/" + MediaClient.enc(id) + "/meta", new JSONObject().put("after", after == null ? JSONObject.NULL : after));
-            ui.post(() -> loadNotes(search.getText().toString().trim()));
-        });
+        try { writeMeta(id, new JSONObject().put("after", after == null ? JSONObject.NULL : after)); }
+        catch (org.json.JSONException impossible) { }
     }
 
     /** Every save of a note, newest first; one opens to read, copy or bring back. */
@@ -835,11 +842,29 @@ public final class NotesActivity extends AppCompatActivity {
                 ui.post(() -> loadNotes(search.getText().toString().trim()));
             } catch (MediaClient.MediaException refused) {
                 // The Pi answered no; there is nothing to retry.
+                ui.post(() -> say(refused.getMessage()));
             } catch (Exception unreached) {
                 PiQueue.put(this, key, "PUT", path, mergeWaiting(key, body));
-                ui.post(this::watchWaiting);
+                ui.post(() -> {
+                    // the row shows what was asked for, marked as not synced, until the Pi answers
+                    showWaitingMeta(id, body);
+                    watchWaiting();
+                });
             }
         });
+    }
+
+    /** Show a pin or colour that is waiting for the Pi on the note's row, which then reads "Not synced yet". */
+    private void showWaitingMeta(String id, JSONObject body) {
+        for (int i = 0; listedNotes != null && i < listedNotes.length(); i++) {
+            JSONObject n = listedNotes.optJSONObject(i);
+            if (n == null || !id.equals(n.optString("id"))) continue;
+            try {
+                if (body.has("pinned")) n.put("pinned", body.optBoolean("pinned"));
+                if (body.has("color")) { if (body.optString("color").isEmpty()) n.remove("color"); else n.put("color", body.optString("color")); }
+            } catch (org.json.JSONException ignored) { }
+        }
+        renderListRows();
     }
 
     /** A waiting meta write for the same note, with this one's fields on top, so one write carries both. */
@@ -877,22 +902,10 @@ public final class NotesActivity extends AppCompatActivity {
         });
     }
 
-    /** Saves a colour or pin on the Pi, then shows the note as the Pi now has it. */
+    /** Saves a colour or pin on the Pi, or leaves it waiting on the phone, then shows the note as the Pi has it. */
     private void setMeta(String id, String key, Object value) {
-        task(() -> {
-            JSONObject note = client.put("/v1/notes/" + MediaClient.enc(id) + "/meta", new JSONObject().put(key, value)).getJSONObject("note");
-            ui.post(() -> {
-                for (int i = 0; listedNotes != null && i < listedNotes.length(); i++) {
-                    JSONObject n = listedNotes.optJSONObject(i);
-                    if (n == null || !id.equals(n.optString("id"))) continue;
-                    try {
-                        n.put("pinned", note.optBoolean("pinned"));
-                        if (note.has("color")) n.put("color", note.optString("color")); else n.remove("color");
-                    } catch (org.json.JSONException ignored) { }
-                }
-                renderListRows();
-            });
-        });
+        try { writeMeta(id, new JSONObject().put(key, value)); }
+        catch (org.json.JSONException impossible) { }
     }
 
     /** The eight tag colours by name, the macOS system set Switchboard uses; null for none. */
@@ -1891,7 +1904,7 @@ public final class NotesActivity extends AppCompatActivity {
                 final boolean metaLost = metaNotKept(data, saved);
                 ui.post(() -> {
                     justSaved = saved;
-                    NoteOutbox.remove(this, editingKey != null ? editingKey : id == null ? null : NoteOutbox.keyFor(id));
+                    PiQueue.remove(this, editingKey != null ? editingKey : id == null ? null : PiQueue.keyFor(id));
                     editingKey = null;
                     // a save on top of an edit made elsewhere is kept, both versions in the body, marked
                     if (saved.optBoolean("conflicted")) say("Saved. It changed elsewhere too: both versions are in the note, marked.");
@@ -1905,9 +1918,9 @@ public final class NotesActivity extends AppCompatActivity {
             } catch (Exception error) {
                 ui.post(() -> {
                     noteSaving = false;
-                    if (NoteOutbox.unreached(error) && sharedImage == null && sharedFile == null) {
+                    if (PiQueue.unreached(error) && sharedImage == null && sharedFile == null) {
                         // The Pi cannot be reached: keep the words on the phone and send them when it answers.
-                        NoteOutbox.put(this, editingKey != null ? editingKey : NoteOutbox.keyFor(id), id, data, expected);
+                        PiQueue.putNote(this, editingKey != null ? editingKey : PiQueue.keyFor(id), id, data, expected);
                         editingKey = null;
                         justSaved = null;
                         toast("Saved on this phone. It goes to the Pi when it answers.");
