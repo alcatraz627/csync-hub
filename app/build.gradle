@@ -10,8 +10,8 @@ android {
         applicationId "com.csync.hub"
         minSdk 26
         targetSdk 34
-        versionCode 81
-        versionName "2.79"
+        versionCode 82
+        versionName "2.80"
     }
 
     buildTypes {
