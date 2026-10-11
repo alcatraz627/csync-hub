@@ -73,6 +73,14 @@ public final class NotesActivity extends AppCompatActivity {
     private String sharedFileName;
     private boolean sharedPrompted;
     private boolean uploading;
+    // The note open on the reading page, so the editor starts from its colour, pin and tags.
+    private JSONObject currentNote;
+    // Colour, pin and tags as set in the editor; saved with the words.
+    private String draftColor = "", baseColor = "", baseTags = "";
+    private boolean draftPinned, basePinned;
+    private EditText tagsField;
+    // The note saved last, kept first in the list until the list is read again with it in.
+    private JSONObject justSaved;
     private String editorMode = "plain";
     // The words under a note's title when nothing else is being said.
     private String resting;
@@ -289,7 +297,9 @@ public final class NotesActivity extends AppCompatActivity {
     private String edited(long seconds) {
         if (seconds <= 0) return null;
         long at = seconds * 1000, day = 86400000L;
-        if (android.text.format.DateUtils.isToday(at)) return "Edited today";
+        // Today's notes say the time, so the newest can be told apart at a glance.
+        if (android.text.format.DateUtils.isToday(at))
+            return "Edited " + android.text.format.DateFormat.getTimeFormat(this).format(new java.util.Date(at));
         if (android.text.format.DateUtils.isToday(at + day)) return "Edited yesterday";
         if (System.currentTimeMillis() - at < 6 * day)
             return "Edited on " + new java.text.SimpleDateFormat("EEEE", java.util.Locale.getDefault()).format(new java.util.Date(at));
@@ -342,6 +352,8 @@ public final class NotesActivity extends AppCompatActivity {
                     if (request != noteSearchGeneration || page != Page.LIST) return;
                     listedNotes = notes;
                     notesError = null;
+                    for (int i = 0; justSaved != null && query.isEmpty() && i < notes.length(); i++)
+                        if (justSaved.optString("id").equals(notes.optJSONObject(i).optString("id"))) justSaved = null;
                     say(null);
                     renderListRows();
                     if ((sharedImage != null || sharedFile != null) && !sharedPrompted) chooseSharedNote();
@@ -406,17 +418,33 @@ public final class NotesActivity extends AppCompatActivity {
             else Kit.empty(rows, Kit.Icon.SEARCH, "No note matches \"" + query + "\"", null, null);
             return;
         }
-        LinearLayout group = Kit.group(rows);
-        // pinned first, as Switchboard's quick page keeps them; otherwise the Pi's order (newest edit first)
-        java.util.List<JSONObject> ordered = new java.util.ArrayList<>();
-        for (int i = 0; i < listedNotes.length(); i++) if (listedNotes.optJSONObject(i) != null) ordered.add(listedNotes.optJSONObject(i));
-        java.util.Collections.sort(ordered, (a, b) -> Boolean.compare(b.optBoolean("pinned"), a.optBoolean("pinned")));
+        // Pinned notes in their own section, as Switchboard keeps them; then the rest, newest edit first,
+        // with the note just saved here first even before the Pi's list has caught up with it.
+        java.util.List<JSONObject> pinnedNotes = new java.util.ArrayList<>(), others = new java.util.ArrayList<>();
+        String fresh = justSaved == null || !query.isEmpty() ? null : justSaved.optString("id");
+        for (int i = 0; i < listedNotes.length(); i++) {
+            JSONObject n = listedNotes.optJSONObject(i);
+            if (n == null || n.optString("id").equals(fresh)) continue;
+            (n.optBoolean("pinned") ? pinnedNotes : others).add(n);
+        }
+        if (fresh != null) (justSaved.optBoolean("pinned") ? pinnedNotes : others).add(0, justSaved);
+        if (!pinnedNotes.isEmpty()) {
+            Kit.label(rows, "Pinned");
+            noteRows(Kit.group(rows), pinnedNotes);
+        }
+        if (!others.isEmpty()) {
+            if (!pinnedNotes.isEmpty()) Kit.label(rows, "Notes");
+            noteRows(Kit.group(rows), others);
+        }
+    }
+
+    private void noteRows(LinearLayout group, java.util.List<JSONObject> ordered) {
         for (JSONObject item : ordered) {
             String id = item.optString("id");
             int kept = item.optInt("items");
             // a note an agent wrote says so; one edited on two devices apart says both sides are in it
             String agent = item.optString("agent");
-            String sub = edited(item.optLong("updatedAt")) + (agent.isEmpty() ? "" : " · by " + agent);
+            String sub = edited(item.optLong("updatedAt")) + (agent.isEmpty() ? "" : " · by " + agent) + tagWords(item);
             String end = item.optBoolean("conflicted") ? "both sides" : kept > 0 ? plural(kept, "item", "items") : null;
             boolean pinned = item.optBoolean("pinned");
             View row = Kit.bindRow(Kit.addRow(group), pinned ? R.drawable.ic_pin : Kit.Icon.NOTES, item.optString("title", "Untitled"), sub, end, true);
@@ -426,6 +454,15 @@ public final class NotesActivity extends AppCompatActivity {
             row.setOnClickListener(v -> loadNote(id));
             row.setOnLongClickListener(v -> { metaSheet(item); return true; });
         }
+    }
+
+    /** A note's tags as they read under its title, " · #work #ideas", or nothing. */
+    private static String tagWords(JSONObject note) {
+        JSONArray tags = note.optJSONArray("tags");
+        if (tags == null || tags.length() == 0) return "";
+        StringBuilder out = new StringBuilder(" ·");
+        for (int i = 0; i < tags.length(); i++) out.append(" #").append(tags.optString(i));
+        return out.toString();
     }
 
     private static final String[] COLORS = { "red", "orange", "yellow", "green", "teal", "blue", "purple", "pink" };
@@ -912,10 +949,11 @@ public final class NotesActivity extends AppCompatActivity {
 
     private void showNote(JSONObject note) {
         noteSaving = false;
+        currentNote = note;
         noteId = note.optString("id");
         revision = note.optInt("revision");
         String noteTitle = note.optString("title"), source = note.optString("body");
-        open(Page.NOTE, noteTitle, edited(note.optLong("updatedAt")));
+        open(Page.NOTE, noteTitle, edited(note.optLong("updatedAt")) + tagWords(note));
         Runnable back = () -> { visiting = false; showingPins = false; showList(); };
         Kit.pageTop(topBar, visiting ? this::finish : back, moreCrumb(), new Kit.Crumb(Kit.Icon.NOTES, "Notes", back),
             new Kit.Crumb(R.drawable.csi_markdown, "Note", null));
@@ -1087,7 +1125,14 @@ public final class NotesActivity extends AppCompatActivity {
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (resultCode != Activity.RESULT_OK || data == null || data.getData() == null || noteId == null) return;
+        if (resultCode != Activity.RESULT_OK || data == null || data.getData() == null) return;
+        if (noteId == null) {
+            // A note not saved yet holds what was picked; the save puts it on the Pi.
+            if (requestCode == 43) { sharedFile = data.getData(); sharedFileName = pickedName(sharedFile); sharedImage = null; }
+            else if (requestCode == 42) { sharedImage = data.getData(); sharedFile = null; }
+            say(sharedFile != null ? sharedFileName + " is added when you save" : "The picture is added when you save");
+            return;
+        }
         if (requestCode == 43) {
             sharedFile = data.getData();
             sharedFileName = pickedName(sharedFile);
@@ -1143,6 +1188,7 @@ public final class NotesActivity extends AppCompatActivity {
         previewParams.topMargin = dp(10);
         rows.addView(preview, previewParams);
         setEditorMode(mode);
+        drawDraftMeta();
         keptHost = new LinearLayout(this);
         keptHost.setOrientation(LinearLayout.VERTICAL);
         rows.addView(keptHost, new LinearLayout.LayoutParams(-1, -2));
@@ -1151,12 +1197,10 @@ public final class NotesActivity extends AppCompatActivity {
         LinearLayout buttons = new LinearLayout(this);
         buttons.addView(Kit.primaryButton(this, R.drawable.csi_check, "Save", this::saveNote),
             new LinearLayout.LayoutParams(-2, -2));
-        // A note has to exist on the Pi before anything can be kept with it.
-        if (noteId != null) {
-            LinearLayout.LayoutParams next = new LinearLayout.LayoutParams(-2, -2);
-            next.setMarginStart(dp(8));
-            buttons.addView(Kit.button(this, R.drawable.csi_plus, "Add to this note", R.color.text, this::chooseAddition), next);
-        }
+        // A new note holds what is added and puts it on the Pi right after the first save.
+        LinearLayout.LayoutParams next = new LinearLayout.LayoutParams(-2, -2);
+        next.setMarginStart(dp(8));
+        buttons.addView(Kit.button(this, R.drawable.csi_plus, "Add to this note", R.color.text, this::chooseAddition), next);
         LinearLayout.LayoutParams below = new LinearLayout.LayoutParams(-1, -2);
         below.topMargin = dp(18);
         rows.addView(buttons, below);
@@ -1164,9 +1208,62 @@ public final class NotesActivity extends AppCompatActivity {
 
     private String editorBaseTitle = "", editorBaseBody = "";
 
+    /**
+     * Pin, colour and tags in the editor, so a note is filed while it is written. They start from the
+     * note being edited, or empty for a new one, and are sent with the words when it is saved.
+     */
+    private void drawDraftMeta() {
+        JSONObject from = noteId == null ? null : currentNote;
+        draftColor = baseColor = from == null ? "" : from.optString("color");
+        draftPinned = basePinned = from != null && from.optBoolean("pinned");
+        java.util.List<String> tags = new java.util.ArrayList<>();
+        JSONArray had = from == null ? null : from.optJSONArray("tags");
+        for (int i = 0; had != null && i < had.length(); i++) tags.add(had.optString(i));
+        baseTags = android.text.TextUtils.join(", ", tags);
+
+        Kit.label(rows, "Pin and colour");
+        LinearLayout group = Kit.group(rows);
+        View pin = Kit.addRow(group);
+        Kit.bindRow(pin, R.drawable.ic_pin, "Pin", "Keep it in Pinned, at the top of the list", null, false);
+        Kit.rowToggle(pin, draftPinned, on -> draftPinned = on);
+        View colour = Kit.addRow(group);
+        Runnable[] showColour = new Runnable[1];
+        showColour[0] = () -> {
+            Kit.bindRow(colour, Kit.Icon.NOTES, "Colour", draftColor.isEmpty() ? "None" : capital(draftColor), null, true);
+            android.widget.ImageView mark = colour.findViewById(R.id.kit_icon);
+            Integer tint = noteColor(draftColor);
+            if (tint != null) mark.setColorFilter(tint); else mark.clearColorFilter();
+        };
+        showColour[0].run();
+        colour.setOnClickListener(v -> {
+            java.util.List<Kit.Action> choices = new java.util.ArrayList<>();
+            for (String c : COLORS)
+                choices.add(new Kit.Action(Kit.Icon.NOTES, capital(c), c.equals(draftColor) ? "Its colour now" : null,
+                    () -> { draftColor = c; showColour[0].run(); }).tint(noteColor(c)));
+            choices.add(new Kit.Action(Kit.Icon.NOTES, "No colour", draftColor.isEmpty() ? "Its colour now" : null,
+                () -> { draftColor = ""; showColour[0].run(); }));
+            Kit.sheet(this, "Colour", null, choices.toArray(new Kit.Action[0]));
+        });
+        tagsField = labelled("Tags", "work, ideas", baseTags, false);
+    }
+
+    private static String capital(String word) {
+        return word.isEmpty() ? word : Character.toUpperCase(word.charAt(0)) + word.substring(1);
+    }
+
+    /** The tags typed in the editor, one per comma, blanks dropped. */
+    private JSONArray draftTags() {
+        JSONArray out = new JSONArray();
+        if (tagsField == null) return out;
+        for (String tag : tagsField.getText().toString().split(",")) if (!tag.trim().isEmpty()) out.put(tag.trim());
+        return out;
+    }
+
     private boolean editorHasUnsaved() {
         if (page != Page.EDIT || title == null || body == null) return false;
-        return sharedImage != null || sharedFile != null ||
+        boolean metaChanged = !draftColor.equals(baseColor) || draftPinned != basePinned ||
+            (tagsField != null && !tagsField.getText().toString().trim().equals(baseTags));
+        return metaChanged || sharedImage != null || sharedFile != null ||
             !title.getText().toString().trim().equals(editorBaseTitle.trim()) ||
             !body.getText().toString().equals(editorBaseBody);
     }
@@ -1202,10 +1299,15 @@ public final class NotesActivity extends AppCompatActivity {
         new Thread(() -> {
             try {
                 JSONObject data = new JSONObject().put("title", name).put("body", source);
+                // only what changed, so a plain save is one version on the Pi, not three
+                if (tagsField != null && !tagsField.getText().toString().trim().equals(baseTags)) data.put("tags", draftTags());
+                if (!draftColor.equals(baseColor)) data.put("color", draftColor);
+                if (draftPinned != basePinned) data.put("pinned", draftPinned);
                 JSONObject result = id == null ? client.post("/v1/notes", data) :
                     client.put("/v1/notes/" + MediaClient.enc(id), data.put("expectedRevision", expected));
                 JSONObject saved = result.getJSONObject("note");
                 ui.post(() -> {
+                    justSaved = saved;
                     // a save on top of an edit made elsewhere is kept, both versions in the body, marked
                     if (saved.optBoolean("conflicted")) say("Saved. It changed elsewhere too: both versions are in the note, marked.");
                     if (sharedImage != null || sharedFile != null) {
@@ -1233,6 +1335,7 @@ public final class NotesActivity extends AppCompatActivity {
     private void deleteNote() {
         String id = noteId;
         int expected = revision;
+        if (justSaved != null && id.equals(justSaved.optString("id"))) justSaved = null;
         say("Deleting from the Pi");
         task(() -> {
             client.delete("/v1/notes/" + MediaClient.enc(id), new JSONObject().put("expectedRevision", expected));
