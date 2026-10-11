@@ -229,9 +229,56 @@ final class SwitchboardScreen {
         String tip = r.optString("tip", "");
         String whole = tip.isEmpty() ? note : tip;
         List<Kit.Action> actions = new ArrayList<>();
+        // The Mac's own buttons run on the Mac; Copy is done here, on the phone.
+        JSONArray buttons = r.optJSONArray("buttons");
+        for (int i = 0; buttons != null && i < buttons.length(); i++) {
+            String button = buttons.optJSONObject(i) == null ? "" : buttons.optJSONObject(i).optString("label");
+            if (button.isEmpty() || button.equals("Copy")) continue;
+            actions.add(new Kit.Action(buttonIcon(button), button, "On the Mac", () -> press(r, button, false)));
+        }
         actions.add(new Kit.Action(R.drawable.csi_copy, "Copy", firstLine(whole), () -> copy(whole)));
         sections.add(new Kit.Section(null, actions));
         Kit.sheet(a, label, note, sections);
+    }
+
+    private static int buttonIcon(String button) {
+        switch (button) {
+            case "Enable": case "Start": return R.drawable.csi_play;
+            case "Disable": case "Stop": case "Kill": return R.drawable.csi_stop;
+            case "Open": return R.drawable.csi_link;
+            default: return R.drawable.csi_tools;
+        }
+    }
+
+    // Press a row's button on the Mac. A button that asks first gets its question asked here;
+    // when it is done the tab is read again, since the row's state lives on the Mac.
+    private void press(JSONObject r, String button, boolean confirmed) {
+        final String ip = Prefs.homeIp(a), token = Prefs.token(a), want = tab, key = r.optString("key");
+        new Thread(() -> {
+            JSONObject got;
+            String why = null;
+            try {
+                got = MeshClient.switchboardAct(ip, token, want, key, button, confirmed);
+            } catch (Exception e) {
+                got = null;
+                why = e.getMessage();
+            }
+            final JSONObject answer = got;
+            final String failure = why;
+            ui.post(() -> {
+                if (answer == null) {
+                    Kit.failed(a, failure == null ? "The Mac did not answer" : failure, () -> press(r, button, confirmed));
+                } else if (answer.has("confirm")) {
+                    Kit.confirm(a, button + " " + r.optString("label") + "?", answer.optString("confirm"),
+                        buttonIcon(button), button, () -> press(r, button, true));
+                } else if (!answer.optBoolean("ok")) {
+                    Kit.failed(a, answer.optString("error", "The Mac could not do that"), null);
+                } else if (showing && want.equals(tab)) {
+                    // The list stays where it is until the fresh one arrives.
+                    load();
+                }
+            });
+        }).start();
     }
 
     private void copy(String words) {

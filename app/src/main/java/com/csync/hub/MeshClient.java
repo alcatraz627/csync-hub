@@ -178,6 +178,34 @@ public final class MeshClient {
         return body;
     }
 
+    /**
+     * Press one button on a Switchboard row, on the Mac. The answer is Switchboard's own:
+     * {"ok":true}, {"ok":false,"error":...}, {"error":...} or {"confirm":question}. Blocks.
+     */
+    static JSONObject switchboardAct(String ip, String token, String tab, String key, String button, boolean confirmed) throws Exception {
+        URL url = new URL("http://" + ip + ":" + PORT + "/switchboard/act");
+        HttpURLConnection c = (HttpURLConnection) url.openConnection();
+        c.setConnectTimeout(5000);
+        c.setReadTimeout(35000);
+        c.setRequestMethod("POST");
+        c.setDoOutput(true);
+        c.setRequestProperty("X-Csync-Token", token);
+        c.setRequestProperty("Content-Type", "application/json");
+        JSONObject ask = new JSONObject().put("tab", tab).put("key", key).put("button", button).put("confirmed", confirmed);
+        try (java.io.OutputStream o = c.getOutputStream()) { o.write(ask.toString().getBytes("UTF-8")); }
+        int code = c.getResponseCode();
+        InputStream in = code < 400 ? c.getInputStream() : c.getErrorStream();
+        ByteArrayOutputStream bo = new ByteArrayOutputStream();
+        byte[] buf = new byte[8192];
+        int r;
+        while (in != null && (r = in.read(buf)) != -1) bo.write(buf, 0, r);
+        if (in != null) in.close();
+        c.disconnect();
+        JSONObject body = new JSONObject(bo.size() == 0 ? "{}" : bo.toString("UTF-8"));
+        if (code >= 400) throw new Exception(body.optString("error", "The Mac answered " + code));
+        return body;
+    }
+
     /** Fetch a media file (image or video) from the assistant, authed. Blocks. */
     static byte[] fetchMedia(String ip, String token, String mediaPath) throws Exception {
         URL url = new URL("http://" + ip + ":" + ASSIST_PORT + mediaPath);
