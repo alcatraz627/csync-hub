@@ -250,7 +250,8 @@ final class SwitchboardScreen {
         int percent = r.optInt("percent");
         String reset = r.optString("reset");
         View row = Kit.addRow(box);
-        Kit.bindRow(row, TAB_ICONS[tabIndex()], r.optString("label"), reset.isEmpty() ? null : "Resets " + reset, null, false);
+        Kit.bindRow(row, TAB_ICONS[tabIndex()], r.optString("label"), reset.isEmpty() ? null : "Resets " + reset, null, true);
+        row.setOnClickListener(v -> details(r));
         LinearLayout meters = new LinearLayout(a);
         meters.setOrientation(LinearLayout.HORIZONTAL);
         meters.setGravity(android.view.Gravity.CENTER_VERTICAL);
@@ -316,7 +317,8 @@ final class SwitchboardScreen {
         }
         colours.add(new Kit.Action(R.drawable.csi_sun, "White", "Back to warm or cool white", () -> act(r, "Colour", "white", false)));
         sections.add(new Kit.Section("Colour", colours));
-        Kit.sheet(a, r.optString("label"), r.optString("note", null), sections);
+        sections.add(new Kit.Section(null, java.util.Collections.singletonList(copyAll(r))));
+        Kit.sheet(a, r.optString("label"), r.optString("note", null), sections, true);
     }
 
     // A row's drawer: everything the Mac shows under it, and Copy for the words it carries.
@@ -332,9 +334,11 @@ final class SwitchboardScreen {
             facts.add(new Kit.Action(R.drawable.csi_info, child.optString("label"), words.isEmpty() ? null : words,
                 () -> copy(words.isEmpty() ? child.optString("label") : words)));
         }
-        if (!facts.isEmpty()) sections.add(new Kit.Section("Tap a line to copy it", facts));
-        String tip = r.optString("tip", "");
-        String whole = tip.isEmpty() ? note : tip;
+        // A long drawer opens with Copy all, so it is not hidden below the lines it copies.
+        if (!facts.isEmpty()) {
+            sections.add(new Kit.Section(null, java.util.Collections.singletonList(copyAll(r))));
+            sections.add(new Kit.Section("Tap to copy a line, hold to select", facts));
+        }
         List<Kit.Action> actions = new ArrayList<>();
         // The Mac's own buttons run on the Mac; Copy is done here, on the phone.
         JSONArray buttons = r.optJSONArray("buttons");
@@ -346,9 +350,32 @@ final class SwitchboardScreen {
             if (spec.has("runs") && !spec.optBoolean("runs")) continue;
             actions.add(new Kit.Action(buttonIcon(button), button, "On the Mac", () -> press(r, button, false)));
         }
-        actions.add(new Kit.Action(R.drawable.csi_copy, "Copy", firstLine(whole), () -> copy(whole)));
+        if (facts.isEmpty()) actions.add(copyAll(r));
         sections.add(new Kit.Section(null, actions));
-        Kit.sheet(a, label, note, sections);
+        Kit.sheet(a, label, note, sections, true);
+    }
+
+    // Every line the drawer shows, as plain text: the name, its words, then each fact as "name: words".
+    private static String allLines(JSONObject r) {
+        StringBuilder all = new StringBuilder(r.optString("label"));
+        String note = r.optString("note", ""), tip = r.optString("tip", "");
+        if (!note.isEmpty()) all.append('\n').append(note);
+        if (!tip.isEmpty() && !tip.equals(note)) all.append('\n').append(tip);
+        JSONArray children = r.optJSONArray("children");
+        for (int i = 0; children != null && i < children.length(); i++) {
+            JSONObject child = children.optJSONObject(i);
+            if (child == null) continue;
+            String words = child.optString("note", "");
+            all.append('\n').append(child.optString("label"));
+            if (!words.isEmpty()) all.append(": ").append(words);
+        }
+        return all.toString();
+    }
+
+    private Kit.Action copyAll(JSONObject r) {
+        String all = allLines(r);
+        int lines = all.split("\n", -1).length;
+        return new Kit.Action(R.drawable.csi_copy, "Copy all", lines + (lines == 1 ? " line" : " lines"), () -> copy(all));
     }
 
     private static boolean hasRunnable(JSONObject r, String button) {
