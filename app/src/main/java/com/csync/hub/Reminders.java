@@ -34,6 +34,10 @@ final class Reminders {
         long at;
         String label;
         boolean rang;
+        // The note this reminder belongs to (empty for one made here), the time the note asked for, and how
+        // it repeats; the reminder re-arms itself after it rings when the note repeats.
+        String note = "", repeat = "never";
+        long srcAt;
         Item(long id, String label, long at, boolean rang) { this.id = id; this.label = label; this.at = at; this.rang = rang; }
     }
 
@@ -65,8 +69,12 @@ final class Reminders {
             for (int i = 0; i < list.length(); i++) {
                 JSONObject o = list.getJSONObject(i);
                 if ("timer".equals(o.optString("kind"))) continue;
-                out.add(new Item(o.getLong("id"), o.optString("label"), o.getLong("at"),
-                    o.optBoolean("rang", o.optBoolean("fired"))));
+                Item item = new Item(o.getLong("id"), o.optString("label"), o.getLong("at"),
+                    o.optBoolean("rang", o.optBoolean("fired")));
+                item.note = o.optString("note");
+                item.repeat = o.optString("repeat", "never");
+                item.srcAt = o.optLong("srcAt");
+                out.add(item);
             }
         } catch (Exception ignored) { }
         out.sort((a, b) -> Long.compare(a.at, b.at));
@@ -134,6 +142,60 @@ final class Reminders {
         alarms(c).cancel(pending(c, id));
         silence(c, id);
         changed(c);
+    }
+
+    // ---- reminders that belong to a note ----
+
+    /** The reminder kept for a note, or null. A note has at most one. */
+    static Item forNote(Context c, String noteId) {
+        for (Item i : all(c)) if (noteId.equals(i.note)) return i;
+        return null;
+    }
+
+    /**
+     * Keep exactly one reminder for a note, at the time the note asks for. {@code at} is when it should
+     * first ring (already moved forward for a repeat), {@code asked} is the time written on the note.
+     */
+    static Item setForNote(Context c, String noteId, String label, long at, long asked, String repeat) {
+        List<Item> items = all(c);
+        Item item = null;
+        for (Item i : items) if (noteId.equals(i.note)) item = i;
+        if (item == null) {
+            long id = System.currentTimeMillis();
+            for (Item other : items) if (other.id >= id) id = other.id + 1;
+            item = new Item(id, label, at, false);
+            items.add(item);
+        }
+        item.note = noteId;
+        item.label = label == null || label.trim().isEmpty() ? "Reminder" : label.trim();
+        item.at = at;
+        item.srcAt = asked;
+        item.repeat = repeat == null ? "never" : repeat;
+        item.rang = false;
+        save(c, items);
+        silence(c, item.id);
+        arm(c, item);
+        changed(c);
+        return item;
+    }
+
+    /** Take away the reminder kept for a note, as when the note moves to the Mac or loses its reminder. */
+    static void dropForNote(Context c, String noteId) {
+        Item item = forNote(c, noteId);
+        if (item != null) cancel(c, item.id);
+    }
+
+    /** The first time after {@code now} that a repeating reminder falls on, or 0 when it does not repeat. */
+    static long nextOccurrence(long at, String repeat, long now) {
+        int field;
+        if ("daily".equals(repeat)) field = Calendar.DAY_OF_MONTH;
+        else if ("weekly".equals(repeat)) field = Calendar.WEEK_OF_YEAR;
+        else if ("monthly".equals(repeat)) field = Calendar.MONTH;
+        else return 0;
+        Calendar when = Calendar.getInstance();
+        when.setTimeInMillis(at);
+        for (int guard = 0; when.getTimeInMillis() <= now && guard < 5000; guard++) when.add(field, 1);
+        return when.getTimeInMillis();
     }
 
     /** Forget rung reminders older than a week, keeping the list short. */
@@ -275,7 +337,11 @@ final class Reminders {
         for (Item i : items) if (i.id == id) hit = i;
         if (hit == null || hit.rang) return;
         hit.rang = true;
+        long rangFor = hit.at;
+        long again = hit.note.isEmpty() ? 0 : nextOccurrence(hit.at, hit.repeat, System.currentTimeMillis());
+        if (again > 0) { hit.at = again; hit.rang = false; }
         save(c, items);
+        if (again > 0) arm(c, hit);
         NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
         NotificationChannel channel = new NotificationChannel(CHANNEL, "Reminders", NotificationManager.IMPORTANCE_HIGH);
         channel.enableVibration(true);
@@ -285,7 +351,7 @@ final class Reminders {
         Notification n = new Notification.Builder(c, CHANNEL)
             .setSmallIcon(R.drawable.csi_bell)
             .setContentTitle(hit.label)
-            .setContentText(android.text.format.DateFormat.getTimeFormat(c).format(new java.util.Date(hit.at)))
+            .setContentText(android.text.format.DateFormat.getTimeFormat(c).format(new java.util.Date(rangFor)))
             .setCategory(Notification.CATEGORY_REMINDER)
             .setAutoCancel(true)
             .setContentIntent(PendingIntent.getActivity(c, (int) (id % 100000), open,
@@ -313,7 +379,7 @@ final class Reminders {
         JSONArray list = new JSONArray();
         try {
             for (Item i : items) list.put(new JSONObject().put("id", i.id).put("kind", "reminder").put("label", i.label)
-                .put("at", i.at).put("rang", i.rang));
+                .put("at", i.at).put("rang", i.rang).put("note", i.note).put("repeat", i.repeat).put("srcAt", i.srcAt));
         } catch (Exception ignored) { }
         prefs(c).edit().putString("items", list.toString()).commit();
     }

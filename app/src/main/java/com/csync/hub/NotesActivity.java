@@ -361,8 +361,11 @@ public final class NotesActivity extends AppCompatActivity {
             try {
                 // Notes written while the Pi was out of reach go first, so the list below already has them.
                 if (NoteOutbox.any(this)) NoteOutbox.flush(this, client);
+                if (PiQueue.any(this)) PiQueue.flush(this, client);
                 String route = "/v1/notes" + (query.isEmpty() ? "" : "?q=" + MediaClient.enc(query));
                 JSONArray notes = client.get(route).getJSONArray("notes");
+                // Only a full read says which notes are gone, so only it settles the phone's reminders.
+                if (query.isEmpty()) NoteReminders.reconcile(this, notes);
                 ui.post(() -> {
                     if (request != noteSearchGeneration || page != Page.LIST) return;
                     listedNotes = notes;
@@ -390,9 +393,9 @@ public final class NotesActivity extends AppCompatActivity {
     /** While notes wait for the Pi, look again every half minute without bothering anyone. */
     private void watchWaiting() {
         if (retryWaiting != null) ui.removeCallbacks(retryWaiting);
-        if (!NoteOutbox.any(this)) return;
+        if (!NoteOutbox.any(this) && !PiQueue.any(this)) return;
         retryWaiting = () -> {
-            if (page == Page.LIST && !showingPins && NoteOutbox.any(this)) loadNotes(search.getText().toString().trim());
+            if (page == Page.LIST && !showingPins && (NoteOutbox.any(this) || PiQueue.any(this))) loadNotes(search.getText().toString().trim());
         };
         ui.postDelayed(retryWaiting, 30_000);
     }
@@ -492,16 +495,18 @@ public final class NotesActivity extends AppCompatActivity {
             else Kit.empty(rows, Kit.Icon.SEARCH, "No note matches \"" + query + "\"", null, null);
             return;
         }
-        // Pinned notes in their own section, as Switchboard keeps them; then the rest, newest edit first,
-        // with the note just saved here first even before the Pi's list has caught up with it.
+        // Pinned notes in their own section, as Switchboard keeps them; then the rest. Each keeps the
+        // Pi's order, which is the shared order. Only a note the Pi's list does not hold yet goes first.
         java.util.List<JSONObject> pinnedNotes = new java.util.ArrayList<>(), others = new java.util.ArrayList<>();
         String fresh = justSaved == null || !query.isEmpty() ? null : justSaved.optString("id");
+        boolean freshListed = false;
         for (int i = 0; i < listedNotes.length(); i++) {
             JSONObject n = listedNotes.optJSONObject(i);
-            if (n == null || n.optString("id").equals(fresh) || waitingIds.contains(n.optString("id"))) continue;
+            if (n == null || waitingIds.contains(n.optString("id"))) continue;
+            if (n.optString("id").equals(fresh)) freshListed = true;
             (n.optBoolean("pinned") ? pinnedNotes : others).add(n);
         }
-        if (fresh != null) (justSaved.optBoolean("pinned") ? pinnedNotes : others).add(0, justSaved);
+        if (fresh != null && !freshListed) (justSaved.optBoolean("pinned") ? pinnedNotes : others).add(0, justSaved);
         if (!pinnedNotes.isEmpty()) {
             Kit.label(rows, "Pinned");
             noteRows(Kit.group(rows), pinnedNotes);
@@ -610,8 +615,46 @@ public final class NotesActivity extends AppCompatActivity {
         // the everyday actions first; the eight colours are long and go last
         sections.add(new Kit.Section("Note", acts));
         sections.add(new Kit.Section("Pin", pin));
+        java.util.List<Kit.Action> moves = moveActions(id, pinned);
+        if (!moves.isEmpty()) sections.add(new Kit.Section("Order", moves));
         sections.add(new Kit.Section("Colour", colours));
         Kit.sheet(this, item.optString("title", "Note"), null, sections);
+    }
+
+    /**
+     * Move up, Move down and Move to top for a note, among the notes now on screen that share its pin
+     * group. The Pi settles the order; "after" names the note it should sit under, null for the top.
+     * A note already first has nothing to move up to, and one last has nothing to move down to.
+     */
+    private java.util.List<Kit.Action> moveActions(String id, boolean pinned) {
+        java.util.List<Kit.Action> out = new java.util.ArrayList<>();
+        if (listedNotes == null) return out;
+        java.util.List<String> group = new java.util.ArrayList<>();
+        for (int i = 0; i < listedNotes.length(); i++) {
+            JSONObject n = listedNotes.optJSONObject(i);
+            if (n != null && n.optBoolean("pinned") == pinned && n.optInt("revision") >= 1) group.add(n.optString("id"));
+        }
+        int at = group.indexOf(id);
+        if (at < 0 || group.size() < 2) return out;
+        if (at > 0) {
+            String above = at >= 2 ? group.get(at - 2) : null;
+            out.add(new Kit.Action(R.drawable.csi_move_up, "Move up", "One place higher", () -> moveNote(id, above)));
+        }
+        if (at < group.size() - 1) {
+            String below = group.get(at + 1);
+            out.add(new Kit.Action(R.drawable.csi_move_down, "Move down", "One place lower", () -> moveNote(id, below)));
+        }
+        if (at > 0) out.add(new Kit.Action(R.drawable.csi_move_top, "Move to top",
+            pinned ? "First among the pinned" : "First below the pinned", () -> moveNote(id, null)));
+        return out;
+    }
+
+    /** Ask the Pi to put a note after another (or first), then read the list again in the order it kept. */
+    private void moveNote(String id, String after) {
+        task(() -> {
+            client.put("/v1/notes/" + MediaClient.enc(id) + "/meta", new JSONObject().put("after", after == null ? JSONObject.NULL : after));
+            ui.post(() -> loadNotes(search.getText().toString().trim()));
+        });
     }
 
     /** Every save of a note, newest first; one opens to read, copy or bring back. */
@@ -702,26 +745,110 @@ public final class NotesActivity extends AppCompatActivity {
             }).show();
     }
 
-    /** A reminder named for the note, at a time picked from a few common ones. */
+    /**
+     * A reminder for the note: pick which device rings it, then when. The choice stays open while the
+     * device is picked, and the time closes it. The note carries the time and the device, so the Mac
+     * reads the same words the phone wrote.
+     */
     private void remindAbout(JSONObject item) {
+        String id = item.optString("id");
+        String label = item.optString("title", "Note");
         java.util.Calendar at = java.util.Calendar.getInstance();
         long inHour = System.currentTimeMillis() + 3_600_000L;
         at.set(java.util.Calendar.HOUR_OF_DAY, 18); at.set(java.util.Calendar.MINUTE, 0); at.set(java.util.Calendar.SECOND, 0);
         long evening = at.getTimeInMillis() > System.currentTimeMillis() + 600_000L ? at.getTimeInMillis() : -1;
         at.add(java.util.Calendar.DAY_OF_MONTH, 1); at.set(java.util.Calendar.HOUR_OF_DAY, 9);
         long morning = at.getTimeInMillis();
-        String label = item.optString("title", "Note");
-        java.util.List<Kit.Action> when = new java.util.ArrayList<>();
-        when.add(new Kit.Action(R.drawable.csi_clock, "In an hour", null, () -> remindAt(label, inHour)));
-        if (evening > 0) when.add(new Kit.Action(R.drawable.csi_dusk, "This evening", "18:00", () -> remindAt(label, evening)));
-        when.add(new Kit.Action(R.drawable.csi_sun, "Tomorrow morning", "09:00", () -> remindAt(label, morning)));
-        Kit.sheet(this, "Remind me about " + label, null, when.toArray(new Kit.Action[0]));
+        String[] on = { "phone".equals(item.optString("remindOn")) || item.optString("remindOn").isEmpty() ? "phone" : "mac" };
+        Kit.toggleSheet(this, "Remind me about " + label, remindingNow(item), () -> {
+            java.util.List<Kit.Section> sections = new java.util.ArrayList<>();
+            java.util.List<Kit.Action> where = new java.util.ArrayList<>();
+            where.add(new Kit.Action(R.drawable.csi_device, "This phone", "Rings here, even with the app closed",
+                () -> on[0] = "phone").value(on[0].equals("phone") ? "Chosen" : null));
+            where.add(new Kit.Action(R.drawable.csi_screen, "Mac", "Rings on the Mac through Reminders",
+                () -> on[0] = "mac").value(on[0].equals("mac") ? "Chosen" : null));
+            sections.add(new Kit.Section("Remind on", where));
+            java.util.List<Kit.Action> when = new java.util.ArrayList<>();
+            when.add(new Kit.Action(R.drawable.csi_clock, "In an hour", null, () -> remindAt(id, label, on[0], inHour), true));
+            if (evening > 0) when.add(new Kit.Action(R.drawable.csi_dusk, "This evening", "18:00", () -> remindAt(id, label, on[0], evening), true));
+            when.add(new Kit.Action(R.drawable.csi_sun, "Tomorrow morning", "09:00", () -> remindAt(id, label, on[0], morning), true));
+            sections.add(new Kit.Section("When", when));
+            if (item.optLong("remindAt") > 0) {
+                java.util.List<Kit.Action> clear = new java.util.ArrayList<>();
+                clear.add(new Kit.Action(R.drawable.csi_close, "Clear the reminder", null, () -> clearRemind(id), true));
+                sections.add(new Kit.Section(null, clear));
+            }
+            return sections;
+        });
     }
 
-    private void remindAt(String label, long at) {
-        Reminders.add(this, label, at);
+    /** What the note's reminder says now, as "This phone, Sat 18:00", or null when it has none. */
+    private String remindingNow(JSONObject item) {
+        long at = item.optLong("remindAt") * 1000;
+        if (at <= 0) return null;
+        String where = "mac".equals(item.optString("remindOn")) ? "On the Mac" : "On this phone";
+        return where + ", " + android.text.format.DateUtils.formatDateTime(this, at,
+            android.text.format.DateUtils.FORMAT_SHOW_TIME | android.text.format.DateUtils.FORMAT_SHOW_WEEKDAY);
+    }
+
+    /** Write the reminder onto the note and keep the phone's own copy in line: here for the phone, none for the Mac. */
+    private void remindAt(String id, String label, String on, long at) {
+        if (on.equals("phone")) NoteReminders.setHere(this, id, label, at, "never");
+        else NoteReminders.dropHere(this, id);
+        JSONObject body = new JSONObject();
+        try { body.put("remindAt", at / 1000).put("remindOn", on); } catch (org.json.JSONException impossible) { }
+        writeMeta(id, body);
         toast("Reminder set for " + android.text.format.DateUtils.formatDateTime(this, at,
-            android.text.format.DateUtils.FORMAT_SHOW_TIME | android.text.format.DateUtils.FORMAT_SHOW_WEEKDAY));
+            android.text.format.DateUtils.FORMAT_SHOW_TIME | android.text.format.DateUtils.FORMAT_SHOW_WEEKDAY)
+            + (on.equals("mac") ? " on the Mac" : " on this phone"));
+    }
+
+    private void clearRemind(String id) {
+        NoteReminders.dropHere(this, id);
+        JSONObject body = new JSONObject();
+        try { body.put("remindAt", JSONObject.NULL); } catch (org.json.JSONException impossible) { }
+        writeMeta(id, body);
+        toast("Reminder cleared");
+    }
+
+    /**
+     * Send a note's meta now, or leave it waiting on the phone if the Pi does not answer. The latest word
+     * for a note replaces an earlier one still waiting. Never says anything went wrong: the phone's own
+     * reminder is already set, and the Mac hears of it when the Pi next answers.
+     */
+    private void writeMeta(String id, JSONObject body) {
+        if (body.length() == 0) return;
+        String path = "/v1/notes/" + MediaClient.enc(id) + "/meta";
+        String key = "meta-" + id;
+        task(() -> {
+            try {
+                // An earlier write still waiting goes first, so the Pi sees them in order.
+                if (PiQueue.has(this, key)) PiQueue.flush(this, client);
+                client.put(path, body);
+                ui.post(() -> loadNotes(search.getText().toString().trim()));
+            } catch (MediaClient.MediaException refused) {
+                // The Pi answered no; there is nothing to retry.
+            } catch (Exception unreached) {
+                PiQueue.put(this, key, "PUT", path, mergeWaiting(key, body));
+                ui.post(this::watchWaiting);
+            }
+        });
+    }
+
+    /** A waiting meta write for the same note, with this one's fields on top, so one write carries both. */
+    private JSONObject mergeWaiting(String key, JSONObject body) {
+        JSONArray ops = PiQueue.all(this);
+        for (int i = 0; i < ops.length(); i++) {
+            JSONObject op = ops.optJSONObject(i);
+            if (op == null || !key.equals(op.optString("key")) || op.optJSONObject("body") == null) continue;
+            try {
+                JSONObject merged = new JSONObject(op.optJSONObject("body").toString());
+                java.util.Iterator<String> names = body.keys();
+                while (names.hasNext()) { String name = names.next(); merged.put(name, body.get(name)); }
+                return merged;
+            } catch (org.json.JSONException ignore) { }
+        }
+        return body;
     }
 
     /** Delete a note picked from the list, at the revision just read, and redraw the list. */

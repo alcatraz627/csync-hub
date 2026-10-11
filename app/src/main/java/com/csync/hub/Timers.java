@@ -48,6 +48,8 @@ final class Timers {
         // When it rings while running; how much is left while paused.
         long end, remain;
         boolean paused, done;
+        // The run this timer is, as the Pi and the Mac know it; empty for a timer that is not shared.
+        String rid = "";
 
         long left(long now) { return done ? 0 : paused ? remain : Math.max(0, end - now); }
         float fraction(long now) { return done ? 1f : total <= 0 ? 0f : Math.max(0f, Math.min(1f, left(now) / (float) total)); }
@@ -58,7 +60,10 @@ final class Timers {
         long id;
         String label, colour;
         int minutes;
+        // The id this tile has in the shared template list; empty until it has been named there.
+        String tid = "";
         Tile(long id, String label, int minutes, String colour) { this.id = id; this.label = label; this.minutes = minutes; this.colour = colour; }
+        Tile(long id, String label, int minutes, String colour, String tid) { this(id, label, minutes, colour); this.tid = tid; }
     }
 
     // ---- listening ----
@@ -93,6 +98,7 @@ final class Timers {
                 t.remain = o.optLong("remain");
                 t.paused = o.optBoolean("paused");
                 t.done = o.optBoolean("done");
+                t.rid = o.optString("rid");
                 out.add(t);
             }
         } catch (Exception ignored) { }
@@ -116,6 +122,14 @@ final class Timers {
     }
 
     static Timer startMs(Context c, long length, String label, String colour) {
+        return startMs(c, length, label, colour, null);
+    }
+
+    /**
+     * Start a timer here. {@code rid} names the run when the Mac asked for it; null makes a new run, so the Pi
+     * and the Mac hear of it too; an empty string keeps the timer to this phone alone.
+     */
+    static Timer startMs(Context c, long length, String label, String colour, String rid) {
         List<Timer> list = all(c);
         int live = 0;
         for (Timer t : list) if (!t.done) live++;
@@ -128,10 +142,13 @@ final class Timers {
         t.total = length;
         t.end = System.currentTimeMillis() + length;
         t.remain = length;
+        t.rid = rid == null ? RunSync.newRid() : rid;
         list.add(t);
         save(c, list);
         arm(c, t);
         changed(c);
+        if (rid == null) RunSync.announce(c, t);
+        else if (!rid.isEmpty()) RunSync.report(c, t, "running");
         return t;
     }
 
@@ -193,6 +210,7 @@ final class Timers {
 
     static void stop(Context c, long id) {
         List<Timer> list = all(c);
+        for (Timer t : list) if (t.id == id && !t.done) RunSync.report(c, t, "stopped");
         list.removeIf(t -> t.id == id);
         save(c, list);
         alarms(c).cancel(ringIntent(c, id));
@@ -213,6 +231,7 @@ final class Timers {
         if (hit.done || hit.paused) alarms(c).cancel(ringIntent(c, id));
         else arm(c, hit);
         changed(c);
+        RunSync.report(c, hit, hit.done ? "done" : hit.paused ? "paused" : "running");
     }
 
     /** Arm every timer still running, as after a restart or an update, and ring any that ran out meanwhile. */
@@ -259,6 +278,7 @@ final class Timers {
             .addAction(new Notification.Action.Builder(null, "Dismiss", action(c, ACT_DISMISS, t.id)).build());
         notifications(c).notify(doneId(id), n.build());
         changed(c);
+        RunSync.report(c, t, "done");
     }
 
     // ---- notifications ----
@@ -428,7 +448,7 @@ final class Timers {
         JSONArray out = new JSONArray();
         try {
             for (Timer t : list) out.put(new JSONObject().put("id", t.id).put("label", t.label).put("colour", t.colour)
-                .put("total", t.total).put("end", t.end).put("remain", t.remain).put("paused", t.paused).put("done", t.done));
+                .put("total", t.total).put("end", t.end).put("remain", t.remain).put("paused", t.paused).put("done", t.done).put("rid", t.rid));
         } catch (Exception ignored) { }
         // Committed at once: a notification button may be the only thing running, and the process can end right after.
         prefs(c).edit().putString("timers", out.toString()).commit();
@@ -440,17 +460,18 @@ final class Timers {
         List<Tile> out = new ArrayList<>();
         String raw = prefs(c).getString("tiles", null);
         if (raw == null) {
-            out.add(new Tile(1, "Quick", 1, "coral"));
-            out.add(new Tile(2, "Quick", 5, "coral"));
-            out.add(new Tile(3, "Quick", 10, "teal"));
-            out.add(new Tile(4, "Focus", 25, "violet"));
+            out.add(new Tile(1, "Quick", 1, "coral", "t-seed-1"));
+            out.add(new Tile(2, "Quick", 5, "coral", "t-seed-2"));
+            out.add(new Tile(3, "Quick", 10, "teal", "t-seed-3"));
+            out.add(new Tile(4, "Focus", 25, "violet", "t-seed-4"));
             return out;
         }
         try {
             JSONArray list = new JSONArray(raw);
             for (int i = 0; i < list.length(); i++) {
                 JSONObject o = list.getJSONObject(i);
-                out.add(new Tile(o.getLong("id"), o.optString("label", "Timer"), o.optInt("minutes", 5), o.optString("colour", "coral")));
+                out.add(new Tile(o.getLong("id"), o.optString("label", "Timer"), o.optInt("minutes", 5), o.optString("colour", "coral"),
+                    o.optString("tid")));
             }
         } catch (Exception ignored) { }
         return out;
@@ -464,19 +485,26 @@ final class Timers {
     static void saveTiles(Context c, List<Tile> list) {
         JSONArray out = new JSONArray();
         try {
-            for (Tile q : list) out.put(new JSONObject().put("id", q.id).put("label", q.label).put("minutes", q.minutes).put("colour", q.colour));
+            for (Tile q : list) out.put(new JSONObject().put("id", q.id).put("label", q.label).put("minutes", q.minutes).put("colour", q.colour).put("tid", q.tid));
         } catch (Exception ignored) { }
         prefs(c).edit().putString("tiles", out.toString()).commit();
         TimerShortcuts.tiles(c.getApplicationContext());
         changed(c);
     }
 
+    /** Take the list the Pi holds as the tiles, without sending anything back. */
+    static void saveTilesQuiet(Context c, List<Tile> list) {
+        saveTiles(c, list);
+    }
+
     static Tile addTile(Context c, String label, int minutes, String colour) {
         List<Tile> list = tiles(c);
         long id = System.currentTimeMillis();
-        Tile q = new Tile(id, label == null || label.trim().isEmpty() ? "Timer" : label.trim(), Math.max(1, Math.min(180, minutes)), colour);
+        Tile q = new Tile(id, label == null || label.trim().isEmpty() ? "Timer" : label.trim(), Math.max(1, Math.min(180, minutes)), colour,
+            TemplateSync.tidFor(id));
         list.add(q);
         saveTiles(c, list);
+        TemplateSync.pushSave(c, q, true);
         return q;
     }
 
@@ -486,12 +514,15 @@ final class Timers {
             q.label = label == null || label.trim().isEmpty() ? "Timer" : label.trim();
             q.minutes = Math.max(1, Math.min(180, minutes));
             q.colour = colour;
+            if (q.tid.isEmpty()) q.tid = TemplateSync.tidFor(q.id);
         }
         saveTiles(c, list);
+        for (Tile q : list) if (q.id == id) TemplateSync.pushSave(c, q, false);
     }
 
     static void deleteTile(Context c, long id) {
         List<Tile> list = tiles(c);
+        for (Tile q : list) if (q.id == id) TemplateSync.pushDelete(c, q);
         list.removeIf(q -> q.id == id);
         saveTiles(c, list);
         TimerShortcuts.forgetTile(c, id);
@@ -506,7 +537,7 @@ final class Timers {
     static void migrate(Context c) {
         if (prefs(c).getBoolean("migrated", false)) return;
         for (Reminders.Item old : Reminders.takeOldTimers(c))
-            if (old.at > System.currentTimeMillis()) startMs(c, old.at - System.currentTimeMillis(), old.label, "coral");
+            if (old.at > System.currentTimeMillis()) startMs(c, old.at - System.currentTimeMillis(), old.label, "coral", "");
         prefs(c).edit().putBoolean("migrated", true).apply();
     }
 

@@ -51,7 +51,9 @@ final class NoteOutbox {
                 if (op != null && !key.equals(op.optString("key"))) kept.put(op);
             }
             kept.put(new JSONObject().put("key", key).put("id", noteId == null ? "" : noteId).put("data", data)
-                .put("expected", expected).put("at", System.currentTimeMillis() / 1000));
+                .put("expected", expected).put("at", System.currentTimeMillis() / 1000)
+                // An entry is only ever kept after a send that did not get an answer, which the Pi may have taken anyway.
+                .put("tried", noteId == null || noteId.isEmpty()));
             prefs(c).edit().putString(KEY, kept.toString()).apply();
         } catch (org.json.JSONException impossible) { }
     }
@@ -67,6 +69,45 @@ final class NoteOutbox {
             else if (op != null) kept.put(op);
         }
         if (changed) prefs(c).edit().putString(KEY, kept.toString()).apply();
+    }
+
+    /** Note that a send of this entry has begun, so a later send first checks the Pi did not already take it. */
+    static synchronized void markTried(Context c, String key) {
+        try {
+            JSONArray ops = all(c);
+            for (int i = 0; i < ops.length(); i++) {
+                JSONObject op = ops.optJSONObject(i);
+                if (op != null && key.equals(op.optString("key"))) op.put("tried", true);
+            }
+            prefs(c).edit().putString(KEY, ops.toString()).apply();
+        } catch (org.json.JSONException impossible) { }
+    }
+
+    /**
+     * Whether the Pi already holds the note this entry would create. A send whose answer was lost can have
+     * been kept by the Pi all the same, and sending it again would make two. The Pi gives a new note no
+     * id of the phone's choosing, so the check is by what the note is: a note created since the entry was
+     * queued, with the same title, whose words match. Called only for an entry that was tried before.
+     */
+    private static boolean alreadyThere(MediaClient client, JSONObject op, JSONObject data) {
+        try {
+            String title = data.optString("title"), body = data.optString("body").trim();
+            String query = (title.isEmpty() ? body : title).trim();
+            if (query.length() > 128) query = query.substring(0, 128);
+            if (query.isEmpty()) return false;
+            JSONArray found = client.get("/v1/notes?q=" + MediaClient.enc(query)).getJSONArray("notes");
+            long since = op.optLong("at") - 5;
+            for (int i = 0; i < found.length(); i++) {
+                JSONObject n = found.optJSONObject(i);
+                if (n == null || n.optLong("createdAt") < since) continue;
+                if (!title.isEmpty() && !title.equals(n.optString("title"))) continue;
+                JSONObject whole = client.get("/v1/notes/" + MediaClient.enc(n.optString("id"))).getJSONObject("note");
+                if (body.equals(whole.optString("body").trim())) return true;
+            }
+        } catch (Exception cannotTell) {
+            // If the Pi cannot be asked now, sending is the next thing that will find out.
+        }
+        return false;
     }
 
     /** True when the failure is the Pi not being reached, as opposed to the Pi answering no. */
@@ -109,8 +150,11 @@ final class NoteOutbox {
             JSONObject data = op.optJSONObject("data");
             if (data == null) { remove(c, key); continue; }
             try {
-                if (id.isEmpty()) client.post("/v1/notes", data);
-                else client.put("/v1/notes/" + MediaClient.enc(id), new JSONObject(data.toString()).put("expectedRevision", op.optInt("expected")));
+                if (id.isEmpty()) {
+                    if (op.optBoolean("tried") && alreadyThere(client, op, data)) { remove(c, key); sent++; continue; }
+                    markTried(c, key);
+                    client.post("/v1/notes", data);
+                } else client.put("/v1/notes/" + MediaClient.enc(id), new JSONObject(data.toString()).put("expectedRevision", op.optInt("expected")));
                 remove(c, key);
                 sent++;
             } catch (MediaClient.MediaException refused) {
