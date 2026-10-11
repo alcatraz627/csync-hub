@@ -530,6 +530,49 @@ public final class NotesActivity extends AppCompatActivity {
         Kit.sheet(this, item.optString("title", "Note"), null, sections);
     }
 
+    /** Every save of a note, newest first; one opens to read, copy or bring back. */
+    private void showHistory(JSONObject note) {
+        String id = note.optString("id");
+        task(() -> {
+            JSONArray versions = client.get("/v1/notes/" + MediaClient.enc(id) + "/history").getJSONArray("versions");
+            ui.post(() -> {
+                java.util.List<Kit.Action> rows = new java.util.ArrayList<>();
+                for (int i = 0; i < versions.length(); i++) {
+                    JSONObject v = versions.optJSONObject(i);
+                    long at = v.optLong("at") * 1000;
+                    String when = android.text.format.DateUtils.formatDateTime(this, at, android.text.format.DateUtils.FORMAT_SHOW_DATE
+                        | android.text.format.DateUtils.FORMAT_SHOW_TIME | android.text.format.DateUtils.FORMAT_ABBREV_MONTH);
+                    String sha = v.optString("sha");
+                    rows.add(new Kit.Action(R.drawable.csi_history, i == 0 ? when + " · now" : when, v.optString("reason"),
+                        () -> showVersion(note, sha, when), true));
+                }
+                if (rows.isEmpty()) rows.add(new Kit.Action(R.drawable.csi_info, "No saved versions yet", null, () -> { }));
+                Kit.sheet(this, "Every save", note.optString("title"), rows.toArray(new Kit.Action[0]));
+            });
+        });
+    }
+
+    private void showVersion(JSONObject note, String sha, String when) {
+        String id = note.optString("id");
+        task(() -> {
+            JSONObject old = client.get("/v1/notes/" + MediaClient.enc(id) + "/history/" + sha).getJSONObject("note");
+            ui.post(() -> {
+                String words = old.optString("body");
+                Kit.sheet(this, old.optString("title") + " · " + when, words.isEmpty() ? "(no words)" : words,
+                    new Kit.Action(R.drawable.csi_restart, "Bring this back", "Saved as the newest version; nothing is lost",
+                        () -> task(() -> {
+                            client.put("/v1/notes/" + MediaClient.enc(id), new JSONObject().put("title", old.optString("title"))
+                                .put("body", words).put("expectedRevision", note.optInt("revision")));
+                            ui.post(() -> loadNote(id));
+                        })),
+                    new Kit.Action(R.drawable.csi_copy, "Copy", "These words, as Markdown", () -> {
+                        android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                        if (cm != null) cm.setPrimaryClip(android.content.ClipData.newPlainText(old.optString("title"), words));
+                    }));
+            });
+        });
+    }
+
     private interface NoteUse { void with(JSONObject note); }
 
     /** Read a note in full from the Pi, then use it; the list only carries its summary. */
@@ -1033,6 +1076,7 @@ public final class NotesActivity extends AppCompatActivity {
         Runnable back = () -> { visiting = false; showingPins = false; showList(); };
         Kit.pageTop(topBar, visiting ? this::finish : back, moreCrumb(), new Kit.Crumb(Kit.Icon.NOTES, "Notes", back),
             new Kit.Crumb(R.drawable.csi_markdown, "Note", null));
+        Kit.topAction(topBar, R.drawable.csi_history, "Every save of this note", v -> showHistory(note));
         Kit.topAction(topBar, Kit.Icon.SHARE, "Send or share this note", v -> share(note));
         Kit.topAction(topBar, R.drawable.csi_trash, "Delete this note", v -> Kit.confirm(this, "Delete this note?",
             noteTitle + " and everything kept with it is removed from the Pi.", R.drawable.csi_trash, "Delete", this::deleteNote));
