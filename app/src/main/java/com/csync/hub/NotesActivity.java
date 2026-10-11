@@ -87,6 +87,9 @@ public final class NotesActivity extends AppCompatActivity {
     private Markwon markwon;
     private Runnable pendingNoteSearch;
     private int noteSearchGeneration;
+    // The waiting entry being edited again, so a good save can clear it.
+    private String editingKey;
+    private Runnable retryWaiting;
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -276,6 +279,14 @@ public final class NotesActivity extends AppCompatActivity {
         keptHost = null;
         heading.setText(title);
         heading.setVisibility(title == null ? View.GONE : View.VISIBLE);
+        // A long title stays on one line with its middle left out; on a note, tapping it opens the whole title to edit.
+        heading.setSingleLine(true);
+        heading.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
+        // Middle truncation draws overlapping letters when the text has tracking, so this heading has none.
+        heading.setLetterSpacing(0f);
+        heading.setOnClickListener(null);
+        heading.setClickable(false);
+        heading.setContentDescription(null);
         resting = restingWords;
         say(null);
         tabsHost.setVisibility(next == Page.LIST ? View.VISIBLE : View.GONE);
@@ -315,6 +326,7 @@ public final class NotesActivity extends AppCompatActivity {
 
     private void showList() {
         noteId = null;
+        editingKey = null;
         currentNote = null;
         open(Page.LIST, null, null);
         Kit.pageTop(topBar, this::finish, moreCrumb(), new Kit.Crumb(Kit.Icon.NOTES, "Notes", null));
@@ -347,6 +359,8 @@ public final class NotesActivity extends AppCompatActivity {
         if (listedNotes == null && notesError == null) say("Reading from the Pi");
         new Thread(() -> {
             try {
+                // Notes written while the Pi was out of reach go first, so the list below already has them.
+                if (NoteOutbox.any(this)) NoteOutbox.flush(this, client);
                 String route = "/v1/notes" + (query.isEmpty() ? "" : "?q=" + MediaClient.enc(query));
                 JSONArray notes = client.get(route).getJSONArray("notes");
                 ui.post(() -> {
@@ -363,6 +377,7 @@ public final class NotesActivity extends AppCompatActivity {
                 ui.post(() -> {
                     if (request != noteSearchGeneration || page != Page.LIST) return;
                     // a list already on screen stays; only a first read with nothing to show gets the error state
+                    watchWaiting();
                     if (listedNotes != null) { say("Could not refresh. " + whyUnreached(error)); return; }
                     notesError = whyUnreached(error);
                     say(null);
@@ -370,6 +385,21 @@ public final class NotesActivity extends AppCompatActivity {
                 });
             }
         }, "csync-note-search").start();
+    }
+
+    /** While notes wait for the Pi, look again every half minute without bothering anyone. */
+    private void watchWaiting() {
+        if (retryWaiting != null) ui.removeCallbacks(retryWaiting);
+        if (!NoteOutbox.any(this)) return;
+        retryWaiting = () -> {
+            if (page == Page.LIST && !showingPins && NoteOutbox.any(this)) loadNotes(search.getText().toString().trim());
+        };
+        ui.postDelayed(retryWaiting, 30_000);
+    }
+
+    @Override protected void onDestroy() {
+        if (retryWaiting != null) ui.removeCallbacks(retryWaiting);
+        super.onDestroy();
     }
 
     private void refreshPins() {
@@ -399,7 +429,49 @@ public final class NotesActivity extends AppCompatActivity {
         else renderNotes(query);
     }
 
+    /** The notes written while the Pi was out of reach, each marked, ahead of everything else. Returns their ids. */
+    private java.util.Set<String> waitingRows() {
+        java.util.Set<String> covered = new java.util.HashSet<>();
+        JSONArray waiting = NoteOutbox.all(this);
+        if (waiting.length() == 0) return covered;
+        Kit.label(rows, "Not synced yet");
+        LinearLayout group = Kit.group(rows);
+        for (int i = waiting.length() - 1; i >= 0; i--) {
+            JSONObject op = waiting.optJSONObject(i);
+            if (op == null) continue;
+            JSONObject note = NoteOutbox.asNote(op);
+            if (!op.optString("id").isEmpty()) covered.add(op.optString("id"));
+            String shown = note.optString("title");
+            View row = Kit.bindRow(Kit.addRow(group), Kit.Icon.NOTES, shown.isEmpty() ? "Untitled" : shown,
+                "Not synced yet, saved on this phone", null, true);
+            TextView rowTitle = row.findViewById(R.id.kit_title);
+            rowTitle.setSingleLine(true);
+            rowTitle.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
+            Integer tint = noteColor(note.optString("color"));
+            if (tint != null) ((android.widget.ImageView) row.findViewById(R.id.kit_icon)).setColorFilter(tint);
+            row.setOnClickListener(v -> editWaiting(op));
+            row.setOnLongClickListener(v -> { toast("Not synced yet. Open it to keep writing."); return true; });
+        }
+        return covered;
+    }
+
+    /** Open a waiting note in the editor with the words that were saved on the phone. */
+    private void editWaiting(JSONObject op) {
+        JSONObject note = NoteOutbox.asNote(op);
+        String id = op.optString("id");
+        noteId = id.isEmpty() ? null : id;
+        revision = op.optInt("expected");
+        currentNote = id.isEmpty() ? null : note;
+        editingKey = op.optString("key");
+        showEditor(note.optString("title"), note.optString("body"), "plain");
+        // The words differ from what the Pi holds, so leaving without saving asks first.
+        editorBaseTitle = "";
+        editorBaseBody = "";
+    }
+
     private void renderNotes(String query) {
+        java.util.Set<String> waitingIds = query.isEmpty() ? waitingRows() : new java.util.HashSet<>();
+        boolean haveWaiting = query.isEmpty() && NoteOutbox.any(this);
         if (notesError != null) {
             // Name the address tried: a wrong saved address and a Pi that is down look alike otherwise.
             Kit.empty(rows, Kit.Icon.NOTES, "The Pi did not answer",
@@ -413,6 +485,7 @@ public final class NotesActivity extends AppCompatActivity {
         }
         if (listedNotes == null) return;
         if (listedNotes.length() == 0) {
+            if (haveWaiting) return;
             if (query.isEmpty()) Kit.empty(rows, Kit.Icon.NOTES, "No notes yet",
                 "Notes are kept on the Pi and the assistant can read them.",
                 Kit.button(this, R.drawable.csi_plus, "New note", R.color.text, () -> showEditor("", "", "plain")));
@@ -425,7 +498,7 @@ public final class NotesActivity extends AppCompatActivity {
         String fresh = justSaved == null || !query.isEmpty() ? null : justSaved.optString("id");
         for (int i = 0; i < listedNotes.length(); i++) {
             JSONObject n = listedNotes.optJSONObject(i);
-            if (n == null || n.optString("id").equals(fresh)) continue;
+            if (n == null || n.optString("id").equals(fresh) || waitingIds.contains(n.optString("id"))) continue;
             (n.optBoolean("pinned") ? pinnedNotes : others).add(n);
         }
         if (fresh != null) (justSaved.optBoolean("pinned") ? pinnedNotes : others).add(0, justSaved);
@@ -450,6 +523,9 @@ public final class NotesActivity extends AppCompatActivity {
             String end = item.optBoolean("conflicted") ? "both sides" : kept > 0 ? plural(kept, "item", "items") : null;
             boolean pinned = item.optBoolean("pinned");
             View row = Kit.bindRow(Kit.addRow(group), pinned ? R.drawable.ic_pin : Kit.Icon.NOTES, item.optString("title", "Untitled"), sub, end, true);
+            TextView rowTitle = row.findViewById(R.id.kit_title);
+            rowTitle.setSingleLine(true);
+            rowTitle.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
             // the note's colour tag, as Switchboard and bfb show it
             Integer tint = noteColor(item.optString("color"));
             if (tint != null) ((android.widget.ImageView) row.findViewById(R.id.kit_icon)).setColorFilter(tint);
@@ -593,7 +669,19 @@ public final class NotesActivity extends AppCompatActivity {
 
     /** A new title for a note, saved on the Pi with its words unchanged. */
     private void rename(JSONObject note) {
+        rename(note, () -> loadNotes(search.getText().toString().trim()));
+    }
+
+    /** The same, with a title box that wraps so every line of a long title can be read, and what to do once it is saved. */
+    private void rename(JSONObject note, Runnable saved) {
         EditText field = field("Title", note.optString("title"), false);
+        field.setSingleLine(false);
+        field.setHorizontallyScrolling(false);
+        field.setMinLines(2);
+        field.setMaxLines(8);
+        field.setGravity(android.view.Gravity.TOP);
+        field.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            | android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);
         android.widget.FrameLayout box = new android.widget.FrameLayout(this);
         box.setPadding(dp(20), dp(8), dp(20), 0);
         box.addView(field);
@@ -609,7 +697,7 @@ public final class NotesActivity extends AppCompatActivity {
                 task(() -> {
                     client.put("/v1/notes/" + MediaClient.enc(note.optString("id")), new JSONObject().put("title", name)
                         .put("body", note.optString("body")).put("expectedRevision", note.optInt("revision")));
-                    ui.post(() -> loadNotes(search.getText().toString().trim()));
+                    ui.post(saved);
                 });
             }).show();
     }
@@ -808,6 +896,7 @@ public final class NotesActivity extends AppCompatActivity {
             bitmap = BitmapFactory.decodeStream(input, null, decode);
         }
         if (bitmap == null) throw new Exception("This is not a picture the phone can read");
+        bitmap = upright(bitmap, uri);
         try {
             for (int edge = 1600; edge >= 400; edge /= 2) {
                 int width = Math.min(bitmap.getWidth(), edge);
@@ -827,6 +916,34 @@ public final class NotesActivity extends AppCompatActivity {
             }
         } finally { bitmap.recycle(); }
         throw new Exception("The picture is too large for a note");
+    }
+
+    /** Turn a photo the way its camera tagged it, because the PNG kept on the Pi carries no such tag. */
+    private Bitmap upright(Bitmap bitmap, Uri uri) {
+        int turn = 0;
+        boolean flip = false;
+        try (InputStream input = getContentResolver().openInputStream(uri)) {
+            if (input == null) return bitmap;
+            int tag = new android.media.ExifInterface(input).getAttributeInt(
+                android.media.ExifInterface.TAG_ORIENTATION, android.media.ExifInterface.ORIENTATION_NORMAL);
+            switch (tag) {
+                case android.media.ExifInterface.ORIENTATION_ROTATE_90: turn = 90; break;
+                case android.media.ExifInterface.ORIENTATION_ROTATE_180: turn = 180; break;
+                case android.media.ExifInterface.ORIENTATION_ROTATE_270: turn = 270; break;
+                case android.media.ExifInterface.ORIENTATION_FLIP_HORIZONTAL: flip = true; break;
+                case android.media.ExifInterface.ORIENTATION_FLIP_VERTICAL: flip = true; turn = 180; break;
+                case android.media.ExifInterface.ORIENTATION_TRANSPOSE: flip = true; turn = 270; break;
+                case android.media.ExifInterface.ORIENTATION_TRANSVERSE: flip = true; turn = 90; break;
+                default: break;
+            }
+        } catch (Exception unreadable) { return bitmap; }
+        if (turn == 0 && !flip) return bitmap;
+        android.graphics.Matrix matrix = new android.graphics.Matrix();
+        if (flip) matrix.postScale(-1, 1);
+        matrix.postRotate(turn);
+        Bitmap turned = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+        if (turned != bitmap) bitmap.recycle();
+        return turned;
     }
 
     /** Read a file that was handed over, up to the 20 MB the Pi keeps. */
@@ -1082,6 +1199,7 @@ public final class NotesActivity extends AppCompatActivity {
 
     private void showNote(JSONObject note) {
         noteSaving = false;
+        editingKey = null;
         currentNote = note;
         noteId = note.optString("id");
         revision = note.optInt("revision");
@@ -1091,7 +1209,6 @@ public final class NotesActivity extends AppCompatActivity {
         Runnable back = () -> { visiting = false; showingPins = false; showList(); };
         Kit.pageTop(topBar, visiting ? this::finish : back, moreCrumb(), new Kit.Crumb(Kit.Icon.NOTES, "Notes", back),
             new Kit.Crumb(R.drawable.csi_markdown, "Note", null));
-        Kit.topAction(topBar, R.drawable.csi_history, "Every save of this note", v -> showHistory(note));
         Kit.topAction(topBar, Kit.Icon.SHARE, "Send or share this note", v -> share(note));
         Kit.topAction(topBar, R.drawable.csi_trash, "Delete this note", v -> Kit.confirm(this, "Delete this note?",
             noteTitle + " and everything kept with it is removed from the Pi.", R.drawable.csi_trash, "Delete", this::deleteNote));
@@ -1100,6 +1217,13 @@ public final class NotesActivity extends AppCompatActivity {
         modeParams.bottomMargin = dp(14);
         rows.addView(modeHost, modeParams);
         drawModes(0, picked -> showEditor(noteTitle, source, MODES[picked]));
+        heading.setContentDescription(noteTitle + ", tap to edit the whole title");
+        heading.setOnClickListener(v -> rename(note, () -> loadNote(note.optString("id"))));
+        // History sits under the tabs: in the top bar it left the path no room and cut "Home" to "ome".
+        View history = Kit.compactButton(this, R.drawable.csi_history, "History", false, () -> showHistory(note));
+        LinearLayout.LayoutParams historyParams = new LinearLayout.LayoutParams(-2, -2);
+        historyParams.bottomMargin = dp(14);
+        rows.addView(history, historyParams);
         // The title is already the heading, so a first line that repeats it is left out of the reading view.
         String firstHeading = "# " + noteTitle;
         String shown = source.equals(firstHeading) ? "" :
@@ -1456,6 +1580,8 @@ public final class NotesActivity extends AppCompatActivity {
                 final boolean metaLost = metaNotKept(data, saved);
                 ui.post(() -> {
                     justSaved = saved;
+                    NoteOutbox.remove(this, editingKey != null ? editingKey : id == null ? null : NoteOutbox.keyFor(id));
+                    editingKey = null;
                     // a save on top of an edit made elsewhere is kept, both versions in the body, marked
                     if (saved.optBoolean("conflicted")) say("Saved. It changed elsewhere too: both versions are in the note, marked.");
                     if (sharedImage != null || sharedFile != null) {
@@ -1468,6 +1594,17 @@ public final class NotesActivity extends AppCompatActivity {
             } catch (Exception error) {
                 ui.post(() -> {
                     noteSaving = false;
+                    if (NoteOutbox.unreached(error) && sharedImage == null && sharedFile == null) {
+                        // The Pi cannot be reached: keep the words on the phone and send them when it answers.
+                        NoteOutbox.put(this, editingKey != null ? editingKey : NoteOutbox.keyFor(id), id, data, expected);
+                        editingKey = null;
+                        justSaved = null;
+                        toast("Saved on this phone. It goes to the Pi when it answers.");
+                        visiting = false;
+                        showingPins = false;
+                        showList();
+                        return;
+                    }
                     if (error instanceof MediaClient.MediaException &&
                         "NOTE_CONFLICT".equals(((MediaClient.MediaException) error).code)) {
                         say("This note changed on the Pi. Your words are still here.");

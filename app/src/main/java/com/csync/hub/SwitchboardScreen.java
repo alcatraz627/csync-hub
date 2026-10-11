@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Switchboard's tabs, read from the Mac: Ledger, Queue, Plugins, Rules, Library, Usage, Bulbs and
+ * Switchboard's tabs, read from the Mac: Approvals, Ledger, Queue, Plugins, Rules, Library, Usage, Bulbs and
  * Agents, each as the same groups and rows the Mac panel draws. Tapping a row opens its details in
  * a drawer; Usage draws meters, and Bulbs have a switch each that presses on the Mac.
  *
@@ -26,9 +26,9 @@ import java.util.Map;
  * never keeps a second copy. A tab that loaded once stays on screen when a later refresh fails.
  */
 final class SwitchboardScreen {
-    private static final String[] TABS = {"ledger", "queue", "plugins", "rules", "library", "usage", "bulbs", "agents"};
-    private static final String[] TAB_WORDS = {"Ledger", "Queue", "Plugins", "Rules", "Library", "Usage", "Bulbs", "Agents"};
-    private static final int[] TAB_ICONS = {R.drawable.csi_history, R.drawable.csi_view_list,
+    private static final String[] TABS = {"approvals", "ledger", "queue", "plugins", "rules", "library", "usage", "bulbs", "agents"};
+    private static final String[] TAB_WORDS = {"Approvals", "Ledger", "Queue", "Plugins", "Rules", "Library", "Usage", "Bulbs", "Agents"};
+    private static final int[] TAB_ICONS = {R.drawable.csi_bell, R.drawable.csi_history, R.drawable.csi_view_list,
         R.drawable.csi_tools, R.drawable.csi_check, R.drawable.csi_files,
         R.drawable.csi_bars, R.drawable.csi_sun, R.drawable.csi_chat};
 
@@ -108,6 +108,11 @@ final class SwitchboardScreen {
                     render();
                 } else if (loaded.containsKey(want)) {
                     Kit.failed(a, "The Mac did not answer, so this is the last list it sent", this::load);
+                } else if (want.equals("approvals") && failure != null && notOnMac(failure)) {
+                    // A Mac whose Switchboard predates the Approvals export: say so, rather than blame the network.
+                    unreachable("Approvals are not on the Mac yet",
+                        "The Mac's Switchboard does not send this list yet. Update Switchboard on the Mac, then open this tab again.",
+                        "Try again", this::load);
                 } else {
                     unreachable("The Mac did not answer",
                         (failure == null ? "No reply" : failure) + ". Asked " + ip + "; the Mac may be asleep or off the tailnet.",
@@ -115,6 +120,11 @@ final class SwitchboardScreen {
                 }
             });
         }).start();
+    }
+
+    private static boolean notOnMac(String failure) {
+        String f = failure.toLowerCase(java.util.Locale.ROOT);
+        return f.contains("no list tab") || f.contains("unknown tab") || f.contains("not found");
     }
 
     private void unreachable(String title, String why, String go, Runnable action) {
@@ -125,7 +135,9 @@ final class SwitchboardScreen {
     private void groups(LinearLayout body, JSONObject got) {
         JSONArray groups = got.optJSONArray("groups");
         if (groups == null || groups.length() == 0) {
-            Kit.empty(body, TAB_ICONS[tabIndex()], "Nothing in " + TAB_WORDS[tabIndex()], "The Mac's Switchboard shows no rows here either.", null);
+            if (tab.equals("approvals")) Kit.empty(body, TAB_ICONS[tabIndex()], "Nothing is waiting on you",
+                "No push, ask or prompt is held for an answer. This list fills when a session needs you.", null);
+            else Kit.empty(body, TAB_ICONS[tabIndex()], "Nothing in " + TAB_WORDS[tabIndex()], "The Mac's Switchboard shows no rows here either.", null);
             return;
         }
         for (int g = 0; g < groups.length(); g++) {
@@ -224,9 +236,13 @@ final class SwitchboardScreen {
         }
         View row = Kit.addRow(box);
         Kit.bindRow(row, TAB_ICONS[tabIndex()], label, firstLine(note), end, opens);
-        if ("on".equals(state)) Kit.rowStatus(row, Kit.Status.GOOD, "On");
+        if ("on".equals(state) && !tab.equals("approvals")) Kit.rowStatus(row, Kit.Status.GOOD, "On");
         if (!r.optBoolean("enabled", true)) row.setAlpha(0.5f);
         row.setOnClickListener(v -> details(r));
+        // A held push or ask is answered with one tap on the row; Deny, Cancel and Copy are in its drawer.
+        if (tab.equals("approvals") && hasRunnable(r, "Approve")) {
+            Kit.rowAction(row, R.drawable.csi_check, "Approve " + label, v -> press(r, "Approve", false));
+        }
     }
 
     // A usage window: its name and when it resets, with a meter and the percent at the end.
@@ -335,9 +351,20 @@ final class SwitchboardScreen {
         Kit.sheet(a, label, note, sections);
     }
 
+    private static boolean hasRunnable(JSONObject r, String button) {
+        JSONArray buttons = r.optJSONArray("buttons");
+        for (int i = 0; buttons != null && i < buttons.length(); i++) {
+            JSONObject spec = buttons.optJSONObject(i);
+            if (spec != null && button.equals(spec.optString("label")) && (!spec.has("runs") || spec.optBoolean("runs"))) return true;
+        }
+        return false;
+    }
+
     private static int buttonIcon(String button) {
         switch (button) {
             case "Enable": case "Start": return R.drawable.csi_play;
+            case "Approve": return R.drawable.csi_check;
+            case "Deny": case "Cancel": return R.drawable.csi_close;
             case "Disable": case "Stop": case "Kill": return R.drawable.csi_stop;
             case "Open": return R.drawable.csi_link;
             default: return R.drawable.csi_tools;
