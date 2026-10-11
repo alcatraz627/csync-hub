@@ -511,9 +511,85 @@ public final class NotesActivity extends AppCompatActivity {
             keep.add(new Kit.Action(Kit.Icon.NOTES, "Keep both", "One after the other, markers removed", () -> settle(id, "both")));
             sections.add(new Kit.Section("Two versions", keep));
         }
+        java.util.List<Kit.Action> acts = new java.util.ArrayList<>();
+        acts.add(new Kit.Action(R.drawable.csi_copy, "Copy", "Its words, as Markdown", () -> withNote(id, n -> {
+            android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            if (cm != null) cm.setPrimaryClip(android.content.ClipData.newPlainText(n.optString("title"), sharedText(n)));
+        })));
+        acts.add(new Kit.Action(Kit.Icon.SHARE, "Send", "To a device, a chat or another app", () -> withNote(id, this::share)));
+        acts.add(new Kit.Action(R.drawable.csi_screen, "Show on the Pi screen", null, () -> withNote(id, this::showOnPi)));
+        acts.add(new Kit.Action(R.drawable.csi_edit, "Rename", null, () -> withNote(id, this::rename), true));
+        acts.add(new Kit.Action(R.drawable.csi_bell, "Remind me", "A reminder named for this note", () -> remindAbout(item), true));
+        acts.add(new Kit.Action(R.drawable.csi_trash, "Delete", null, () -> withNote(id, n -> Kit.confirm(this, "Delete this note?",
+            n.optString("title") + " and everything kept with it is removed from the Pi.", R.drawable.csi_trash, "Delete",
+            () -> deleteListed(n)))));
+        // the everyday actions first; the eight colours are long and go last
+        sections.add(new Kit.Section("Note", acts));
         sections.add(new Kit.Section("Pin", pin));
         sections.add(new Kit.Section("Colour", colours));
         Kit.sheet(this, item.optString("title", "Note"), null, sections);
+    }
+
+    private interface NoteUse { void with(JSONObject note); }
+
+    /** Read a note in full from the Pi, then use it; the list only carries its summary. */
+    private void withNote(String id, NoteUse use) {
+        task(() -> {
+            JSONObject note = client.get("/v1/notes/" + MediaClient.enc(id)).getJSONObject("note");
+            ui.post(() -> use.with(note));
+        });
+    }
+
+    /** A new title for a note, saved on the Pi with its words unchanged. */
+    private void rename(JSONObject note) {
+        EditText field = field("Title", note.optString("title"), false);
+        android.widget.FrameLayout box = new android.widget.FrameLayout(this);
+        box.setPadding(dp(20), dp(8), dp(20), 0);
+        box.addView(field);
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setTitle("Rename note").setView(box)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Rename", (d, w) -> {
+                String name = field.getText().toString().trim();
+                if (name.isEmpty() || name.equals(note.optString("title"))) return;
+                task(() -> {
+                    client.put("/v1/notes/" + MediaClient.enc(note.optString("id")), new JSONObject().put("title", name)
+                        .put("body", note.optString("body")).put("expectedRevision", note.optInt("revision")));
+                    ui.post(() -> loadNotes(search.getText().toString().trim()));
+                });
+            }).show();
+    }
+
+    /** A reminder named for the note, at a time picked from a few common ones. */
+    private void remindAbout(JSONObject item) {
+        java.util.Calendar at = java.util.Calendar.getInstance();
+        long inHour = System.currentTimeMillis() + 3_600_000L;
+        at.set(java.util.Calendar.HOUR_OF_DAY, 18); at.set(java.util.Calendar.MINUTE, 0); at.set(java.util.Calendar.SECOND, 0);
+        long evening = at.getTimeInMillis() > System.currentTimeMillis() + 600_000L ? at.getTimeInMillis() : -1;
+        at.add(java.util.Calendar.DAY_OF_MONTH, 1); at.set(java.util.Calendar.HOUR_OF_DAY, 9);
+        long morning = at.getTimeInMillis();
+        String label = item.optString("title", "Note");
+        java.util.List<Kit.Action> when = new java.util.ArrayList<>();
+        when.add(new Kit.Action(R.drawable.csi_clock, "In an hour", null, () -> remindAt(label, inHour)));
+        if (evening > 0) when.add(new Kit.Action(R.drawable.csi_dusk, "This evening", "18:00", () -> remindAt(label, evening)));
+        when.add(new Kit.Action(R.drawable.csi_sun, "Tomorrow morning", "09:00", () -> remindAt(label, morning)));
+        Kit.sheet(this, "Remind me about " + label, null, when.toArray(new Kit.Action[0]));
+    }
+
+    private void remindAt(String label, long at) {
+        Reminders.add(this, label, at);
+        toast("Reminder set for " + android.text.format.DateUtils.formatDateTime(this, at,
+            android.text.format.DateUtils.FORMAT_SHOW_TIME | android.text.format.DateUtils.FORMAT_SHOW_WEEKDAY));
+    }
+
+    /** Delete a note picked from the list, at the revision just read, and redraw the list. */
+    private void deleteListed(JSONObject note) {
+        String id = note.optString("id");
+        if (justSaved != null && id.equals(justSaved.optString("id"))) justSaved = null;
+        task(() -> {
+            client.delete("/v1/notes/" + MediaClient.enc(id), new JSONObject().put("expectedRevision", note.optInt("revision")));
+            ui.post(() -> loadNotes(search.getText().toString().trim()));
+        });
     }
 
     /** Settles a two-version note on the Pi and reloads the list. */
@@ -1108,6 +1184,11 @@ public final class NotesActivity extends AppCompatActivity {
     }
 
     private void pick(String type, int request) {
+        // Pictures open on the photo gallery; the file picker starts on an empty Recent list.
+        if (type.startsWith("image/") && android.os.Build.VERSION.SDK_INT >= 33) {
+            startActivityForResult(new Intent(android.provider.MediaStore.ACTION_PICK_IMAGES), request);
+            return;
+        }
         Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         picker.setType(type);
         picker.addCategory(Intent.CATEGORY_OPENABLE);
