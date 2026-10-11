@@ -676,6 +676,13 @@ final class Kit {
      */
     static void fieldSheet(Context c, CharSequence title, CharSequence sub, String hint, String note,
                            int icon, String go, Typed typed) {
+        fieldSheet(c, title, sub, hint, note, icon, go, typed,
+            android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
+    }
+
+    /** The same, with the kind of keyboard named: a name wants ordinary text, not a web address. */
+    static void fieldSheet(Context c, CharSequence title, CharSequence sub, String hint, String note,
+                           int icon, String go, Typed typed, int inputType) {
         com.google.android.material.bottomsheet.BottomSheetDialog dialog =
             new com.google.android.material.bottomsheet.BottomSheetDialog(c);
         View body = LayoutInflater.from(c).inflate(R.layout.kit_sheet, null, false);
@@ -691,7 +698,7 @@ final class Kit {
         field.setBackgroundResource(R.drawable.card_bg);
         field.setPadding(dp(c, 14), dp(c, 12), dp(c, 14), dp(c, 12));
         field.setMinHeight(dp(c, 48));
-        field.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
+        field.setInputType(inputType);
         rows.addView(field, new LinearLayout.LayoutParams(-1, -2));
         if (note != null) {
             TextView help = new TextView(c);

@@ -77,6 +77,12 @@ public final class MediaActivity extends AppCompatActivity {
     private final java.util.concurrent.atomic.AtomicBoolean stateInFlight = new java.util.concurrent.atomic.AtomicBoolean();
     private final ActivityResultLauncher<String> wallpaperPicker = registerForActivityResult(
         new ActivityResultContracts.GetContent(), uri -> { if (uri != null) uploadWallpaper(uri); });
+    // The folder an upload is for, fixed when the picker opens so a later move in the list cannot redirect it.
+    private String uploadDrive = "", uploadPath = "", uploadWhere = "";
+    private final ActivityResultLauncher<String[]> folderFilePicker = registerForActivityResult(
+        new ActivityResultContracts.OpenDocument(), uri -> { if (uri != null) uploadHere(uri); });
+    private final ActivityResultLauncher<String> folderPicturePicker = registerForActivityResult(
+        new ActivityResultContracts.GetContent(), uri -> { if (uri != null) uploadHere(uri); });
     private final ActivityResultLauncher<String> mediaPicker = registerForActivityResult(
         new ActivityResultContracts.GetContent(), uri -> { if (uri != null) castPhoneFile(uri); });
     // Why playback on this phone failed and what it was, kept after the player has gone so the page can still say so.
@@ -1339,6 +1345,87 @@ public final class MediaActivity extends AppCompatActivity {
             else keys.hideSoftInputFromWindow(search.getWindowToken(), 0);
         });
         Kit.topAction(top, Kit.Icon.SOURCE, "Switch source", v -> chooseSource());
+        Kit.topAction(top, R.drawable.csi_plus, "Add to this folder", v -> addHere());
+    }
+
+    /** Where a new folder or file would go, in words: the drive, then the folders down to here. */
+    private String hereWords() {
+        return path.isEmpty() ? driveLabel : driveLabel + " / " + path.replace("/", " / ");
+    }
+
+    /** The "+" in Files: a new folder, or a file or picture from this phone, into the folder being browsed. */
+    private void addHere() {
+        if (driveId.isEmpty()) { say("Choose a drive first, then add to a folder on it."); return; }
+        uploadDrive = driveId;
+        uploadPath = path;
+        uploadWhere = hereWords();
+        Kit.sheet(this, "Add to this folder", uploadWhere,
+            new Kit.Action(Kit.Icon.FOLDER, "New folder", "An empty folder here", this::newFolderHere),
+            new Kit.Action(R.drawable.csi_upload, "Upload file", "A video or a song from this phone",
+                () -> folderFilePicker.launch(new String[]{"video/*", "audio/*", "image/*"})),
+            new Kit.Action(R.drawable.csi_image, "Upload picture", "A photo from this phone",
+                () -> folderPicturePicker.launch("image/*")));
+    }
+
+    private void newFolderHere() {
+        final String drive = uploadDrive, folder = uploadPath, where = uploadWhere;
+        Kit.fieldSheet(this, "New folder", "In " + where, "Folder name", null,
+            Kit.Icon.FOLDER, "Make folder", name -> makeFolderIn(drive, folder, where, name),
+            android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+    }
+
+    private void makeFolderIn(String drive, String folder, String where, String name) {
+        say("Making the folder " + name);
+        request(() -> client.makeFolder(drive, folder, name), result -> {
+            say("Made " + name + " in " + where);
+            if (drive.equals(driveId) && folder.equals(path) && activeTab == FILES) browse();
+        });
+    }
+
+    /** Send the chosen file to the folder the "+" was opened on, and say plainly how it went. */
+    private void uploadHere(Uri uri) { uploadTo(uri, uploadDrive, uploadPath, uploadWhere); }
+
+    private void uploadTo(Uri uri, String drive, String folder, String where) {
+        String name = null;
+        long size = -1;
+        try (Cursor cursor = getContentResolver().query(uri,
+                new String[]{OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE}, null, null, null)) {
+            if (cursor != null && cursor.moveToFirst()) {
+                int nameColumn = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                int sizeColumn = cursor.getColumnIndex(OpenableColumns.SIZE);
+                if (nameColumn >= 0) name = cursor.getString(nameColumn);
+                if (sizeColumn >= 0 && !cursor.isNull(sizeColumn)) size = cursor.getLong(sizeColumn);
+            }
+        } catch (Exception error) { say("Could not read the selected file: " + error.getMessage()); return; }
+        if (name == null || name.isEmpty() || size <= 0) {
+            say("That file cannot be read from this phone. Choose another.");
+            return;
+        }
+        final String fileName = name;
+        final long fileSize = size;
+        say("Sending " + fileName + " to " + where + ": 0%");
+        new Thread(() -> {
+            String failure = null;
+            try (InputStream input = getContentResolver().openInputStream(uri)) {
+                if (input == null) throw new Exception("Could not open the selected file");
+                client.uploadToFolder(drive, folder, fileName, fileSize, input, sent -> {
+                    int percent = (int) (sent * 100 / fileSize);
+                    ui.post(() -> say("Sending " + fileName + " to " + where + ": " + percent + "%"));
+                });
+            } catch (Exception error) { failure = friendlyError(error); }
+            final String problem = failure;
+            ui.post(() -> {
+                if (problem == null) {
+                    say("Saved " + fileName + " in " + where);
+                    if (drive.equals(driveId) && folder.equals(path) && activeTab == FILES && !fullPlayer) browse();
+                } else {
+                    unsay.run();
+                    boolean taken = problem.contains("already exists");
+                    Kit.failed(this, taken ? problem : fileName + " was not saved. " + problem,
+                        taken ? null : () -> uploadTo(uri, drive, folder, where));
+                }
+            });
+        }, "media-upload-here").start();
     }
 
     /** The drives to browse, each with whether it is connected. Picking one opens it. */
