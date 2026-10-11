@@ -808,6 +808,7 @@ public final class NotesActivity extends AppCompatActivity {
             bitmap = BitmapFactory.decodeStream(input, null, decode);
         }
         if (bitmap == null) throw new Exception("This is not a picture the phone can read");
+        bitmap = upright(bitmap, uri);
         try {
             for (int edge = 1600; edge >= 400; edge /= 2) {
                 int width = Math.min(bitmap.getWidth(), edge);
@@ -827,6 +828,34 @@ public final class NotesActivity extends AppCompatActivity {
             }
         } finally { bitmap.recycle(); }
         throw new Exception("The picture is too large for a note");
+    }
+
+    /** Turn a photo the way its camera tagged it, because the PNG kept on the Pi carries no such tag. */
+    private Bitmap upright(Bitmap bitmap, Uri uri) {
+        int turn = 0;
+        boolean flip = false;
+        try (InputStream input = getContentResolver().openInputStream(uri)) {
+            if (input == null) return bitmap;
+            int tag = new android.media.ExifInterface(input).getAttributeInt(
+                android.media.ExifInterface.TAG_ORIENTATION, android.media.ExifInterface.ORIENTATION_NORMAL);
+            switch (tag) {
+                case android.media.ExifInterface.ORIENTATION_ROTATE_90: turn = 90; break;
+                case android.media.ExifInterface.ORIENTATION_ROTATE_180: turn = 180; break;
+                case android.media.ExifInterface.ORIENTATION_ROTATE_270: turn = 270; break;
+                case android.media.ExifInterface.ORIENTATION_FLIP_HORIZONTAL: flip = true; break;
+                case android.media.ExifInterface.ORIENTATION_FLIP_VERTICAL: flip = true; turn = 180; break;
+                case android.media.ExifInterface.ORIENTATION_TRANSPOSE: flip = true; turn = 270; break;
+                case android.media.ExifInterface.ORIENTATION_TRANSVERSE: flip = true; turn = 90; break;
+                default: break;
+            }
+        } catch (Exception unreadable) { return bitmap; }
+        if (turn == 0 && !flip) return bitmap;
+        android.graphics.Matrix matrix = new android.graphics.Matrix();
+        if (flip) matrix.postScale(-1, 1);
+        matrix.postRotate(turn);
+        Bitmap turned = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+        if (turned != bitmap) bitmap.recycle();
+        return turned;
     }
 
     /** Read a file that was handed over, up to the 20 MB the Pi keeps. */
