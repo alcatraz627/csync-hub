@@ -43,6 +43,15 @@ final class Catalogue {
         add("guide", R.drawable.csi_help, "Assistant guide", "What to ask", false);
         add("widgets", R.drawable.csi_launcher, "Widgets", "Tiles and shortcuts", false);
         add("settings", Kit.Icon.SETTINGS, "Settings", "Connect, play, look", false);
+        add("media", Kit.Icon.MEDIA, "Media", "Browse the Pi's drives", false);
+        add("share", Kit.Icon.SHARE, "Share", "Send to a device", false);
+        add("chats", Kit.Icon.CHAT, "Conversations", "Every chat so far", false);
+        add("switchboard", R.drawable.csi_sliders, "Switchboard", "Your Mac, from here", false);
+        add("bulbs", R.drawable.csi_sun, "Bulbs", "Lights Switchboard can reach", false);
+        add("connection", R.drawable.csi_wifi, "Connection", "The Mac, the Pi, the token", false);
+        add("roadmap", R.drawable.csi_history, "Roadmap", "What is planned next", false);
+        add("design", R.drawable.csi_palette, "Design system", "Every part of the app", false);
+        add("about", R.drawable.csi_info, "About", "Version and updates", false);
     }
 
     static List<Entry> tier(boolean primary) {

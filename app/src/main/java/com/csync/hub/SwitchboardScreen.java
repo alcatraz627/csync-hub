@@ -38,6 +38,9 @@ final class SwitchboardScreen {
     private final Handler ui = new Handler(Looper.getMainLooper());
     // The last good answer per tab, so a failed refresh keeps what was already shown.
     private final Map<String, JSONObject> loaded = new HashMap<>();
+    // When each tab's copy on the phone was taken, and which tabs are showing that copy because the Mac is silent.
+    private final Map<String, Long> cachedAt = new HashMap<>();
+    private final Map<String, Long> silent = new HashMap<>();
     private String tab;
     private boolean showing;
     // Bumped on every load, so an answer for a tab the owner has since left is dropped.
@@ -54,6 +57,13 @@ final class SwitchboardScreen {
         showing = true;
         render();
         load();
+    }
+
+    /** Open on this tab next time the screen shows, for a card on Home that means one tab. */
+    void selectTab(String which) {
+        if (java.util.Arrays.asList(TABS).indexOf(which) < 0) return;
+        tab = which;
+        a.getSharedPreferences("switchboard_view", Activity.MODE_PRIVATE).edit().putString("tab", tab).apply();
     }
 
     void hide() {
@@ -80,13 +90,74 @@ final class SwitchboardScreen {
         body.setOrientation(LinearLayout.VERTICAL);
         host.addView(body, new LinearLayout.LayoutParams(-1, -2));
         JSONObject got = loaded.get(tab);
+        if (got == null) {
+            got = readCache(tab);
+            if (got != null) loaded.put(tab, got);
+        }
         if (got == null) Kit.empty(body, TAB_ICONS[tabIndex()], "Asking the Mac", "Switchboard's " + TAB_WORDS[tabIndex()] + " tab", null);
-        else groups(body, got);
+        else {
+            if (silent.containsKey(tab)) staleLine(body, silent.get(tab));
+            groups(body, got);
+        }
+    }
+
+    // One quiet line above a list that is the phone's own copy because the Mac is not answering.
+    private void staleLine(LinearLayout body, long at) {
+        TextView line = new TextView(a);
+        line.setTextAppearance(R.style.Kit_Text_Meta);
+        // Today's copy says just the time; an older one says the day too.
+        boolean today = android.text.format.DateUtils.isToday(at);
+        String when = new java.text.SimpleDateFormat(today ? "HH:mm" : "d MMM HH:mm", java.util.Locale.getDefault()).format(new java.util.Date(at));
+        line.setText("From " + when + ", the Mac is not answering");
+        line.setSingleLine(true);
+        line.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        line.setPadding(Kit.dp(a, 4), Kit.dp(a, 8), Kit.dp(a, 4), 0);
+        body.addView(line, new LinearLayout.LayoutParams(-1, -2));
+    }
+
+    private java.io.File cacheFile(String which) {
+        java.io.File dir = new java.io.File(a.getFilesDir(), "switchboard_cache");
+        return new java.io.File(dir, which + ".json");
+    }
+
+    // The tab's last good answer, as stored: {"at": ms, "data": {...}}. Null when there is none or it is unreadable.
+    private JSONObject readCache(String which) {
+        java.io.File f = cacheFile(which);
+        if (!f.isFile()) return null;
+        try {
+            byte[] raw = java.nio.file.Files.readAllBytes(f.toPath());
+            JSONObject wrap = new JSONObject(new String(raw, java.nio.charset.StandardCharsets.UTF_8));
+            cachedAt.put(which, wrap.optLong("at"));
+            return wrap.getJSONObject("data");
+        } catch (Exception unreadable) {
+            return null;
+        }
+    }
+
+    private void writeCache(String which, JSONObject data) {
+        try {
+            java.io.File f = cacheFile(which);
+            f.getParentFile().mkdirs();
+            JSONObject wrap = new JSONObject().put("at", System.currentTimeMillis()).put("data", data);
+            java.io.File tmp = new java.io.File(f.getPath() + ".tmp");
+            java.nio.file.Files.write(tmp.toPath(), wrap.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            if (!tmp.renameTo(f)) tmp.delete();
+            cachedAt.put(which, System.currentTimeMillis());
+        } catch (Exception ignored) {
+            // a cache that cannot be written only means the next offline open has nothing to show
+        }
     }
 
     private void load() {
         final String ip = Prefs.homeIp(a), token = Prefs.token(a), want = tab;
         if (ip.isEmpty() || token.isEmpty()) {
+            if (loaded.containsKey(want) || readCache(want) != null) {
+                if (!loaded.containsKey(want)) loaded.put(want, readCache(want));
+                Long at = cachedAt.get(want);
+                silent.put(want, at == null ? System.currentTimeMillis() : at);
+                render();
+                return;
+            }
             unreachable("No Mac address saved", "Save the Mac's address and the access token in Connection.", "Open Connection", openConnection);
             return;
         }
@@ -105,17 +176,23 @@ final class SwitchboardScreen {
                 if (!showing || ticket != asked || !want.equals(tab)) return;
                 if (answer != null) {
                     loaded.put(want, answer);
+                    silent.remove(want);
+                    writeCache(want, answer);
                     render();
-                } else if (loaded.containsKey(want)) {
-                    Kit.failed(a, "The Mac did not answer, so this is the last list it sent", this::load);
+                } else if (loaded.containsKey(want) || readCache(want) != null) {
+                    // The phone's copy stays up; the one quiet line says how old it is.
+                    if (!loaded.containsKey(want)) loaded.put(want, readCache(want));
+                    Long at = cachedAt.get(want);
+                    silent.put(want, at == null ? System.currentTimeMillis() : at);
+                    render();
                 } else if (want.equals("approvals") && failure != null && notOnMac(failure)) {
                     // A Mac whose Switchboard predates the Approvals export: say so, rather than blame the network.
                     unreachable("Approvals are not on the Mac yet",
                         "The Mac's Switchboard does not send this list yet. Update Switchboard on the Mac, then open this tab again.",
                         "Try again", this::load);
                 } else {
-                    unreachable("The Mac did not answer",
-                        (failure == null ? "No reply" : failure) + ". Asked " + ip + "; the Mac may be asleep or off the tailnet.",
+                    unreachable("The Mac is not answering",
+                        "Nothing from an earlier visit is saved on this phone yet. The Mac may be asleep or off the tailnet.",
                         "Try again", this::load);
                 }
             });
@@ -326,18 +403,25 @@ final class SwitchboardScreen {
         String label = r.optString("label"), note = r.optString("note", "");
         List<Kit.Section> sections = new ArrayList<>();
         JSONArray children = r.optJSONArray("children");
-        List<Kit.Action> facts = new ArrayList<>();
+        // Short facts (When, Source, State, a path) share one card as name and value on a line;
+        // long text (About, a description) keeps a block of its own.
+        List<Kit.Action> facts = new ArrayList<>(), shortFacts = new ArrayList<>(), longFacts = new ArrayList<>();
         for (int i = 0; children != null && i < children.length(); i++) {
             JSONObject child = children.optJSONObject(i);
             if (child == null) continue;
-            String words = child.optString("note", "");
-            facts.add(new Kit.Action(R.drawable.csi_info, child.optString("label"), words.isEmpty() ? null : words,
-                () -> copy(words.isEmpty() ? child.optString("label") : words)));
+            String name = child.optString("label"), words = child.optString("note", "");
+            Kit.Action fact = new Kit.Action(R.drawable.csi_info, name, words.isEmpty() ? null : words,
+                () -> copy(words.isEmpty() ? name : words));
+            facts.add(fact);
+            boolean brief = !words.isEmpty() && words.length() <= 100 && name.length() <= 18 && words.indexOf('\n') < 0;
+            (brief ? shortFacts : longFacts).add(fact);
         }
         // A long drawer opens with Copy all, so it is not hidden below the lines it copies.
         if (!facts.isEmpty()) {
             sections.add(new Kit.Section(null, java.util.Collections.singletonList(copyAll(r))));
-            sections.add(new Kit.Section("Tap to copy a line, hold to select", facts));
+            String hint = "Tap to copy a line, hold to select";
+            if (!shortFacts.isEmpty()) sections.add(new Kit.Section(hint, shortFacts).compact());
+            if (!longFacts.isEmpty()) sections.add(new Kit.Section(shortFacts.isEmpty() ? hint : null, longFacts));
         }
         List<Kit.Action> actions = new ArrayList<>();
         // The Mac's own buttons run on the Mac; Copy is done here, on the phone.
@@ -432,7 +516,8 @@ final class SwitchboardScreen {
             ui.post(() -> {
                 if (settled != null) settled.run();
                 if (answer == null) {
-                    String words = failure == null ? "The Mac did not answer" : failure;
+                    // Reading works from the phone's copy; pressing needs the Mac, and this says so quietly.
+                    String words = "The Mac is not answering. This works once it is back.";
                     if (mayHaveRun) {
                         // Pressing again could do it twice; show what the Mac now says instead.
                         Kit.failed(a, "The Mac did not answer in time. It may have done it.", "Reload", () -> {

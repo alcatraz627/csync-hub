@@ -215,7 +215,59 @@ final class Kit {
     /** A labelled set of choices. A null label draws the set without a heading. */
     static final class Section {
         final String label; final java.util.List<Action> actions;
+        // True for short facts: each choice's label and sub draw as one name-and-value line inside a single card.
+        boolean compact;
         Section(String label, java.util.List<Action> actions) { this.label = label; this.actions = actions; }
+        Section compact() { compact = true; return this; }
+    }
+
+    /**
+     * Short facts in one card, a quiet name then its value on the same line, so a When or a Source
+     * does not take a whole row. A tap runs the choice (Copy); a long press selects the words.
+     */
+    private static void compactLines(LinearLayout card, java.util.List<Action> actions, Runnable before, boolean selectable) {
+        Context c = card.getContext();
+        card.setPadding(dp(c, 14), dp(c, 6), dp(c, 14), dp(c, 6));
+        // The name column is as wide as the longest name, so no name is cut or wrapped, up to 40% of the screen.
+        TextView probe = new TextView(c);
+        probe.setTextAppearance(R.style.Kit_Text_RowSub);
+        float widest = 0;
+        for (Action action : actions) widest = Math.max(widest, probe.getPaint().measureText(action.label));
+        int nameWidth = (int) Math.min(widest + dp(c, 12), c.getResources().getDisplayMetrics().widthPixels * 0.4f);
+        nameWidth = Math.max(nameWidth, dp(c, 64));
+        // Room left for a value beside the names: the screen less the page margin, card padding and the name column.
+        float inline = c.getResources().getDisplayMetrics().widthPixels - nameWidth - dp(c, 2 * (16 + 14 + 14));
+        for (Action action : actions) {
+            LinearLayout line = new LinearLayout(c);
+            line.setGravity(android.view.Gravity.TOP);
+            line.setPadding(0, dp(c, 5), 0, dp(c, 5));
+            TextView name = new TextView(c);
+            name.setTextAppearance(R.style.Kit_Text_RowSub);
+            name.setSingleLine(true);
+            name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            name.setText(action.label);
+            TextView value = new TextView(c);
+            value.setTextAppearance(R.style.Kit_Text_RowSub);
+            value.setTextColor(ContextCompat.getColor(c, R.color.text));
+            value.setTypeface(androidx.core.content.res.ResourcesCompat.getFont(c, R.font.mono));
+            String words = action.sub == null ? "" : action.sub;
+            value.setText(words);
+            if (selectable) value.setTextIsSelectable(true);
+            // A value that would break inside a word beside its name goes under the name, full width.
+            if (value.getPaint().measureText(words) > inline) {
+                line.setOrientation(LinearLayout.VERTICAL);
+                line.addView(name, new LinearLayout.LayoutParams(-1, -2));
+                line.addView(value, new LinearLayout.LayoutParams(-1, -2));
+            } else {
+                line.addView(name, new LinearLayout.LayoutParams(nameWidth, -2));
+                line.addView(value, new LinearLayout.LayoutParams(0, -2, 1));
+            }
+            line.setContentDescription(action.label + ", " + (action.sub == null ? "" : action.sub));
+            View.OnClickListener tap = v -> { if (before != null) before.run(); action.run.run(); };
+            line.setOnClickListener(tap);
+            if (selectable) value.setOnClickListener(tap);
+            card.addView(line, new LinearLayout.LayoutParams(-1, -2));
+        }
     }
 
     /**
@@ -249,6 +301,10 @@ final class Kit {
                 new LinearLayout.LayoutParams(-1, dp(parent.getContext(), 16)));
             first = false;
             LinearLayout rows = group(parent);
+            if (section.compact) {
+                compactLines(rows, section.actions, before, selectable);
+                continue;
+            }
             for (Action action : section.actions) {
                 View row = addRow(rows);
                 bindRow(row, action.icon, action.label, action.sub, action.value, action.opens);

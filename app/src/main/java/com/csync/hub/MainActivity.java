@@ -1419,7 +1419,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
     /** Lay the catalogue's cards out two to a row; the secondary tier is smaller and quieter. */
     private void homeCards(LinearLayout host, java.util.List<Catalogue.Entry> entries, boolean primary) {
         host.removeAllViews();
-        TextView label = Kit.label(host, primary ? "Go to" : "Also here");
+        TextView label = Kit.label(host, primary ? "Go to" : "More");
         label.setPadding(dp(4), 0, 0, 0);
         LinearLayout row = null;
         for (int i = 0; i < entries.size(); i++) {
@@ -1433,7 +1433,8 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             row.addView(card);
             if ("pi".equals(entry.id)) piCardLine = card.findViewWithTag("sub");
         }
-        if (row != null && row.getChildCount() == 1) row.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1));
+        // The empty half is as tall as a card: the card matches its row's height, so a 1px spacer would squash a lone last card out of sight.
+        if (row != null && row.getChildCount() == 1) row.addView(new View(this), new LinearLayout.LayoutParams(0, dp(primary ? 118 : 56), 1));
     }
 
     /**
@@ -1493,6 +1494,10 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
         title.setTextAppearance(R.style.Kit_Text_RowTitle);
         if (!primary) title.setTextSize(14.5f);
         title.setText(entry.title);
+        // A card's name stays on one line: at a large font it shrinks a little rather than breaking a word.
+        title.setMaxLines(1);
+        androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(title, 10, primary ? 15 : 14, 1,
+            android.util.TypedValue.COMPLEX_UNIT_SP);
         words.addView(title);
         if (primary) {
             TextView sub = new TextView(this);
@@ -1537,6 +1542,19 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             case "timers": fromHome(R.id.nav_more, () -> showMoreDetail(4)); break;
             case "reminders": fromHome(R.id.nav_more, () -> showMoreDetail(5)); break;
             case "settings": fromHome(R.id.nav_more, () -> show(4)); break;
+            case "media": startActivity(new Intent(this, MediaActivity.class)); break;
+            case "share": fromHome(R.id.nav_share, () -> setShareMode(false)); break;
+            case "chats": fromHome(R.id.nav_chat, this::showChatList); break;
+            case "switchboard": fromHome(R.id.nav_more, () -> showMoreDetail(6)); break;
+            case "bulbs":
+                // Switchboard opens on the tab it was last left on, so say which one this card means.
+                switchboardScreen.selectTab("bulbs");
+                fromHome(R.id.nav_more, () -> showMoreDetail(6));
+                break;
+            case "connection": fromHome(R.id.nav_more, () -> { show(4); revealSettingsDetail(R.id.settings_connection_detail); }); break;
+            case "roadmap": fromHome(R.id.nav_more, () -> openMediaModal("/media/tasks.md", "markdown", "tasks.md")); break;
+            case "design": fromHome(R.id.nav_more, () -> showMoreDetail(3)); break;
+            case "about": fromHome(R.id.nav_more, () -> showMoreDetail(2)); break;
             default: break;
         }
     }
