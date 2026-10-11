@@ -1189,7 +1189,27 @@ final class Kit {
         }
         // A long path rests at its end, so the current page's name is the part that stays in view.
         android.widget.HorizontalScrollView strip = top.findViewById(R.id.kit_crumbs_scroll);
-        strip.post(() -> strip.fullScroll(View.FOCUS_RIGHT));
+        // When the path is wider than the bar, the steps before the current page keep their icon and lose
+        // their words, so the strip never cuts a word in half ("Home" reading "ome").
+        strip.post(() -> {
+            if (row.getWidth() > strip.getWidth()) {
+                for (int i = 0; i < row.getChildCount() - 1; i++) {
+                    View step = row.getChildAt(i);
+                    if (step instanceof LinearLayout && ((LinearLayout) step).getChildCount() > 1) {
+                        ((LinearLayout) step).getChildAt(1).setVisibility(View.GONE);
+                        step.setMinimumWidth(dp(c, 32));
+                        ((LinearLayout) step).setGravity(android.view.Gravity.CENTER);
+                    }
+                }
+            }
+            row.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
+                @Override public void onLayoutChange(View v, int l, int t, int r, int b, int ol, int ot, int or, int ob) {
+                    row.removeOnLayoutChangeListener(this);
+                    strip.post(() -> strip.fullScroll(View.FOCUS_RIGHT));
+                }
+            });
+            strip.post(() -> strip.fullScroll(View.FOCUS_RIGHT));
+        });
         ((LinearLayout) top.findViewById(R.id.kit_actions)).removeAllViews();
     }
 

@@ -282,6 +282,8 @@ public final class NotesActivity extends AppCompatActivity {
         // A long title stays on one line with its middle left out; on a note, tapping it opens the whole title to edit.
         heading.setSingleLine(true);
         heading.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
+        // Middle truncation draws overlapping letters when the text has tracking, so this heading has none.
+        heading.setLetterSpacing(0f);
         heading.setOnClickListener(null);
         heading.setClickable(false);
         heading.setContentDescription(null);
@@ -441,7 +443,7 @@ public final class NotesActivity extends AppCompatActivity {
             if (!op.optString("id").isEmpty()) covered.add(op.optString("id"));
             String shown = note.optString("title");
             View row = Kit.bindRow(Kit.addRow(group), Kit.Icon.NOTES, shown.isEmpty() ? "Untitled" : shown,
-                "Saved on this phone, goes to the Pi when it answers", "not synced yet", true);
+                "Saved on this phone", "not synced yet", true);
             TextView rowTitle = row.findViewById(R.id.kit_title);
             rowTitle.setSingleLine(true);
             rowTitle.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
