@@ -727,13 +727,18 @@ final class Kit {
      * A page that cannot show anything at all says so in place instead (see {@link #notice}).
      */
     static void failed(android.app.Activity a, CharSequence what, Runnable retry) {
+        failed(a, what, "Retry", retry);
+    }
+
+    /** The same, with the action named for what it does (a reload is not a retry). */
+    static void failed(android.app.Activity a, CharSequence what, String actionLabel, Runnable retry) {
         if (a == null || a.isFinishing()) return;
         View root = a.findViewById(android.R.id.content);
         com.google.android.material.snackbar.Snackbar bar = com.google.android.material.snackbar.Snackbar.make(
             root, what, retry == null ? com.google.android.material.snackbar.Snackbar.LENGTH_LONG : 6000);
         View nav = find(root, com.google.android.material.bottomnavigation.BottomNavigationView.class);
         if (nav != null && nav.isShown()) bar.setAnchorView(nav);
-        if (retry != null) bar.setAction("Retry", v -> retry.run());
+        if (retry != null) bar.setAction(actionLabel, v -> retry.run());
         // Drawn in the app's own colours, a raised card with the accent on Retry, not Material's default.
         bar.setBackgroundTint(ContextCompat.getColor(a, R.color.surface2));
         bar.setTextColor(ContextCompat.getColor(a, R.color.text));

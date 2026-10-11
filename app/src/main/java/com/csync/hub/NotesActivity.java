@@ -353,8 +353,8 @@ public final class NotesActivity extends AppCompatActivity {
                     if (request != noteSearchGeneration || page != Page.LIST) return;
                     listedNotes = notes;
                     notesError = null;
-                    for (int i = 0; justSaved != null && query.isEmpty() && i < notes.length(); i++)
-                        if (justSaved.optString("id").equals(notes.optJSONObject(i).optString("id"))) justSaved = null;
+                    // A full list is the truth: a just-saved note it lacks was removed elsewhere, so no ghost row.
+                    if (query.isEmpty()) justSaved = null;
                     say(null);
                     renderListRows();
                     if ((sharedImage != null || sharedFile != null) && !sharedPrompted) chooseSharedNote();
@@ -445,7 +445,8 @@ public final class NotesActivity extends AppCompatActivity {
             int kept = item.optInt("items");
             // a note an agent wrote says so; one edited on two devices apart says both sides are in it
             String agent = item.optString("agent");
-            String sub = edited(item.optLong("updatedAt")) + (agent.isEmpty() ? "" : " · by " + agent) + tagWords(item);
+            String when = edited(item.optLong("updatedAt"));
+            String sub = lead(when, (agent.isEmpty() ? "" : " · by " + agent) + tagWords(item));
             String end = item.optBoolean("conflicted") ? "both sides" : kept > 0 ? plural(kept, "item", "items") : null;
             boolean pinned = item.optBoolean("pinned");
             View row = Kit.bindRow(Kit.addRow(group), pinned ? R.drawable.ic_pin : Kit.Icon.NOTES, item.optString("title", "Untitled"), sub, end, true);
@@ -458,6 +459,12 @@ public final class NotesActivity extends AppCompatActivity {
     }
 
     /** A note's tags as they read under its title, " · #work #ideas", or nothing. */
+    /** The "Edited ..." words then the rest; with no edit time the rest loses its leading separator. */
+    private static String lead(String when, String rest) {
+        if (when != null) return when + rest;
+        return rest.replaceFirst("^ · ?", "");
+    }
+
     private static String tagWords(JSONObject note) {
         JSONArray tags = note.optJSONArray("tags");
         if (tags == null || tags.length() == 0) return "";
@@ -561,11 +568,11 @@ public final class NotesActivity extends AppCompatActivity {
                 String words = old.optString("body");
                 Kit.sheet(this, old.optString("title") + " · " + when, words.isEmpty() ? "(no words)" : words,
                     new Kit.Action(R.drawable.csi_restart, "Bring this back", "Saved as the newest version; nothing is lost",
-                        () -> task(() -> {
+                        () -> { if (note.optInt("revision") < 1) { toast(NOT_SYNCED); return; } task(() -> {
                             client.put("/v1/notes/" + MediaClient.enc(id), new JSONObject().put("title", old.optString("title"))
                                 .put("body", words).put("expectedRevision", note.optInt("revision")));
                             ui.post(() -> loadNote(id));
-                        })),
+                        }); }),
                     new Kit.Action(R.drawable.csi_copy, "Copy", "These words, as Markdown", () -> {
                         android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
                         if (cm != null) cm.setPrimaryClip(android.content.ClipData.newPlainText(old.optString("title"), words));
@@ -598,6 +605,7 @@ public final class NotesActivity extends AppCompatActivity {
             .setPositiveButton("Rename", (d, w) -> {
                 String name = field.getText().toString().trim();
                 if (name.isEmpty() || name.equals(note.optString("title"))) return;
+                if (note.optInt("revision") < 1) { toast(NOT_SYNCED); return; }
                 task(() -> {
                     client.put("/v1/notes/" + MediaClient.enc(note.optString("id")), new JSONObject().put("title", name)
                         .put("body", note.optString("body")).put("expectedRevision", note.optInt("revision")));
@@ -631,6 +639,7 @@ public final class NotesActivity extends AppCompatActivity {
     /** Delete a note picked from the list, at the revision just read, and redraw the list. */
     private void deleteListed(JSONObject note) {
         String id = note.optString("id");
+        if (note.optInt("revision") < 1) { toast(NOT_SYNCED); return; }
         if (justSaved != null && id.equals(justSaved.optString("id"))) justSaved = null;
         task(() -> {
             client.delete("/v1/notes/" + MediaClient.enc(id), new JSONObject().put("expectedRevision", note.optInt("revision")));
@@ -1077,7 +1086,8 @@ public final class NotesActivity extends AppCompatActivity {
         noteId = note.optString("id");
         revision = note.optInt("revision");
         String noteTitle = note.optString("title"), source = note.optString("body");
-        open(Page.NOTE, noteTitle, edited(note.optLong("updatedAt")) + tagWords(note));
+        String editedWhen = edited(note.optLong("updatedAt"));
+        open(Page.NOTE, noteTitle, lead(editedWhen, tagWords(note)));
         Runnable back = () -> { visiting = false; showingPins = false; showList(); };
         Kit.pageTop(topBar, visiting ? this::finish : back, moreCrumb(), new Kit.Crumb(Kit.Icon.NOTES, "Notes", back),
             new Kit.Crumb(R.drawable.csi_markdown, "Note", null));
@@ -1416,8 +1426,11 @@ public final class NotesActivity extends AppCompatActivity {
         drawModes(java.util.Arrays.asList(MODES).indexOf(mode), picked -> setEditorMode(MODES[picked]));
     }
 
+    private static final String NOT_SYNCED = "This note has not synced yet; try again in a minute";
+
     private void saveNote() {
         if (page != Page.EDIT || title == null || body == null || noteSaving) return;
+        if (noteId != null && revision < 1) { say(NOT_SYNCED); return; }
         String name = title.getText().toString().trim();
         String source = body.getText().toString();
         if (name.isEmpty()) { title.setError("Give this note a title"); return; }
@@ -1440,6 +1453,7 @@ public final class NotesActivity extends AppCompatActivity {
                 JSONObject result = id == null ? client.post("/v1/notes", data) :
                     client.put("/v1/notes/" + MediaClient.enc(id), data.put("expectedRevision", expected));
                 JSONObject saved = result.getJSONObject("note");
+                final boolean metaLost = metaNotKept(data, saved);
                 ui.post(() -> {
                     justSaved = saved;
                     // a save on top of an edit made elsewhere is kept, both versions in the body, marked
@@ -1449,6 +1463,7 @@ public final class NotesActivity extends AppCompatActivity {
                         showNote(saved);
                         uploadShared(saved.optString("id"));
                     } else showNote(saved);
+                    if (metaLost) say("Saved, but this Pi is too old to keep tags, colour or pin. Update the Pi.");
                 });
             } catch (Exception error) {
                 ui.post(() -> {
@@ -1466,9 +1481,23 @@ public final class NotesActivity extends AppCompatActivity {
         }, "csync-note-save").start();
     }
 
+    /** True when the Pi's answer lacks tags, colour or pin the phone sent: an older Pi that only reads title and body. */
+    private static boolean metaNotKept(JSONObject sent, JSONObject saved) {
+        if (sent.has("tags")) {
+            java.util.Set<String> want = new java.util.TreeSet<>(), got = new java.util.TreeSet<>();
+            JSONArray a = sent.optJSONArray("tags"), b = saved.optJSONArray("tags");
+            for (int i = 0; a != null && i < a.length(); i++) want.add(a.optString(i).toLowerCase(java.util.Locale.ROOT));
+            for (int i = 0; b != null && i < b.length(); i++) got.add(b.optString(i).toLowerCase(java.util.Locale.ROOT));
+            if (!want.equals(got)) return true;
+        }
+        if (sent.has("color") && !sent.optString("color").equalsIgnoreCase(saved.optString("color"))) return true;
+        return sent.has("pinned") && sent.optBoolean("pinned") != saved.optBoolean("pinned");
+    }
+
     private void deleteNote() {
         String id = noteId;
         int expected = revision;
+        if (expected < 1) { say(NOT_SYNCED); return; }
         if (justSaved != null && id.equals(justSaved.optString("id"))) justSaved = null;
         say("Deleting from the Pi");
         task(() -> {

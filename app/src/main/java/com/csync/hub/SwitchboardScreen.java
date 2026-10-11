@@ -264,7 +264,15 @@ final class SwitchboardScreen {
             row.setContentDescription(r.optString("label") + ", not answering");
             return;
         }
-        Kit.rowToggle(row, on, now -> act(r, now ? "On" : "Off", null, true));
+        // One press at a time: a second act would race the first and leave the wrong state on screen.
+        Kit.rowToggle(row, on, now -> {
+            row.setEnabled(false);
+            row.setAlpha(0.5f);
+            act(r, now ? "On" : "Off", null, true, () -> {
+                row.setEnabled(true);
+                row.setAlpha(1f);
+            });
+        });
         Kit.rowAction(row, R.drawable.csi_sliders, "Brightness and colour", v -> bulbSheet(r));
     }
 
@@ -282,8 +290,13 @@ final class SwitchboardScreen {
             JSONObject s = swatches.optJSONObject(i);
             if (s == null) continue;
             String hex = s.optString("hex");
-            colours.add(new Kit.Action(R.drawable.csi_palette, s.optString("name"), null, () -> act(r, "Colour", hex, false))
-                .tint(android.graphics.Color.parseColor("#" + hex)));
+            Kit.Action swatch = new Kit.Action(R.drawable.csi_palette, s.optString("name"), null, () -> act(r, "Colour", hex, false));
+            try {
+                swatch.tint(android.graphics.Color.parseColor("#" + hex));
+            } catch (IllegalArgumentException malformed) {
+                // a swatch the Mac sent with a bad colour still works, just without its tint
+            }
+            colours.add(swatch);
         }
         colours.add(new Kit.Action(R.drawable.csi_sun, "White", "Back to warm or cool white", () -> act(r, "Colour", "white", false)));
         sections.add(new Kit.Section("Colour", colours));
@@ -310,8 +323,11 @@ final class SwitchboardScreen {
         // The Mac's own buttons run on the Mac; Copy is done here, on the phone.
         JSONArray buttons = r.optJSONArray("buttons");
         for (int i = 0; buttons != null && i < buttons.length(); i++) {
-            String button = buttons.optJSONObject(i) == null ? "" : buttons.optJSONObject(i).optString("label");
+            JSONObject spec = buttons.optJSONObject(i);
+            String button = spec == null ? "" : spec.optString("label");
             if (button.isEmpty() || button.equals("Copy")) continue;
+            // The Mac says which buttons it can run from here; an older Mac says nothing, so all are shown.
+            if (spec.has("runs") && !spec.optBoolean("runs")) continue;
             actions.add(new Kit.Action(buttonIcon(button), button, "On the Mac", () -> press(r, button, false)));
         }
         actions.add(new Kit.Action(R.drawable.csi_copy, "Copy", firstLine(whole), () -> copy(whole)));
@@ -337,22 +353,41 @@ final class SwitchboardScreen {
     // The same with a value for a button that asks for a line. A switch that fails is put back
     // by reading the tab again, since it already moved under the owner's finger.
     private void act(JSONObject r, String button, String value, boolean confirmed) {
+        act(r, button, value, confirmed, null);
+    }
+
+    // settled runs on the screen's thread once the act has an answer or has failed, however it ended.
+    private void act(JSONObject r, String button, String value, boolean confirmed, Runnable settled) {
         final String ip = Prefs.homeIp(a), token = Prefs.token(a), want = tab, key = r.optString("key");
         new Thread(() -> {
             JSONObject got;
             String why = null;
+            boolean sentThenSilent = false;
             try {
                 got = MeshClient.switchboardAct(ip, token, want, key, button, value, confirmed);
             } catch (Exception e) {
                 got = null;
                 why = e.getMessage();
+                // A read timeout means the request went out and the Mac may have acted; a connect failure means it did not.
+                sentThenSilent = e instanceof java.net.SocketTimeoutException
+                    && (why == null || !why.toLowerCase(java.util.Locale.ROOT).contains("connect"));
             }
             final JSONObject answer = got;
             final String failure = why;
+            final boolean mayHaveRun = sentThenSilent;
             ui.post(() -> {
+                if (settled != null) settled.run();
                 if (answer == null) {
-                    Kit.failed(a, failure == null ? "The Mac did not answer" : failure, () -> act(r, button, value, confirmed));
-                    if (showing && want.equals(tab)) load();
+                    String words = failure == null ? "The Mac did not answer" : failure;
+                    if (mayHaveRun) {
+                        // Pressing again could do it twice; show what the Mac now says instead.
+                        Kit.failed(a, "The Mac did not answer in time. It may have done it.", "Reload", () -> {
+                            if (showing && want.equals(tab)) load();
+                        });
+                    } else {
+                        Kit.failed(a, words, () -> act(r, button, value, confirmed, settled));
+                        if (showing && want.equals(tab)) load();
+                    }
                 } else if (answer.has("confirm")) {
                     Kit.confirm(a, button + " " + r.optString("label") + "?", answer.optString("confirm"),
                         buttonIcon(button), button, () -> act(r, button, value, true));
