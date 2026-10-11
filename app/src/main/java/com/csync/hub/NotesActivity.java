@@ -276,6 +276,12 @@ public final class NotesActivity extends AppCompatActivity {
         keptHost = null;
         heading.setText(title);
         heading.setVisibility(title == null ? View.GONE : View.VISIBLE);
+        // A long title stays on one line with its middle left out; on a note, tapping it opens the whole title to edit.
+        heading.setSingleLine(true);
+        heading.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
+        heading.setOnClickListener(null);
+        heading.setClickable(false);
+        heading.setContentDescription(null);
         resting = restingWords;
         say(null);
         tabsHost.setVisibility(next == Page.LIST ? View.VISIBLE : View.GONE);
@@ -450,6 +456,9 @@ public final class NotesActivity extends AppCompatActivity {
             String end = item.optBoolean("conflicted") ? "both sides" : kept > 0 ? plural(kept, "item", "items") : null;
             boolean pinned = item.optBoolean("pinned");
             View row = Kit.bindRow(Kit.addRow(group), pinned ? R.drawable.ic_pin : Kit.Icon.NOTES, item.optString("title", "Untitled"), sub, end, true);
+            TextView rowTitle = row.findViewById(R.id.kit_title);
+            rowTitle.setSingleLine(true);
+            rowTitle.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
             // the note's colour tag, as Switchboard and bfb show it
             Integer tint = noteColor(item.optString("color"));
             if (tint != null) ((android.widget.ImageView) row.findViewById(R.id.kit_icon)).setColorFilter(tint);
@@ -593,7 +602,19 @@ public final class NotesActivity extends AppCompatActivity {
 
     /** A new title for a note, saved on the Pi with its words unchanged. */
     private void rename(JSONObject note) {
+        rename(note, () -> loadNotes(search.getText().toString().trim()));
+    }
+
+    /** The same, with a title box that wraps so every line of a long title can be read, and what to do once it is saved. */
+    private void rename(JSONObject note, Runnable saved) {
         EditText field = field("Title", note.optString("title"), false);
+        field.setSingleLine(false);
+        field.setHorizontallyScrolling(false);
+        field.setMinLines(2);
+        field.setMaxLines(8);
+        field.setGravity(android.view.Gravity.TOP);
+        field.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            | android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);
         android.widget.FrameLayout box = new android.widget.FrameLayout(this);
         box.setPadding(dp(20), dp(8), dp(20), 0);
         box.addView(field);
@@ -609,7 +630,7 @@ public final class NotesActivity extends AppCompatActivity {
                 task(() -> {
                     client.put("/v1/notes/" + MediaClient.enc(note.optString("id")), new JSONObject().put("title", name)
                         .put("body", note.optString("body")).put("expectedRevision", note.optInt("revision")));
-                    ui.post(() -> loadNotes(search.getText().toString().trim()));
+                    ui.post(saved);
                 });
             }).show();
     }
@@ -1120,7 +1141,6 @@ public final class NotesActivity extends AppCompatActivity {
         Runnable back = () -> { visiting = false; showingPins = false; showList(); };
         Kit.pageTop(topBar, visiting ? this::finish : back, moreCrumb(), new Kit.Crumb(Kit.Icon.NOTES, "Notes", back),
             new Kit.Crumb(R.drawable.csi_markdown, "Note", null));
-        Kit.topAction(topBar, R.drawable.csi_history, "Every save of this note", v -> showHistory(note));
         Kit.topAction(topBar, Kit.Icon.SHARE, "Send or share this note", v -> share(note));
         Kit.topAction(topBar, R.drawable.csi_trash, "Delete this note", v -> Kit.confirm(this, "Delete this note?",
             noteTitle + " and everything kept with it is removed from the Pi.", R.drawable.csi_trash, "Delete", this::deleteNote));
@@ -1129,6 +1149,13 @@ public final class NotesActivity extends AppCompatActivity {
         modeParams.bottomMargin = dp(14);
         rows.addView(modeHost, modeParams);
         drawModes(0, picked -> showEditor(noteTitle, source, MODES[picked]));
+        heading.setContentDescription(noteTitle + ", tap to edit the whole title");
+        heading.setOnClickListener(v -> rename(note, () -> loadNote(note.optString("id"))));
+        // History sits under the tabs: in the top bar it left the path no room and cut "Home" to "ome".
+        View history = Kit.compactButton(this, R.drawable.csi_history, "History", false, () -> showHistory(note));
+        LinearLayout.LayoutParams historyParams = new LinearLayout.LayoutParams(-2, -2);
+        historyParams.bottomMargin = dp(14);
+        rows.addView(history, historyParams);
         // The title is already the heading, so a first line that repeats it is left out of the reading view.
         String firstHeading = "# " + noteTitle;
         String shown = source.equals(firstHeading) ? "" :
