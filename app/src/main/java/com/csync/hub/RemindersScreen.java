@@ -45,6 +45,9 @@ final class RemindersScreen {
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final Runnable changed = this::render;
     private boolean showing;
+    // What the Mac section last drew, so a quiet refresh redraws the page only when it changed.
+    private String lastMac = "";
+    private final Runnable macChanged = this::macMaybe;
 
     private String view;
     private long day;
@@ -62,10 +65,11 @@ final class RemindersScreen {
     }
 
     void show(boolean focusAsk) {
-        if (!showing) { Reminders.listen(changed); showing = true; }
+        if (!showing) { Reminders.listen(changed); RunSync.listen(macChanged); showing = true; }
         Reminders.tidy(a);
         render();
         tick();
+        poll();
         if (focusAsk && ask != null) {
             ask.requestFocus();
             ask.post(() -> ((android.view.inputmethod.InputMethodManager) a.getSystemService(Activity.INPUT_METHOD_SERVICE))
@@ -73,8 +77,19 @@ final class RemindersScreen {
         }
     }
 
+    // Every ten seconds while the page is open, hear what the Mac says about the reminders sent to it.
+    private void poll() {
+        if (!showing) return;
+        RunSync.refreshAsync(a);
+        ui.postDelayed(this::poll, 10_000);
+    }
+
+    private void macMaybe() {
+        if (!RunRows.signature(a, false).equals(lastMac)) render();
+    }
+
     void hide() {
-        if (showing) Reminders.unlisten(changed);
+        if (showing) { Reminders.unlisten(changed); RunSync.unlisten(macChanged); }
         showing = false;
         ui.removeCallbacksAndMessages(null);
     }
@@ -108,6 +123,8 @@ final class RemindersScreen {
             case "month": monthView(); break;
             default: timeline();
         }
+        RunRows.section(a, host, false);
+        lastMac = RunRows.signature(a, false);
     }
 
     // ---- adding ----
@@ -166,8 +183,10 @@ final class RemindersScreen {
             ask.clearFocus();
             typed = "";
             day = Reminders.startOfDay(p.at);
-            Reminders.add(a, p.label, p.at);
-            Toast.makeText(a, p.label + ", " + dayWords(p.at).toLowerCase() + " at " + hm(p.at), Toast.LENGTH_SHORT).show();
+            boolean toMac = RunSync.runOn(a).equals("mac");
+            if (toMac) RunSync.sendToMac(a, "reminder", p.label, "", 0, p.at, null);
+            else Reminders.add(a, p.label, p.at);
+            Toast.makeText(a, p.label + ", " + dayWords(p.at).toLowerCase() + " at " + hm(p.at) + (toMac ? ", sent to the Mac" : ""), Toast.LENGTH_SHORT).show();
         };
         send.setOnClickListener(v -> { Kit.tick(v); add.run(); });
         ask.setOnEditorActionListener((v, action, event) -> {
@@ -190,6 +209,14 @@ final class RemindersScreen {
         scroll.setHorizontalScrollBarEnabled(false);
         scroll.addView(chips);
         host.addView(scroll);
+
+        // Which device rings it: this phone, or the Mac through the Pi.
+        TextView where = Kit.label(host, "Run on");
+        ((LinearLayout.LayoutParams) where.getLayoutParams()).topMargin = Kit.dp(a, 10);
+        LinearLayout runOn = new LinearLayout(a);
+        host.addView(runOn, new LinearLayout.LayoutParams(-1, -2));
+        Kit.segmented(runOn, new int[]{R.drawable.csi_device, R.drawable.csi_screen}, new String[]{"This phone", "Mac"},
+            RunSync.runOn(a).equals("mac") ? 1 : 0, i -> { RunSync.setRunOn(a, i == 1 ? "mac" : "phone"); render(); });
     }
 
     /** Put words into the box after what is already typed, ready to add or finish. */

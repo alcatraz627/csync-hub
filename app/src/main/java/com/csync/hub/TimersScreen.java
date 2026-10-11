@@ -45,6 +45,10 @@ final class TimersScreen {
     private final List<Runnable> live = new ArrayList<>();
     private DialView dial;
     private boolean showing;
+    // What the Mac section last drew, so a quiet refresh redraws only when something in it changed.
+    private String lastMac = "";
+    private boolean stripDrawn;
+    private final Runnable macChanged = this::macMaybe;
 
     TimersScreen(Activity a, LinearLayout host) {
         this.a = a;
@@ -53,13 +57,26 @@ final class TimersScreen {
 
     void show(long openTimer) {
         if (openTimer > 0 && Timers.find(a, openTimer) != null) { focus = openTimer; adding = false; }
-        if (!showing) { Timers.listen(changed); showing = true; }
+        if (!showing) { Timers.listen(changed); RunSync.listen(macChanged); showing = true; }
         render();
         tick();
+        TemplateSync.refreshAsync(a);
+        poll();
+    }
+
+    // Every ten seconds while the page is open, hear what the Mac says it runs and what it asked of this phone.
+    private void poll() {
+        if (!showing) return;
+        RunSync.refreshAsync(a);
+        ui.postDelayed(this::poll, 10_000);
+    }
+
+    private void macMaybe() {
+        if (!RunRows.signature(a, true).equals(lastMac)) render();
     }
 
     void hide() {
-        if (showing) Timers.unlisten(changed);
+        if (showing) { Timers.unlisten(changed); RunSync.unlisten(macChanged); }
         showing = false;
         ui.removeCallbacksAndMessages(null);
     }
@@ -86,6 +103,7 @@ final class TimersScreen {
         live.clear();
         dial = null;
         List<Timers.Timer> runs = running();
+        stripDrawn = false;
         if (focus > 0 && Timers.find(a, focus) == null) focus = -1;
         if (adding && runs.size() >= Timers.MAX) adding = false;
 
@@ -108,6 +126,8 @@ final class TimersScreen {
             }
         } else cards(runs);
 
+        RunRows.section(a, host, true);
+        lastMac = RunRows.signature(a, true);
         tiles(runs.size() >= Timers.MAX);
         for (Runnable r : live) r.run();
     }
@@ -232,6 +252,16 @@ final class TimersScreen {
     }
 
     private void startDraft() {
+        if (RunSync.runOn(a).equals("mac")) {
+            long total = draftMinutes * Timers.MINUTE;
+            RunSync.sendToMac(a, "timer", draftLabel, draftColour, total, System.currentTimeMillis() + total, null);
+            Toast.makeText(a, (draftLabel.isEmpty() ? "Timer" : draftLabel) + " sent to the Mac, " + Timers.lengthWords(draftMinutes), Toast.LENGTH_SHORT).show();
+            adding = false;
+            focus = -1;
+            draftLabel = "";
+            render();
+            return;
+        }
         Timers.Timer t = Timers.start(a, draftMinutes, draftLabel, draftColour);
         if (t == null) { Toast.makeText(a, "Four timers is the most at once", Toast.LENGTH_SHORT).show(); return; }
         adding = false;
@@ -243,13 +273,26 @@ final class TimersScreen {
     // ---- a new timer's label and colour ----
 
     private void composer() {
+        runOnStrip();
         EditText label = field("Label, such as Tea");
         label.setText(draftLabel);
         label.addTextChangedListener(new SimpleWatcher(s -> draftLabel = s));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
-        lp.topMargin = Kit.dp(a, 14);
+        lp.topMargin = Kit.dp(a, 8);
         host.addView(label, lp);
         host.addView(swatches(draftColour, c -> { draftColour = c; render(); }));
+    }
+
+    /** Which device the next timer runs on, as one choice the page keeps; drawn once, above the composer or the tiles. */
+    private void runOnStrip() {
+        if (stripDrawn) return;
+        stripDrawn = true;
+        TextView label = Kit.label(host, "Run on");
+        ((LinearLayout.LayoutParams) label.getLayoutParams()).topMargin = Kit.dp(a, 14);
+        LinearLayout seg = new LinearLayout(a);
+        host.addView(seg, new LinearLayout.LayoutParams(-1, -2));
+        Kit.segmented(seg, new int[]{R.drawable.csi_device, R.drawable.csi_screen}, new String[]{"This phone", "Mac"},
+            RunSync.runOn(a).equals("mac") ? 1 : 0, i -> { RunSync.setRunOn(a, i == 1 ? "mac" : "phone"); render(); });
     }
 
     interface Picked { void colour(String name); }
@@ -467,6 +510,10 @@ final class TimersScreen {
     // ---- saved tiles ----
 
     private void tiles(boolean full) {
+        boolean mac = RunSync.runOn(a).equals("mac");
+        // Four timers on the phone is the most; that limit has no say over what the Mac runs.
+        full = full && !mac;
+        runOnStrip();
         LinearLayout head = new LinearLayout(a);
         head.setOrientation(LinearLayout.HORIZONTAL);
         head.setGravity(Gravity.CENTER_VERTICAL);
@@ -484,7 +531,7 @@ final class TimersScreen {
         grid.setColumnCount(3);
         host.addView(grid, new LinearLayout.LayoutParams(-1, -2));
         int gap = Kit.dp(a, 8);
-        for (Timers.Tile q : Timers.tiles(a)) grid.addView(tile(q, full), cell(gap));
+        for (Timers.Tile q : Timers.tiles(a)) grid.addView(tile(q, full, mac), cell(gap));
         if (editingTiles) {
             LinearLayout add = new LinearLayout(a);
             add.setOrientation(LinearLayout.VERTICAL);
@@ -512,7 +559,7 @@ final class TimersScreen {
         }
     }
 
-    private View tile(Timers.Tile q, boolean full) {
+    private View tile(Timers.Tile q, boolean full, boolean mac) {
         LinearLayout tile = new LinearLayout(a);
         tile.setOrientation(LinearLayout.VERTICAL);
         tile.setPadding(Kit.dp(a, 12), Kit.dp(a, 10), Kit.dp(a, 10), Kit.dp(a, 10));
@@ -553,11 +600,18 @@ final class TimersScreen {
             tile.setContentDescription("Edit " + spoken);
             tile.setOnClickListener(v -> tileSheet(q, q.minutes, q.label, q.colour));
         } else {
-            tile.setContentDescription("Start " + spoken + ". Hold to edit");
+            tile.setContentDescription((mac ? "Start on the Mac " : "Start ") + spoken + ". Hold to edit");
             tile.setAlpha(full ? 0.45f : 1f);
             tile.setOnClickListener(v -> {
                 if (full) { Toast.makeText(a, "Four timers is the most at once", Toast.LENGTH_SHORT).show(); return; }
                 Kit.tick(v);
+                if (mac) {
+                    long total = q.minutes * Timers.MINUTE;
+                    RunSync.sendToMac(a, "timer", q.label.equals("Quick") ? "" : q.label, q.colour, total, System.currentTimeMillis() + total,
+                        q.tid.isEmpty() ? TemplateSync.tidFor(q.id) : q.tid);
+                    Toast.makeText(a, (q.label.equals("Quick") ? "Timer" : q.label) + " sent to the Mac, " + Timers.lengthWords(q.minutes), Toast.LENGTH_SHORT).show();
+                    return;
+                }
                 Timers.Timer t = Timers.startTile(a, q.id);
                 if (t != null) Toast.makeText(a, t.name() + " started, " + Timers.lengthWords(q.minutes), Toast.LENGTH_SHORT).show();
             });
