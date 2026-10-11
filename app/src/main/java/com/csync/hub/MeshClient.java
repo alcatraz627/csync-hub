@@ -154,6 +154,30 @@ public final class MeshClient {
         }
     }
 
+    /**
+     * One Switchboard tab from the Mac, as the panel draws it: groups of rows. With a group
+     * named, that group's rows from `offset`. Blocks; throws with the agent's words on failure.
+     */
+    static JSONObject switchboard(String ip, String token, String tab, String group, int offset) throws Exception {
+        String q = group == null ? "" : "?group=" + java.net.URLEncoder.encode(group, "UTF-8") + "&offset=" + offset;
+        URL url = new URL("http://" + ip + ":" + PORT + "/switchboard/" + tab + q);
+        HttpURLConnection c = (HttpURLConnection) url.openConnection();
+        c.setConnectTimeout(5000);
+        c.setReadTimeout(25000);
+        c.setRequestProperty("X-Csync-Token", token);
+        int code = c.getResponseCode();
+        InputStream in = code < 400 ? c.getInputStream() : c.getErrorStream();
+        ByteArrayOutputStream bo = new ByteArrayOutputStream();
+        byte[] buf = new byte[8192];
+        int r;
+        while (in != null && (r = in.read(buf)) != -1) bo.write(buf, 0, r);
+        if (in != null) in.close();
+        c.disconnect();
+        JSONObject body = new JSONObject(bo.size() == 0 ? "{}" : bo.toString("UTF-8"));
+        if (code >= 400) throw new Exception(body.optString("error", "The Mac answered " + code));
+        return body;
+    }
+
     /** Fetch a media file (image or video) from the assistant, authed. Blocks. */
     static byte[] fetchMedia(String ip, String token, String mediaPath) throws Exception {
         URL url = new URL("http://" + ip + ":" + ASSIST_PORT + mediaPath);
