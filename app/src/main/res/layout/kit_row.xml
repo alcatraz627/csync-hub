@@ -19,14 +19,15 @@
     <LinearLayout android:layout_width="0dp" android:layout_weight="1"
         android:layout_height="wrap_content" android:orientation="vertical">
         <TextView android:id="@+id/kit_title" style="@style/Kit.Text.RowTitle"
-            android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:maxLines="2"/>
+            android:layout_width="match_parent" android:layout_height="wrap_content"/>
         <TextView android:id="@+id/kit_sub" style="@style/Kit.Text.RowSub"
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="3dp"/>
     </LinearLayout>
+    <!-- capped so a long status wraps in its own column instead of squeezing the words beside it -->
     <TextView android:id="@+id/kit_end" style="@style/Kit.Text.Meta"
         android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:maxWidth="112dp" android:gravity="end"
         android:layout_marginStart="8dp"/>
     <ImageView android:id="@+id/kit_action"
         android:layout_width="48dp" android:layout_height="48dp" android:layout_marginStart="2dp"
