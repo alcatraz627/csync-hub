@@ -31,6 +31,19 @@ public final class PeerStore {
         p(c).edit().putString("roster", roster.toString()).apply();
     }
 
+    /**
+     * The tailnet address last seen for a device, or "". Sends go to this address first: a
+     * phone with Tailscale DNS off cannot resolve the device's name, but the address always works.
+     */
+    static String ip(Context c, String name) {
+        JSONArray roster = load(c);
+        for (int i = 0; i < roster.length(); i++) {
+            JSONObject o = roster.optJSONObject(i);
+            if (o != null && name.equals(o.optString("name"))) return o.optString("ip", "");
+        }
+        return "";
+    }
+
     /** The name of the device the owner picked as the send target, or "". */
     static String selected(Context c) { return p(c).getString("send_target", ""); }
 
@@ -68,6 +81,8 @@ public final class PeerStore {
                 o.put("name", name);
                 o.put("platform", s.optString("platform", o.optString("platform", "")));
                 o.put("online", online);
+                String ip = s.optString("ip", "");
+                if (!ip.isEmpty()) o.put("ip", ip);
                 if (online) o.put("lastSeen", now);
             } catch (Throwable ignore) {}
             byName.put(name, o);

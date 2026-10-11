@@ -2630,7 +2630,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
                 if ((mime != null && mime.startsWith("image/")) ||
                     lowerName.endsWith(".png") || lowerName.endsWith(".jpg") ||
                     lowerName.endsWith(".jpeg") || lowerName.endsWith(".webp")) kind = "image";
-                MeshClient.send(target, token, Prefs.deviceName(this), kind, name, bytes.toByteArray());
+                MeshClient.sendTo(this, target, token, Prefs.deviceName(this), kind, name, bytes.toByteArray());
                 result = "";
                 delivered = true;
             } catch (Exception error) {
@@ -2815,7 +2815,7 @@ public class MainActivity extends androidx.appcompat.app.AppCompatActivity {
             String result;
             boolean sent = false;
             try {
-                MeshClient.send(target, token, from, "text", "shared.txt", text.getBytes("UTF-8"));
+                MeshClient.sendTo(this, target, token, from, "text", "shared.txt", text.getBytes("UTF-8"));
                 result = "";
                 sent = true;
             } catch (Throwable e) {

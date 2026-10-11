@@ -605,7 +605,7 @@ public class ShareActivity extends AppCompatActivity {
                         pendingKind = "text";
                         pendingUri = null;
                         pendingText = text;
-                        MeshClient.send(peer, token, from, "text", textName, text.getBytes("UTF-8"));
+                        MeshClient.sendTo(this, peer, token, from, "text", textName, text.getBytes("UTF-8"));
                     } else {
                         Uri u = files.get(item - textItems);
                         pendingUri = u.toString();
@@ -615,7 +615,7 @@ public class ShareActivity extends AppCompatActivity {
                         String sentAs = isImage(name, getContentResolver().getType(u)) ? "image" : "file";
                         pendingName = name;
                         pendingKind = sentAs;
-                        MeshClient.send(peer, token, from, sentAs, name, data);
+                        MeshClient.sendTo(this, peer, token, from, sentAs, name, data);
                     }
                     Transfers.recordSent(this, pendingName, pendingKind, peer, true, pendingUri, pendingText);
                     sent++;
