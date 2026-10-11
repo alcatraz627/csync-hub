@@ -28,7 +28,7 @@ import java.util.Map;
 final class SwitchboardScreen {
     private static final String[] TABS = {"approvals", "ledger", "queue", "plugins", "rules", "library", "usage", "bulbs", "agents"};
     private static final String[] TAB_WORDS = {"Approvals", "Ledger", "Queue", "Plugins", "Rules", "Library", "Usage", "Bulbs", "Agents"};
-    private static final int[] TAB_ICONS = {R.drawable.csi_access, R.drawable.csi_history, R.drawable.csi_view_list,
+    private static final int[] TAB_ICONS = {R.drawable.csi_bell, R.drawable.csi_history, R.drawable.csi_view_list,
         R.drawable.csi_tools, R.drawable.csi_check, R.drawable.csi_files,
         R.drawable.csi_bars, R.drawable.csi_sun, R.drawable.csi_chat};
 
@@ -236,7 +236,7 @@ final class SwitchboardScreen {
         }
         View row = Kit.addRow(box);
         Kit.bindRow(row, TAB_ICONS[tabIndex()], label, firstLine(note), end, opens);
-        if ("on".equals(state)) Kit.rowStatus(row, Kit.Status.GOOD, "On");
+        if ("on".equals(state) && !tab.equals("approvals")) Kit.rowStatus(row, Kit.Status.GOOD, "On");
         if (!r.optBoolean("enabled", true)) row.setAlpha(0.5f);
         row.setOnClickListener(v -> details(r));
         // A held push or ask is answered with one tap on the row; Deny, Cancel and Copy are in its drawer.
