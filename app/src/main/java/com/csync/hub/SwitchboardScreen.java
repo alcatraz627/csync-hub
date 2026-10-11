@@ -7,6 +7,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -17,17 +18,19 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Switchboard's list tabs, read from the Mac: Ledger, Queue, Plugins, Rules and Library, each
- * as the same groups and rows the Mac panel draws. Tapping a row opens its details in a drawer.
+ * Switchboard's tabs, read from the Mac: Ledger, Queue, Plugins, Rules, Library, Usage, Bulbs and
+ * Agents, each as the same groups and rows the Mac panel draws. Tapping a row opens its details in
+ * a drawer; Usage draws meters, and Bulbs have a switch each that presses on the Mac.
  *
  * The rows come from the Mac's csync agent, which runs Switchboard's own export, so the phone
  * never keeps a second copy. A tab that loaded once stays on screen when a later refresh fails.
  */
 final class SwitchboardScreen {
-    private static final String[] TABS = {"ledger", "queue", "plugins", "rules", "library"};
-    private static final String[] TAB_WORDS = {"Ledger", "Queue", "Plugins", "Rules", "Library"};
+    private static final String[] TABS = {"ledger", "queue", "plugins", "rules", "library", "usage", "bulbs", "agents"};
+    private static final String[] TAB_WORDS = {"Ledger", "Queue", "Plugins", "Rules", "Library", "Usage", "Bulbs", "Agents"};
     private static final int[] TAB_ICONS = {R.drawable.csi_history, R.drawable.csi_view_list,
-        R.drawable.csi_tools, R.drawable.csi_check, R.drawable.csi_files};
+        R.drawable.csi_tools, R.drawable.csi_check, R.drawable.csi_files,
+        R.drawable.csi_bars, R.drawable.csi_sun, R.drawable.csi_chat};
 
     private final Activity a;
     private final LinearLayout host;
@@ -135,10 +138,12 @@ final class SwitchboardScreen {
         String title = group.optString("title");
         JSONArray rows = group.optJSONArray("rows");
         int shown = rows == null ? 0 : rows.length(), total = group.optInt("total", shown);
-        Kit.label(body, total > 0 ? title + "  " + total : title);
+        boolean counted = !tab.equals("usage") && !tab.equals("bulbs");
+        Kit.label(body, total > 0 && counted ? title + "  " + total : title);
         LinearLayout box = Kit.group(body);
         if (shown == 0) {
-            Kit.bindRow(Kit.addRow(box), TAB_ICONS[tabIndex()], "Nothing here", null, null, false);
+            // The Mac says why a section is empty (no reading yet, no bulbs answered).
+            Kit.bindRow(Kit.addRow(box), TAB_ICONS[tabIndex()], "Nothing here", firstLine(group.optString("status", null)), null, false);
             return;
         }
         for (int i = 0; i < shown; i++) row(box, rows.optJSONObject(i));
@@ -205,11 +210,84 @@ final class SwitchboardScreen {
         JSONArray children = r.optJSONArray("children");
         boolean opens = children != null && children.length() > 0 || !r.optString("tip").isEmpty();
         String end = "count".equals(state) ? String.valueOf(r.optInt("count")) : null;
+        if (tab.equals("usage") && r.has("percent")) {
+            usageRow(box, r);
+            return;
+        }
+        if (tab.equals("bulbs")) {
+            bulbRow(box, r);
+            return;
+        }
+        if (tab.equals("agents") && end == null) {
+            String value = r.optString("value");
+            if (!value.isEmpty() && value.length() <= 10) end = value;
+        }
         View row = Kit.addRow(box);
         Kit.bindRow(row, TAB_ICONS[tabIndex()], label, firstLine(note), end, opens);
         if ("on".equals(state)) Kit.rowStatus(row, Kit.Status.GOOD, "On");
         if (!r.optBoolean("enabled", true)) row.setAlpha(0.5f);
         row.setOnClickListener(v -> details(r));
+    }
+
+    // A usage window: its name and when it resets, with a meter and the percent at the end.
+    private void usageRow(LinearLayout box, JSONObject r) {
+        int percent = r.optInt("percent");
+        String reset = r.optString("reset");
+        View row = Kit.addRow(box);
+        Kit.bindRow(row, TAB_ICONS[tabIndex()], r.optString("label"), reset.isEmpty() ? null : "Resets " + reset, null, false);
+        LinearLayout meters = new LinearLayout(a);
+        meters.setOrientation(LinearLayout.HORIZONTAL);
+        meters.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        meters.setTag("kit-action");
+        TextView number = new TextView(a);
+        number.setTextAppearance(R.style.Kit_Text_Meta);
+        number.setTypeface(androidx.core.content.res.ResourcesCompat.getFont(a, R.font.mono));
+        number.setText(percent + "%");
+        number.setMinWidth(Kit.dp(a, 44));
+        number.setGravity(android.view.Gravity.END);
+        number.setPadding(0, 0, Kit.dp(a, 8), 0);
+        meters.addView(number);
+        meters.addView(Kit.meter(a, percent, 72, 6));
+        LinearLayout line = (LinearLayout) row;
+        line.addView(meters, line.indexOfChild(row.findViewById(R.id.kit_chevron)));
+        row.setContentDescription(r.optString("label") + ", " + percent + " percent used" + (reset.isEmpty() ? "" : ", resets " + reset));
+    }
+
+    // A bulb: a switch that presses On or Off on the Mac, and a drawer button for brightness and colour.
+    // A bulb that does not answer is dimmed and says so; it has nothing to press.
+    private void bulbRow(LinearLayout box, JSONObject r) {
+        View row = Kit.addRow(box);
+        boolean reachable = r.optBoolean("reachable", true), on = r.optBoolean("on");
+        Kit.bindRow(row, TAB_ICONS[tabIndex()], r.optString("label"), r.optString("note", null), null, false);
+        if (!reachable) {
+            row.setAlpha(0.5f);
+            row.setContentDescription(r.optString("label") + ", not answering");
+            return;
+        }
+        Kit.rowToggle(row, on, now -> act(r, now ? "On" : "Off", null, true));
+        Kit.rowAction(row, R.drawable.csi_sliders, "Brightness and colour", v -> bulbSheet(r));
+    }
+
+    private void bulbSheet(JSONObject r) {
+        int brightness = r.optInt("brightness", 100);
+        List<Kit.Section> sections = new ArrayList<>();
+        List<Kit.Action> set = new ArrayList<>();
+        set.add(new Kit.Action(R.drawable.csi_sun, "Brightness", "Slide, then lift your finger", () ->
+            Kit.sliderSheet(a, r.optString("label") + " brightness", 10, 100, 5, brightness, v -> Math.round(v) + "%",
+                v -> act(r, "Brightness", String.valueOf(Math.round(v)), false)), true).value(brightness + "%"));
+        sections.add(new Kit.Section(null, set));
+        List<Kit.Action> colours = new ArrayList<>();
+        JSONArray swatches = r.optJSONArray("swatches");
+        for (int i = 0; swatches != null && i < swatches.length(); i++) {
+            JSONObject s = swatches.optJSONObject(i);
+            if (s == null) continue;
+            String hex = s.optString("hex");
+            colours.add(new Kit.Action(R.drawable.csi_palette, s.optString("name"), null, () -> act(r, "Colour", hex, false))
+                .tint(android.graphics.Color.parseColor("#" + hex)));
+        }
+        colours.add(new Kit.Action(R.drawable.csi_sun, "White", "Back to warm or cool white", () -> act(r, "Colour", "white", false)));
+        sections.add(new Kit.Section("Colour", colours));
+        Kit.sheet(a, r.optString("label"), r.optString("note", null), sections);
     }
 
     // A row's drawer: everything the Mac shows under it, and Copy for the words it carries.
@@ -253,12 +331,18 @@ final class SwitchboardScreen {
     // Press a row's button on the Mac. A button that asks first gets its question asked here;
     // when it is done the tab is read again, since the row's state lives on the Mac.
     private void press(JSONObject r, String button, boolean confirmed) {
+        act(r, button, null, confirmed);
+    }
+
+    // The same with a value for a button that asks for a line. A switch that fails is put back
+    // by reading the tab again, since it already moved under the owner's finger.
+    private void act(JSONObject r, String button, String value, boolean confirmed) {
         final String ip = Prefs.homeIp(a), token = Prefs.token(a), want = tab, key = r.optString("key");
         new Thread(() -> {
             JSONObject got;
             String why = null;
             try {
-                got = MeshClient.switchboardAct(ip, token, want, key, button, confirmed);
+                got = MeshClient.switchboardAct(ip, token, want, key, button, value, confirmed);
             } catch (Exception e) {
                 got = null;
                 why = e.getMessage();
@@ -267,12 +351,14 @@ final class SwitchboardScreen {
             final String failure = why;
             ui.post(() -> {
                 if (answer == null) {
-                    Kit.failed(a, failure == null ? "The Mac did not answer" : failure, () -> press(r, button, confirmed));
+                    Kit.failed(a, failure == null ? "The Mac did not answer" : failure, () -> act(r, button, value, confirmed));
+                    if (showing && want.equals(tab)) load();
                 } else if (answer.has("confirm")) {
                     Kit.confirm(a, button + " " + r.optString("label") + "?", answer.optString("confirm"),
-                        buttonIcon(button), button, () -> press(r, button, true));
+                        buttonIcon(button), button, () -> act(r, button, value, true));
                 } else if (!answer.optBoolean("ok")) {
                     Kit.failed(a, answer.optString("error", "The Mac could not do that"), null);
+                    if (showing && want.equals(tab)) load();
                 } else if (showing && want.equals(tab)) {
                     // The list stays where it is until the fresh one arrives.
                     load();

@@ -183,6 +183,11 @@ public final class MeshClient {
      * {"ok":true}, {"ok":false,"error":...}, {"error":...} or {"confirm":question}. Blocks.
      */
     static JSONObject switchboardAct(String ip, String token, String tab, String key, String button, boolean confirmed) throws Exception {
+        return switchboardAct(ip, token, tab, key, button, null, confirmed);
+    }
+
+    /** The same, for a button that asks for a line first (a bulb's brightness or colour); value is that line. */
+    static JSONObject switchboardAct(String ip, String token, String tab, String key, String button, String value, boolean confirmed) throws Exception {
         URL url = new URL("http://" + ip + ":" + PORT + "/switchboard/act");
         HttpURLConnection c = (HttpURLConnection) url.openConnection();
         c.setConnectTimeout(5000);
@@ -192,6 +197,7 @@ public final class MeshClient {
         c.setRequestProperty("X-Csync-Token", token);
         c.setRequestProperty("Content-Type", "application/json");
         JSONObject ask = new JSONObject().put("tab", tab).put("key", key).put("button", button).put("confirmed", confirmed);
+        if (value != null) ask.put("value", value);
         try (java.io.OutputStream o = c.getOutputStream()) { o.write(ask.toString().getBytes("UTF-8")); }
         int code = c.getResponseCode();
         InputStream in = code < 400 ? c.getInputStream() : c.getErrorStream();
